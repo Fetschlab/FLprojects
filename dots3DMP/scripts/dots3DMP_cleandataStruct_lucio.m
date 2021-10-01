@@ -2,10 +2,10 @@
 
 clear all; close all
 
-conftask = 2; 
+conftask = 2;
 RTtask = 1;
 
-subject = 'lucio';
+subj = 'lucio';
 paradigm = 'dots3DMP';
 dateRange = 20210315:20210805; % RT
 
@@ -13,9 +13,23 @@ dateRange = 20210315:20210805; % RT
 %%
 % folder = '/Users/chris/Documents/MATLAB/PLDAPS_data/';
 folder = '/Users/stevenjerjian/Desktop/FetschLab/PLDAPS_data/';
-file = [subject '_' num2str(dateRange(1)) '-' num2str(dateRange(end)) '.mat'];
-load([folder file], 'data');
 
+% file = [subject '_' num2str(dateRange(1)) '-' num2str(dateRange(end)) '.mat'];
+% load([folder file], 'data');
+
+load('/Users/chris/Downloads/lucio_20210315-20210707_clean.mat')
+
+%% temp: CF needs these for now
+for k = 1:length(data.filename)
+    data.subj{k,:} = 'lucio';
+    data.oneTargChoice(k,:) = 0;
+    data.oneTargConf(k,:) = 0;
+end
+
+
+
+
+%%
 % struct data has fields:
 % filename
 % subj: subject code
@@ -133,8 +147,33 @@ for u = 1:length(dates)
     nTrialsByDate(u) = sum(ismember(data.date,dates(u)));
 end
 
+
+
 %% save it
-save(fullfile(folder,[file(1:end-4) '_clean.mat']),'data');
+% save(fullfile(folder,[file(1:end-4) '_clean.mat']),'data');
+
+
+% CF temp:
+parsedData = dots3DMP_parseData(data,mods,cohs,deltas,hdgs,conftask,RTtask);
+
+%%
+dots3DMP_plots_func_forAumena(parsedData,mods,cohs,deltas,hdgs,conftask,RTtask);
+
+%%
+gfit = dots3DMP_fit_cgauss(data,mods,cohs,deltas,conftask,RTtask);
+
+%%
+dots3DMP_plots_cgauss_func(gfit,parsedData,mods,cohs,deltas,hdgs,conftask,RTtask)
+
+
+
+
+
+
+
+
+
+
 
 
 

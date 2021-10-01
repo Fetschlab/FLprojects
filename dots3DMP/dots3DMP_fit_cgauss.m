@@ -45,14 +45,15 @@ guess_gauss  = [0.5 0 6 1];
 fitOptions = optimset('display','none','MaxFunEvals',1000,'MaxIter',1000);
 
 %% first, for all trials irrespective of delta
-D = length(deltas)+1; % (the extra column we made for pooling across deltas)
+% D = length(deltas)+1; % (the extra column we made for pooling across deltas)
 % OR select just delta=0:
-% D = find(deltas==0);
+D = find(deltas==0);
 
 % initialize vars for storing param fits
 % deal func looks nicer, but is slow for some reason...
 n = nan(length(mods),length(cohs),D);
 
+<<<<<<< HEAD
 muPMF = n; muPMFse = n;
 sigmaPMF = n; sigmaPMFse = n;
 flagPMF = n;
@@ -62,12 +63,27 @@ muConf = n; muConfse = n;
 sigmaConf = n; sigmaConfse = n;
 baselineConf = n; baselineConfse = n;
 flagConf = n;
+=======
+muChoice = n; muChoiceSE = n;
+sigmaChoice = n; sigmaChoiceSE = n;
+fvalChoice = n;
+
+amplConf = n; amplConfSE = n;
+muConf = n; muConfSE = n;
+sigmaConf = n; sigmaConfSE = n;
+baselineConf = n; baselineConfSE = n;
+fvalConf = n;
+>>>>>>> 442f2b6e8eab5ad9e235836908aa3f5d8c3a02c4
 
 amplRT = n; amplRTse = n;
 muRT = n; muRTse = n;
 sigmaRT = n; sigmaRTse = n;
 baselineRT = n; baselineRTse = n;
+<<<<<<< HEAD
 flagRT = n;
+=======
+fvalRT = n;
+>>>>>>> 442f2b6e8eab5ad9e235836908aa3f5d8c3a02c4
 
 for c = 1:length(cohs)
     % choice
@@ -82,18 +98,20 @@ for c = 1:length(cohs)
             end
         end
         
-        beta = fminsearch(@(x) cgauss_err(x,data.choice(I)==2,data.heading(I)), guess_cgauss,fitOptions);
-        [betaUnc,~,flag,~,~,hessian] = fminunc(@(x) cgauss_err(x,data.choice(I)==2,data.heading(I)), guess_cgauss,fitOptions);
+        [beta,fval] = fminsearch(@(x) cgauss_err(x,data.choice(I)==2,data.heading(I)), guess_cgauss,fitOptions);
+        [betaUnc,fvalunc,flag,~,~,hessian] = fminunc(@(x) cgauss_err(x,data.choice(I)==2,data.heading(I)), guess_cgauss,fitOptions);
         SE = sqrt(diag(inv(hessian)));
-        muPMFse(m,c,D) = SE(1);
-        sigmaPMFse(m,c,D) = SE(2);
-        flagPMF(m,c,D) = flag;
+        muChoiceSE(m,c,D) = SE(1);
+        sigmaChoiceSE(m,c,D) = SE(2);
+        flagChoice(m,c,D) = flag;
         if unc
-            muPMF(m,c,D) = betaUnc(1);
-            sigmaPMF(m,c,D) = betaUnc(2);
+            muChoice(m,c,D) = betaUnc(1);
+            sigmaChoice(m,c,D) = betaUnc(2);
+            fvalChoice(m,c,D) = fvalunc;
         else
-            muPMF(m,c,D) = beta(1);
-            sigmaPMF(m,c,D) = beta(2);
+            muChoice(m,c,D) = beta(1);
+            sigmaChoice(m,c,D) = beta(2);
+            fvalChoice(m,c,D) = fval;
         end
     end
     
@@ -111,30 +129,31 @@ for c = 1:length(cohs)
             end
             
             if conftask==1 % sacc endpoint
-                
-                beta = fminsearch(@(x) flippedGauss_err(x,data.conf(I),data.heading(I)), guess_fgauss,fitOptions);
-                [betaUnc,~,flag,~,~,hessian] = fminunc(@(x) flippedGauss_err(x,data.conf(I),data.heading(I)), guess_fgauss,fitOptions);
+                [beta,fval] = fminsearch(@(x) flippedGauss_err(x,data.conf(I),data.heading(I)), guess_fgauss,fitOptions);
+                [betaUnc,fvalunc,flag,~,~,hessian] = fminunc(@(x) flippedGauss_err(x,data.conf(I),data.heading(I)), guess_fgauss,fitOptions);
             elseif conftask==2 % PDW
-                beta = fminsearch(@(x) flippedGauss_err(x,data.PDW(I)==1,data.heading(I)), guess_fgauss,fitOptions);
-                [betaUnc,~,flag,~,~,hessian] = fminunc(@(x) flippedGauss_err(x,data.PDW(I)==1,data.heading(I)), guess_fgauss,fitOptions);
+                [beta,fval] = fminsearch(@(x) flippedGauss_err(x,data.PDW(I)==1,data.heading(I)), guess_fgauss,fitOptions);
+                [betaUnc,fvalunc,flag,~,~,hessian] = fminunc(@(x) flippedGauss_err(x,data.PDW(I)==1,data.heading(I)), guess_fgauss,fitOptions);
             end
             
             SE = sqrt(diag(inv(hessian)));
-            amplConfse(m,c,D) = SE(1);
-            muConfse(m,c,D) = SE(2);
-            sigmaConfse(m,c,D) = SE(3);
-            baselineConfse(m,c,D) = SE(4);
+            amplConfSE(m,c,D) = SE(1);
+            muConfSE(m,c,D) = SE(2);
+            sigmaConfSE(m,c,D) = SE(3);
+            baselineConfSE(m,c,D) = SE(4);
             flagConf(m,c,D) = flag;
             if unc
                 amplConf(m,c,D) = betaUnc(1);
                 muConf(m,c,D) = betaUnc(2);
                 sigmaConf(m,c,D) = betaUnc(3);
                 baselineConf(m,c,D) = betaUnc(4);
+                fvalConf(m,c,D) = fvalunc;
             else
                 amplConf(m,c,D) = beta(1);
                 muConf(m,c,D) = beta(2);
                 sigmaConf(m,c,D) = beta(3);
                 baselineConf(m,c,D) = beta(4);
+                fvalConf(m,c,D) = fval;
             end
         end
     end
@@ -151,8 +170,8 @@ for c = 1:length(cohs)
                     I = data.modality==mods(m) & data.coherence==cohs(c) & data.delta==deltas(D);
                 end
             end
-            beta = fminsearch(@(x) gauss_err(x,data.RT(I),data.heading(I)), guess_gauss,fitOptions);
-            [betaUnc,~,flag,~,~,hessian] = fminunc(@(x) gauss_err(x,data.RT(I),data.heading(I)), guess_gauss,fitOptions);
+            [beta,fval] = fminsearch(@(x) gauss_err(x,data.RT(I),data.heading(I)), guess_gauss,fitOptions);
+            [betaUnc,fvalunc,flag,~,~,hessian] = fminunc(@(x) gauss_err(x,data.RT(I),data.heading(I)), guess_gauss,fitOptions);
             SE = sqrt(diag(inv(hessian)));
             amplRTse(m,c,D) = SE(1);
             muRTse(m,c,D) = SE(2);
@@ -164,11 +183,13 @@ for c = 1:length(cohs)
                 muRT(m,c,D) = betaUnc(2);
                 sigmaRT(m,c,D) = betaUnc(3);
                 baselineRT(m,c,D) = betaUnc(4);
+                fvalRT(m,c,D) = fvalunc;
             else
                 amplRT(m,c,D) = beta(1);
                 muRT(m,c,D) = beta(2);
                 sigmaRT(m,c,D) = beta(3);
                 baselineRT(m,c,D) = beta(4);
+                fvalRT(m,c,D) = fval;
             end
         end
     end
@@ -183,18 +204,20 @@ for c = 1:length(cohs)
     for d = 1:length(deltas)     % m c d h
         I = data.modality==3 & data.coherence==cohs(c) & data.delta==deltas(d);
         
-        beta = fminsearch(@(x) cgauss_err(x,data.choice(I)==2,data.heading(I)), guess_cgauss,fitOptions);
-        [betaUnc,~,flag,~,~,hessian] = fminunc(@(x) cgauss_err(x,data.choice(I)==2,data.heading(I)), guess_cgauss,fitOptions);
+        [beta,fval] = fminsearch(@(x) cgauss_err(x,data.choice(I)==2,data.heading(I)), guess_cgauss,fitOptions);
+        [betaUnc,fvalunc,flag,~,~,hessian] = fminunc(@(x) cgauss_err(x,data.choice(I)==2,data.heading(I)), guess_cgauss,fitOptions);
         SE = sqrt(diag(inv(hessian)));
-        muPMFse(3,c,d) = SE(1);
-        sigmaPMFse(3,c,d) = SE(2);
-        flagPMF(3,c,d) = flag;
+        muChoiceSE(3,c,d) = SE(1);
+        sigmaChoiceSE(3,c,d) = SE(2);
+        flagChoice(3,c,d) = flag;
         if unc
-            muPMF(3,c,d) = betaUnc(1);
-            sigmaPMF(3,c,d) = betaUnc(2);
+            muChoice(3,c,d) = betaUnc(1);
+            sigmaChoice(3,c,d) = betaUnc(2);
+            fvalChoice(3,c,d) = fvalunc;
         else
-            muPMF(3,c,d) = beta(1);
-            sigmaPMF(3,c,d) = beta(2);
+            muChoice(3,c,d) = beta(1);
+            sigmaChoice(3,c,d) = beta(2);
+            fvalChoice(3,c,d) = fval;
         end
     end
     
@@ -204,18 +227,18 @@ for c = 1:length(cohs)
             I = data.modality==3 & data.coherence==cohs(c) & data.delta==deltas(d);
             
             if conftask==1 % sacc endpoint
-                beta = fminsearch(@(x) flippedGauss_err(x,data.conf(I),data.heading(I)), guess_fgauss,fitOptions);
-                [betaUnc,~,flag,~,~,hessian] = fminunc(@(x) flippedGauss_err(x,data.conf(I),data.heading(I)), guess_fgauss,fitOptions);
+                [beta,fval] = fminsearch(@(x) flippedGauss_err(x,data.conf(I),data.heading(I)), guess_fgauss,fitOptions);
+                [betaUnc,fvalunc,flag,~,~,hessian] = fminunc(@(x) flippedGauss_err(x,data.conf(I),data.heading(I)), guess_fgauss,fitOptions);
             elseif conftask==2 % PDW
-                beta = fminsearch(@(x) flippedGauss_err(x,data.PDW(I)==1,data.heading(I)), guess_fgauss,fitOptions);
-                [betaUnc,~,flag,~,~,hessian] = fminunc(@(x) flippedGauss_err(x,data.PDW(I)==1,data.heading(I)), guess_fgauss,fitOptions);
+                [beta,fval] = fminsearch(@(x) flippedGauss_err(x,data.PDW(I)==1,data.heading(I)), guess_fgauss,fitOptions);
+                [betaUnc,fvalunc,flag,~,~,hessian] = fminunc(@(x) flippedGauss_err(x,data.PDW(I)==1,data.heading(I)), guess_fgauss,fitOptions);
             end
             
             SE = sqrt(diag(inv(hessian)));
-            amplConfse(3,c,d) = SE(1);
-            muConfse(3,c,d) = SE(2);
-            sigmaConfse(3,c,d) = SE(3);
-            baselineConfse(3,c,d) = SE(4);
+            amplConfSE(3,c,d) = SE(1);
+            muConfSE(3,c,d) = SE(2);
+            sigmaConfSE(3,c,d) = SE(3);
+            baselineConfSE(3,c,d) = SE(4);
             flagConf(3,c,d) = flag;
 
             if unc
@@ -223,11 +246,13 @@ for c = 1:length(cohs)
                 muConf(3,c,d) = betaUnc(2);
                 sigmaConf(3,c,d) = betaUnc(3);
                 baselineConf(3,c,d) = betaUnc(4);
+                fvalConf(3,c,d) = fvalunc;
             else
                 amplConf(3,c,d) = beta(1);
                 muConf(3,c,d) = beta(2);
                 sigmaConf(3,c,d) = beta(3);
                 baselineConf(3,c,d) = beta(4);
+                fvalConf(3,c,d) = fval;
             end
         end
     end
@@ -236,8 +261,8 @@ for c = 1:length(cohs)
     if RTtask
         for d = 1:length(deltas)
             I = data.modality==3 & data.coherence==cohs(c) & data.delta==deltas(d);
-            beta = fminsearch(@(x) gauss_err(x,data.RT(I),data.heading(I)), guess_gauss,fitOptions);
-            [betaUnc,~,flag,~,~,hessian] = fminunc(@(x) gauss_err(x,data.RT(I),data.heading(I)), guess_gauss,fitOptions);
+            [beta,fval] = fminsearch(@(x) gauss_err(x,data.RT(I),data.heading(I)), guess_gauss,fitOptions);
+            [betaUnc,fvalunc,flag,~,~,hessian] = fminunc(@(x) gauss_err(x,data.RT(I),data.heading(I)), guess_gauss,fitOptions);
             SE = sqrt(diag(inv(hessian)));
             amplRTse(3,c,d) = SE(1);
             muRTse(3,c,d) = SE(2);
@@ -249,11 +274,13 @@ for c = 1:length(cohs)
                 muRT(3,c,d) = betaUnc(2);
                 sigmaRT(3,c,d) = betaUnc(3);
                 baselineRT(3,c,d) = betaUnc(4);
+                fvalRT(3,c,d) = fvalunc;
             else
                 amplRT(3,c,d) = beta(1);
                 muRT(3,c,d) = beta(2);
                 sigmaRT(3,c,d) = beta(3);
                 baselineRT(3,c,d) = beta(4);
+                fvalRT(3,c,d) = fval;
             end
         end
     end
@@ -263,48 +290,54 @@ end
 % save outputs
 gfit = struct();
 
-gfit.choice.mu = muPMF;
-gfit.choice.muSE = muPMFse;
-gfit.choice.sigma = sigmaPMF;
-gfit.choice.sigmaSE = sigmaPMFse;
-gfit.choice.flag = flagPMF;
+gfit.choice.mu = muChoice;
+gfit.choice.muSE = muChoiceSE;
+gfit.choice.sigma = sigmaChoice;
+gfit.choice.sigmaSE = sigmaChoiceSE;
+gfit.choice.flag = flagChoice;
 
 gfit.choice.func = cgauss;
 gfit.choice.err = cgauss_err;
 gfit.choice.guess = guess_cgauss;
 
+gfit.choice.fval = fvalChoice;
+
 if conftask
-gfit.conf.ampl = amplConf;
-gfit.conf.mu   = muConf;
-gfit.conf.sigma = sigmaConf;
-gfit.conf.bsln = baselineConf;
-gfit.conf.flag = flagConf;
+    gfit.conf.ampl = amplConf;
+    gfit.conf.mu   = muConf;
+    gfit.conf.sigma = sigmaConf;
+    gfit.conf.bsln = baselineConf;
+    gfit.conf.flag = flagConf;
 
-gfit.conf.amplSE = amplConfse;
-gfit.conf.muSE  = muConfse;
-gfit.conf.sigmaSE = sigmaConfse;
-gfit.conf.bslnSE = baselineConfse;
+    gfit.conf.amplSE = amplConfSE;
+    gfit.conf.muSE  = muConfSE;
+    gfit.conf.sigmaSE = sigmaConfSE;
+    gfit.conf.bslnSE = baselineConfSE;
 
-gfit.conf.func = flippedGauss;
-gfit.conf.err = flippedGauss_err;
-gfit.conf.guess = guess_fgauss;
+    gfit.conf.func = flippedGauss;
+    gfit.conf.err = flippedGauss_err;
+    gfit.conf.guess = guess_fgauss;
 
+    gfit.conf.fval = fvalConf;
 end
 
 if RTtask
-gfit.RT.ampl = amplRT;
-gfit.RT.mu   = muRT;
-gfit.RT.sigma = sigmaRT;
-gfit.RT.bsln = baselineRT;
-gfit.RT.flag = flagRT;
+    gfit.RT.ampl = amplRT;
+    gfit.RT.mu   = muRT;
+    gfit.RT.sigma = sigmaRT;
+    gfit.RT.bsln = baselineRT;
+    gfit.RT.flag = flagRT;
 
-gfit.RT.amplSE = amplRTse;
-gfit.RT.muSE  = muRTse;
-gfit.RT.sigmaSE = sigmaRTse;
-gfit.RT.bslnSE = baselineRTse;
+    gfit.RT.amplSE = amplRTse;
+    gfit.RT.muSE  = muRTse;
+    gfit.RT.sigmaSE = sigmaRTse;
+    gfit.RT.bslnSE = baselineRTse;
 
-gfit.RT.func = gauss;
-gfit.RT.err  = gauss_err;
-gfit.RT.guess = guess_gauss;
-
+    gfit.RT.func = gauss;
+    gfit.RT.err  = gauss_err;
+    gfit.RT.guess = guess_gauss;
+    
+    gfit.RT.fval = fvalRT;
 end
+
+gfit.D = D;

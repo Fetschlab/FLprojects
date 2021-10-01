@@ -13,7 +13,8 @@ dateRange = 20210315:20210512;
 
 %%
 % change to whatever local folder data is stored in
-folder = '/Users/stevenjerjian/Desktop/FetschLab/PLDAPS_data/';
+% folder = '/Users/stevenjerjian/Desktop/FetschLab/PLDAPS_data/';
+folder = '/Users/chris/Documents/MATLAB/PLDAPS_data/';
 
 file = [subject '_' num2str(dateRange(1)) '-' num2str(dateRange(end)) '.mat'];
 load([folder file], 'data');
