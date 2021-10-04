@@ -53,17 +53,6 @@ D = find(deltas==0);
 % deal func looks nicer, but is slow for some reason...
 n = nan(length(mods),length(cohs),D);
 
-<<<<<<< HEAD
-muPMF = n; muPMFse = n;
-sigmaPMF = n; sigmaPMFse = n;
-flagPMF = n;
-
-amplConf = n; amplConfse = n;
-muConf = n; muConfse = n;
-sigmaConf = n; sigmaConfse = n;
-baselineConf = n; baselineConfse = n;
-flagConf = n;
-=======
 muChoice = n; muChoiceSE = n;
 sigmaChoice = n; sigmaChoiceSE = n;
 fvalChoice = n;
@@ -73,17 +62,13 @@ muConf = n; muConfSE = n;
 sigmaConf = n; sigmaConfSE = n;
 baselineConf = n; baselineConfSE = n;
 fvalConf = n;
->>>>>>> 442f2b6e8eab5ad9e235836908aa3f5d8c3a02c4
 
 amplRT = n; amplRTse = n;
 muRT = n; muRTse = n;
 sigmaRT = n; sigmaRTse = n;
 baselineRT = n; baselineRTse = n;
-<<<<<<< HEAD
-flagRT = n;
-=======
+
 fvalRT = n;
->>>>>>> 442f2b6e8eab5ad9e235836908aa3f5d8c3a02c4
 
 for c = 1:length(cohs)
     % choice
@@ -103,7 +88,6 @@ for c = 1:length(cohs)
         SE = sqrt(diag(inv(hessian)));
         muChoiceSE(m,c,D) = SE(1);
         sigmaChoiceSE(m,c,D) = SE(2);
-        flagChoice(m,c,D) = flag;
         if unc
             muChoice(m,c,D) = betaUnc(1);
             sigmaChoice(m,c,D) = betaUnc(2);
@@ -141,7 +125,7 @@ for c = 1:length(cohs)
             muConfSE(m,c,D) = SE(2);
             sigmaConfSE(m,c,D) = SE(3);
             baselineConfSE(m,c,D) = SE(4);
-            flagConf(m,c,D) = flag;
+            fvalConf(m,c,D) = fval;
             if unc
                 amplConf(m,c,D) = betaUnc(1);
                 muConf(m,c,D) = betaUnc(2);
@@ -177,7 +161,7 @@ for c = 1:length(cohs)
             muRTse(m,c,D) = SE(2);
             sigmaRTse(m,c,D) = SE(3);
             baselineRTse(m,c,D) = SE(4);
-            flagRT(m,c,D) = flag;
+            fvalRT(m,c,D) = fval;
             if unc
                 amplRT(m,c,D) = betaUnc(1);
                 muRT(m,c,D) = betaUnc(2);
@@ -209,7 +193,7 @@ for c = 1:length(cohs)
         SE = sqrt(diag(inv(hessian)));
         muChoiceSE(3,c,d) = SE(1);
         sigmaChoiceSE(3,c,d) = SE(2);
-        flagChoice(3,c,d) = flag;
+        fvalChoice(3,c,d) = fval;
         if unc
             muChoice(3,c,d) = betaUnc(1);
             sigmaChoice(3,c,d) = betaUnc(2);
@@ -239,7 +223,7 @@ for c = 1:length(cohs)
             muConfSE(3,c,d) = SE(2);
             sigmaConfSE(3,c,d) = SE(3);
             baselineConfSE(3,c,d) = SE(4);
-            flagConf(3,c,d) = flag;
+            fvalConf(3,c,d) = fval;
 
             if unc
                 amplConf(3,c,d) = betaUnc(1);
@@ -268,7 +252,7 @@ for c = 1:length(cohs)
             muRTse(3,c,d) = SE(2);
             sigmaRTse(3,c,d) = SE(3);
             baselineRTse(3,c,d) = SE(4);
-            flagRT(3,c,d) = flag;
+            fvalRT(3,c,d) = fval;
             if unc
                 amplRT(3,c,d) = betaUnc(1);
                 muRT(3,c,d) = betaUnc(2);
@@ -307,7 +291,6 @@ if conftask
     gfit.conf.mu   = muConf;
     gfit.conf.sigma = sigmaConf;
     gfit.conf.bsln = baselineConf;
-    gfit.conf.flag = flagConf;
 
     gfit.conf.amplSE = amplConfSE;
     gfit.conf.muSE  = muConfSE;
@@ -326,7 +309,6 @@ if RTtask
     gfit.RT.mu   = muRT;
     gfit.RT.sigma = sigmaRT;
     gfit.RT.bsln = baselineRT;
-    gfit.RT.flag = flagRT;
 
     gfit.RT.amplSE = amplRTse;
     gfit.RT.muSE  = muRTse;

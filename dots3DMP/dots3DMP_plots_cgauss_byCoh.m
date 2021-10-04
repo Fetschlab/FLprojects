@@ -15,12 +15,9 @@ clr{2} = {'ko','ro','bo'};
 clr{3} = {'ko','yo','go'};
 clr{4} = clr{1};
 figure(101+D);
-<<<<<<< HEAD:dots3DMP/dots3DMP_plots_cgauss_byCoh.m
-set(gcf,'Color',[1 1 1],'Position',[300 1000 450+300*(length(cohs)-2) 400+150*(conftask>0)+150*RTtask],'PaperPositionMode','auto'); clf;
-=======
+
 set(gcf,'Color',[1 1 1],'Position',[300 1000 450+300*(length(cohs)-2) 200+150*(conftask>0)+150*RTtask],'PaperPositionMode','auto'); clf;
 % set(gcf,'Color',[1 1 1],'Position',[300 600 600 800],'PaperPositionMode','auto'); clf;
->>>>>>> 442f2b6e8eab5ad9e235836908aa3f5d8c3a02c4:dots3DMP/dots3DMP_plots_cgauss_func.m
 for c = 1:length(cohs)
     % choice
     subplot(1+double(conftask>0)+double(RTtask),length(cohs),c); box off; hold on;
