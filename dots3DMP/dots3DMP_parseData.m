@@ -37,6 +37,9 @@ for d = 1:length(deltas)+1 % add extra column for all trials irrespective of del
         if RTtask
             RTmean(m,c,d,h) = nanmean(data.RT(J));
             RTse(m,c,d,h) = nanstd(data.RT(J))/sqrt(n(m,c,d,h));
+        else
+            RTmean(m,c,d,h) = NaN;
+            RTse(m,c,d,h) = NaN;
         end
         
         if conftask==1 % saccEndpoint
@@ -49,7 +52,10 @@ for d = 1:length(deltas)+1 % add extra column for all trials irrespective of del
             end
             confMean(m,c,d,h) = nansum(J & data.PDW==1) / sum(J); % 1 is high
             % SE gets calculated below
-        end           
+        else % no conf at all
+            confMean(m,c,d,h) = NaN;
+            confSE(m,c,d,h) = NaN;
+        end
     end
 
     % fit logistic regression

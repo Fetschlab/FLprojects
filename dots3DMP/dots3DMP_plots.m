@@ -30,7 +30,7 @@ for c = 1:length(cohs)
     try changeAxesFontSize(gca,15,15); catch; end
     
     % CONFIDENCE
-    if conftask > 0
+    if conftask
         subplot(1+double(conftask>0)+double(RTtask),length(cohs),c+length(cohs)); box off; hold on;
         for m = 1:length(mods)
             h(m) = errorbar(hdgs, squeeze(parsedData.confMean(m,c,D,:)), squeeze(parsedData.confSE(m,c,D,:)), [clr{c}{m} '-'],'linewidth',1.5);
@@ -85,18 +85,20 @@ for c = 1:length(cohs)
     xlabel('heading angle (deg)'); ylabel('P(right)');
     try changeAxesFontSize(gca,15,15); catch; end
     
-    subplot(1+double(conftask>0)+double(RTtask),length(cohs),c+length(cohs)); box off; hold on;
-    for d = 1:length(deltas)
-        h(d) = errorbar(hdgs, squeeze(parsedData.confMean(3,c,d,:)), squeeze(parsedData.confSE(3,c,d,:)), [clr{c}{d} '-'], 'linewidth', 1.5);
-        hold on;
-    end
-    ylim([0 1]); 
-    xlabel('heading angle (deg)'); 
-    if conftask==1, ylabel('SEP (''confidence'', %)');
-    elseif conftask==2, ylabel('P(high bet)');
-    end
-    try changeAxesFontSize(gca,15,15); catch; end
-   
+    if conftask
+        subplot(1+double(conftask>0)+double(RTtask),length(cohs),c+length(cohs)); box off; hold on;
+        for d = 1:length(deltas)
+            h(d) = errorbar(hdgs, squeeze(parsedData.confMean(3,c,d,:)), squeeze(parsedData.confSE(3,c,d,:)), [clr{c}{d} '-'], 'linewidth', 1.5);
+            hold on;
+        end
+        ylim([0 1]); 
+        xlabel('heading angle (deg)'); 
+        if conftask==1, ylabel('SEP (''confidence'', %)');
+        elseif conftask==2, ylabel('P(high bet)');
+        end
+        try changeAxesFontSize(gca,15,15); catch; end
+    end 
+    
     if RTtask
         subplot(1+double(conftask>0)+double(RTtask),length(cohs),c+length(cohs)*2); box off; hold on;
         for d = 1:length(deltas)

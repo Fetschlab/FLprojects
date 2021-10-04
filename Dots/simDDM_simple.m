@@ -1,13 +1,13 @@
 %% simDDM_simple.m
-% simple monte-carlo style simulation of a 1D drift-diffusion model in the 
-% context of a motion discrimination task (see e.g. Shadlen et al. 2006)
-% CRF circa 2015
+% simple simulation of a 1D drift-diffusion model in the context of a
+% motion discrimination task (see e.g. Shadlen et al. 2006)
+% CF circa 2015
 
 clear all; close all;
 
 ntrials = 5000;
 
-% different levels of motion strength (percent coherence)
+% different levels of motion strength ('coherence')
 cohs = [-0.512 -0.256 -0.128 -0.064 -0.032 0 0.032 0.064 0.128 0.256 0.512];
 
 % delta-T (time step, in ms)
@@ -20,13 +20,14 @@ timeAxis = 0:dT:maxdur;
 coh = randsample(cohs,ntrials,'true')';
 
 
-%% params
-k = 0.3; % coefficient converting coherence to units of momentary evidence
+%% model parameters (play around with these to see their effects)
+k = 0.3; % 'drift rate' or sensitivity term: a constant converting stimulus
+         % strength into units of momentary evidence
+sigma = 1; % standard deviation of momentary evidence; often fixed at 1
 B = 25; % height of the bound, or threshold, for decision termination
-sigma = 1; % standard deviation of momentary evidence
 
 
-%% the diffusion process
+%% simulate the diffusion process
 
 % initialize variables
 dv = nan(ntrials,length(timeAxis)); % the DV as a function of n and time
@@ -40,8 +41,8 @@ for n = 1:ntrials
     % mean of momentary evidence
     mu = k * coh(n);
 
-    % diffusion process: slow version
-    if n==1 % run this once, for illustration purposes
+    % diffusion process: slow version***
+    if n==1 % ***run this once, for illustration purposes
         momentaryEvidence = nan(maxdur,1);
         for t = 1:maxdur
             momentaryEvidence(t) = randn*sigma + mu; % random sample with mean=mu, s.d.=sigma
@@ -52,32 +53,33 @@ for n = 1:ntrials
         plot(1:length(dv),ones(1,length(dv))*B,'g-');
         plot(1:length(dv),ones(1,length(dv))*-B,'r-');
         xlabel('Time (ms)'); ylabel('Accum. evidence (DV)');
-        % (evidence is shown continuing to accumulate
-        % past the bound, although it realy stops there)
+        % (evidence is shown continuing to accumulate past the bound,
+        % although it realy stops there; this can be useful
+        % for diagnosing problems with certain parameter settings)
     end    
 
     % faster version: does not require a FOR loop over the variable t
     dv(n,:) = [0, cumsum(normrnd(mu,sigma,1,maxdur))];
         
-    cRT = find(abs(dv(n,:))>=B, 1);
-    if isempty(cRT) % did not hit bound
+    tempRT = find(abs(dv(n,:))>=B, 1);
+    if isempty(tempRT) % did not hit bound
         RT(n) = maxdur;
         finalV(n) = dv(RT(n));
         hitBound(n) = 0;
     else % hit bound
-        RT(n) = cRT;
+        RT(n) = tempRT;
         finalV(n) = B*sign(dv(n,RT(n)));
         hitBound(n) = 1;
-    end    
+    end
     choice(n) = sign(finalV(n));  
 end
 toc
 
 % quick sanity check to see if params give reasonable performance
-pCorrect_total = (sum(choice==1 & coh>0) + sum(choice==-1 & coh<0)) / ntrials;
+pCorrect_total = (sum(choice==1 & coh>0) + sum(choice==-1 & coh<0)) / ntrials
 
 
-%% plot proportion "rightward" (choice=1) and reaction time as a function of coherence
+%% plot proportion "rightward" (choice=1) and reaction time as a function of motion strength
 
 for c = 1:length(cohs)
     I = coh==cohs(c);
@@ -90,7 +92,4 @@ xlabel('Motion strength (%coh)'); ylabel('Proportion rightward choices');
 
 figure; plot(cohs,meanRT(:,1),'go-');
 xlabel('Motion strength (%coh)'); ylabel('Reaction time (ms)');
-
-
-
 
