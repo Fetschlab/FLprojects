@@ -1,2 +1,4 @@
 
 *.m~
+.DS_store
+*.mat
