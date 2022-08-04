@@ -36,7 +36,8 @@
 %
 %
 % TODO 
-% - add option to append to existing dataCell
+% - add option to append to existing dataCell instead of creating new one
+% from scratch? but need to be careful about pars list too
 % - add more useful metadata to info?
 % - key fields from info should get their own field in dataCell rows?
 % - exclusion criteria for cells
@@ -68,7 +69,7 @@ paradigms = {'dots3DMPtuning','dots3DMP','RFMapping','VesMapping'};
 subject = 'lucio';
 
 % dateRange = [20220223:20220331 20220512:20220531];
-dateRange = 20220615;
+dateRange = 20220801:20220802;
 
 dateStr = num2str(dateRange(1));
 for d = 2:length(dateRange)
@@ -78,7 +79,7 @@ end
 %%
 % set to 0 for testing, smaller size data, SU only
 % set to 1 to keep all MUs
-keepMU   = 1; 
+keepMU = 1; 
 useSCP = 1;
 useVPN = 0;
 overwriteLocalFiles = 0; % set to 1 to always use the server copy
@@ -86,7 +87,6 @@ overwriteLocalFiles = 0; % set to 1 to always use the server copy
 % SJ 04-2022
 % download associated PDS data files (we'll need this for some cleanup)
 % actually, just specify the mountDir, don't bother downloading the files
-% as my local mac is filling up with these files way too quickly
 % localDir = ['/Users/stevenjerjian/Desktop/FetschLab/PLDAPS_data/' subject '/']; 
 % remoteDir = ['/var/services/homes/fetschlab/data/' subject '/'];
 % getDataFromServer;

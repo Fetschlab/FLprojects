@@ -75,10 +75,6 @@ deltas = unique(data.delta);
 % deltas = [-3 3];
 hdgs   = unique(data.heading);
 
-
-%%
-
-
 %% basic parsing and descriptive gaussian fits 
 
 % means per condition, logistic fits
@@ -118,13 +114,6 @@ if ~isfield(data,'correct')
 end
 
 % third argument specifies which trials to use 
-% -1: all, 0: error trials only, 1: correct trials only
-% -1 will also lead to plotting of p(correct) as function of RT quantiles
-% 0 will only use weaker stimuli (set to bottom 3), since stronger stimuli
-% produce few errors 
-
-
-% dots3DMP_RTquantiles(data,conftask,-1)
 
 % newer version, SJJ late October 2021
 % plotOption == 0 - plot errors/low bet only
@@ -143,25 +132,42 @@ dots3DMP_CorrectVsErrorCurves(data,conftask,RTtask,1)
 % predictive of accuracy, even within a stimulus condition!
 
 parsedData_byConf = dots3DMP_parseData_byConf(data,mods,cohs,deltas,hdgs,conftask,RTtask); 
-gfit_byConf       = dots3DMP_fit_cgauss_byConf(data,mods,cohs,deltas,conftask,RTtask);
+% gfit_byConf       = dots3DMP_fit_cgauss_byConf(data,mods,cohs,deltas,conftask,RTtask);
 
 % plot it
-dots3DMP_plots_cgauss_byConf(gfit_byConf,parsedData_byConf,mods,cohs,deltas,hdgs,conftask,RTtask)
+dots3DMP_plots_byConf(parsedData_byConf,mods,cohs,deltas,hdgs,conftask,RTtask);
+% dots3DMP_plots_cgauss_byConf(gfit_byConf,parsedData_byConf,mods,cohs,deltas,hdgs,conftask,RTtask)
 
-%%
+%% Psychometric curves split by (previous) PDW
+
+% doesn't seem like nBack 1 has any influence on accuracy/RT on subsequent
+% trial (within or across mod)...
+% something weird with PDW though, need to check code logic
+nBack = 1; withinMod = 0;
+parsedData = dots3DMP_parseDataPrevConf(data,mods,cohs,deltas,hdgs,conftask,RTtask,nBack,withinMod);
+dots3DMP_plots_byConf(parsedData,mods,cohs,deltas,hdgs,conftask,RTtask);
+
+%% split curves for PDW, split  by relative reward for high bet
 
 rewRatio = data.amountRewardHighConfOffered ./ data.amountRewardLowConfOffered;
 nbins = 4;
 confQ = [0 quantile(rewRatio,nbins-1) inf];
 confGroup = discretize(rewRatio, confQ); 
+splitPDW  = 2; isPDW = 0;
+% splitPDW = 0 - don't split trials at all (show all, together), 1 - show only low bets, 2 -
+% show only high bets, 3 - show only 1-target, 4 - show all, separately
+
+% just plot behavioral outcomes split by PDW, and
+% make 1-target trials a separate category (i.e. line)
+% can remove them totally by setting removeOneTarg=0;
 % confGroup = double(data.PDW)+1;
 % confGroup(logical(data.oneTargConf))= 3;
+% splitPDW = 0; % this is redundant in this case
+% isPDW = 1;
 
-splitPDW = 0;
-removeOneTarg = 1;
+removeOneTarg = 0;
 parsedData = dots3DMP_parseData_multiConf(data,mods,cohs,deltas,hdgs,confGroup,conftask,RTtask,removeOneTarg,splitPDW); % don't remove 1-targets, and don't split by hi/lo, so we can plot P(high bet) as function of reward ratio
-
-dots3DMP_plots_multiConf(parsedData,mods,cohs,deltas,hdgs,conftask,RTtask,splitPDW)
+dots3DMP_plots_multiConf(parsedData,mods,cohs,deltas,hdgs,conftask,RTtask,splitPDW,isPDW)
 
 
 %% relationship between confidence and cue weights

@@ -21,8 +21,8 @@ if conftask==1 % continuous, sacc endpoint
 elseif conftask==2 % PDW, probabilities
     
     % dont force min/max 0,1... resulting in non-invertible Hessians
-    flippedGauss = @(b,hdg) 1 - ( min(max(b(1),0),1) .* exp(-(hdg-b(2)).^2 ./ (2*b(3).^2)) + min(max(b(4),0),1));
-%     flippedGauss = @(b,hdg) 1 - ( b(1) .* exp(-(hdg-b(2)).^2 ./ (2*b(3).^2)) + b(4));
+%     flippedGauss = @(b,hdg) 1 - ( min(max(b(1),0),1) .* exp(-(hdg-b(2)).^2 ./ (2*b(3).^2)) + min(max(b(4),0),1));
+    flippedGauss = @(b,hdg) 1 - ( b(1) .* exp(-(hdg-b(2)).^2 ./ (2*b(3).^2)) + b(4));
 
     % negative log likelihood of observing PDW data
     % log prob of observing high bet on all trials where subj bet
@@ -39,8 +39,8 @@ unc = 0; % saves biases from fminunc instead of fminsearch (SEs always are fminu
 
 % parameter initial guesses
 guess_cgauss = [0 2];
-guess_fgauss = [0.2 0 4 0.4];
-guess_gauss  = [0.5 0 6 1];
+guess_fgauss = [0.1 0 5 0.3];
+guess_gauss  = [0.5 0 5 1];
 
 fitOptions = optimset('display','none','MaxFunEvals',1000,'MaxIter',1000);
 

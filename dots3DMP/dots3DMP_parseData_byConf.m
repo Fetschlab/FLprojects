@@ -21,7 +21,7 @@ yVals = nan(length(mods)+1,length(cohs),length(deltas)+1,length(xVals),2);
 
 B = cell(length(mods)+1,length(cohs),length(deltas)+1,2);
 stats = cell(length(mods)+1,length(cohs),length(deltas)+1,2);
-plotLogistic = nan(length(mods)+1,length(cohs),length(deltas)+1,2);
+plotLogistic = false(length(mods)+1,length(cohs),length(deltas)+1,2);
 
 if conftask==1
     % currently just a median split across subjs

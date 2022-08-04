@@ -45,12 +45,15 @@ end
 [cgs,ia,ic] = unique(confGroup);
 ncg = length(cgs);
 
+rewRatio = data.amountRewardHighConfOffered ./ data.amountRewardLowConfOffered;
+
+
 %% parse data
 % create and use matrices of summary data indexed by variables of interest
 
 n = nan(length(mods)+1,length(cohs),length(deltas)+1,length(hdgs),ncg);
                                % add extra column^ for pooling all trials irrespective of delta
-[pRight, RTmean, RTse, confMean, confSE] = deal(n);
+[pRight, RTmean, RTse, confMean, confSE,nCorr] = deal(n);
 
 xVals = hdgs(1):0.1:hdgs(end);
 yVals = nan(length(mods)+1,length(cohs),length(deltas)+1,length(xVals),ncg);
@@ -81,14 +84,20 @@ for d = 1:length(deltas)+1 % add extra column for all trials irrespective of del
         
         pRight(m,c,d,h,nc) = sum(Jc & data.choice==2) / n(m,c,d,h,nc); % 2 is rightward
         
+        % only correct trials for conf and RT
+        Jc = Jc & ~data.correct;
+        nCorr(m,c,d,h,nc) = sum(Jc);
+        
         if RTtask
             RTmean(m,c,d,h,nc) = mean(data.RT(Jc));
-            RTse(m,c,d,h,nc) = std(data.RT(Jc))/sqrt(n(m,c,d,h,nc));
+%             RTse(m,c,d,h,nc) = std(data.RT(Jc))/sqrt(n(m,c,d,h,nc));
+            RTse(m,c,d,h,nc) = std(data.RT(Jc))/sqrt(nCorr(m,c,d,h,nc));
         end
         
         if conftask==1
             confMean(m,c,d,h,nc) = mean(data.conf(Jc));
-            confSE(m,c,d,h,nc) = std(data.conf(Jc))/sqrt(n(m,c,d,h,nc));
+%             confSE(m,c,d,h,nc) = std(data.conf(Jc))/sqrt(n(m,c,d,h,nc));
+            confSE(m,c,d,h,nc) = std(data.conf(Jc))/sqrt(nCorr(m,c,d,h,nc));
             
         else % PDW
             confMean(m,c,d,h,nc) = mean(data.PDW(Jc)); % 1 is high
@@ -106,6 +115,8 @@ for d = 1:length(deltas)+1 % add extra column for all trials irrespective of del
     end
     K = K & confGroup==cgs(nc);
 
+    meanRew(m,c,d,nc) = mean(rewRatio(K));
+    
     if sum(~isnan(data.heading(K)))>=3*length(hdgs) && length(hdgs)>5
         X = data.heading(K);
         y = data.choice(K)==2; % 2 is rightward
@@ -128,6 +139,8 @@ end
 % copy vestib-only data to all coherences, to aid plotting
 for c=1:length(cohs)
     n(1,c,:,:,:) = n(1,1,:,:,:);
+%     nCorr(1,c,:,:,:) = nCorr(1,1,:,:,:);
+
     pRight(1,c,:,:,:) = pRight(1,1,:,:,:);
     pRightSE(1,c,:,:,:) = pRightSE(1,1,:,:,:);
     confMean(1,c,:,:,:) = confMean(1,1,:,:,:);
@@ -140,12 +153,15 @@ for c=1:length(cohs)
     plotLogistic(1,c,:,:) = plotLogistic(1,1,:,:);
     B(1,c,:,:) = B(1,1,:,:);
     stats(1,c,:,:) = stats(1,1,:,:);
+    
+    meanRew(1,c,:,:) = meanRew(1,1,:,:);
 end
 
 
 parsedData = struct();
 %parsedData.subject = data.filename{1}(1:5);
 parsedData.n = n;
+parsedData.nCorr = nCorr;
 parsedData.pRight = pRight;
 parsedData.pRightSE = pRightSE;
 parsedData.xVals = xVals;
@@ -158,6 +174,7 @@ parsedData.confGroupSplit = groupSplit;
 parsedData.confMean = confMean;
 parsedData.confSE = confSE;
 
+parsedData.meanRew = meanRew;
 
 if RTtask
     parsedData.RTmean = RTmean;

@@ -29,7 +29,7 @@ if ~RTtask
 
 else
     load('human_20200213-20220317_RT_clean_Apr2022.mat') % human RT
-    subjs2keep = [1 2 4 5];
+    subjs2keep = [1 2 3 4 5];
     
 %     data.Confnorm = data.conf;
 %     data.conf = data.confRaw;
@@ -101,7 +101,7 @@ dots3DMP_plots_cgauss_byConf(gfit_byConf,parsedData_byConf,mods,cohs,deltas,hdgs
 
 % 0 - plot errors/low bet only, 1 - plot correct/high bet only, 2 - plot correct/error or high/low bet separately, -1 - plot all trials
 if RTtask
-    dots3DMP_RTquantiles(data,conftask,1); 
+    dots3DMP_RTquantiles(data,conftask,2); 
 %     confRT_distrs(data,mods,cohs,conftask,RTtask)
 end
 if printFigs
@@ -115,6 +115,8 @@ end
 % wrapper that does analyses with each subject's data, by sub-sampling
 % relevant trials from data
 
+%%
+dots3DMP_CorrectVsErrorCurves(data,conftask,RTtask,1)
 
 
 %% meta-sensitivity
@@ -137,7 +139,7 @@ end
 % dots3DMP_plotCueWeights(wves,wvesBoot,cohs,conftask) % plot the weights
 
 
-%% individual subjects psychometric curve, and cue conflict shift/SE comparisons
+%% individual subjects psychometric curves, and cue conflict shift/SE comparisons
 
 subjs = unique(data.subj);
 fnames = fieldnames(data);

@@ -49,7 +49,7 @@ for ii=1:nInt
 end
 
 % reshape so that 'heading' or main independent variable is separate axis
-% to other conditions, makes plotting easier
+% to other conditions, makes plotting easier in some cases
 if resort
 uhdgs=unique(groupVar(:,end));
 meanFR = reshape(meanFR,length(uhdgs),[],size(meanFR,2));

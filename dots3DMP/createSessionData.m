@@ -69,6 +69,8 @@ for n = 1:length(currentFolderList)
             
             if isempty(theseFiles), continue, end
             
+            %fprintf('%d files for %s\n',length(theseFiles),paradigms{par});
+            
             % concatenate all the data and condition fields of PDS files for given paradigm which are marked as part of the same recording group
             clear allPDS
             st = 1;
@@ -102,6 +104,7 @@ for n = 1:length(currentFolderList)
             else
                 sp.st = [];
                 sp.clu = [];
+                sp.waves = [];
                 shiftSpikeTime = [];
             end
             
@@ -111,7 +114,31 @@ for n = 1:length(currentFolderList)
                 load(fullfile(localDir,NSfilename));
                 
                 % pull in relevant condition data from PLDAPS and sub-select trials from this paradigm
-                [thisParEvents] = nsEventConditions(nsEvents,allPDS,lower(paradigms{par}));
+                
+                % I think I messed up here and (permanently) deleted the wrong RFmapping
+                % PLDAPS file (should have kept 1344 not 1338 as it seems
+                % that is the one matched to 0008 trellis file)
+                if strcmp(NSfilename,'lucio20220719dots3DMP0008_RippleEvents.mat')
+                    
+                    continue
+                    
+                    % don't have targetR and targetTheta though...adding
+                    % this to Ripple events from now on
+%                     thisParEvents = nsEvents;
+%                     hdgThetas = [90 -90 0 180 0 0]; hdgPhis = [0 0 0 0 90 -90];
+%                     for t = 1:length(thisParEvents.Events.dotOrder)
+%                         if all(~isnan(thisParEvents.Events.dotOrder{t}))
+%                             thisParEvents.Events.headingTheta{t} = hdgThetas(thisParEvents.Events.dotOrder{t});
+%                             thisParEvents.Events.headingPhi{t} = hdgPhis(thisParEvents.Events.dotOrder{t});
+%                         else
+%                             thisParEvents.Events.headingTheta{t} = NaN;
+%                             thisParEvents.Events.headingPhi{t} = NaN;
+%                         end
+%                     end
+%                     thisParEvents.Events.hdgOrder = thisParEvents.Events.dotOrder;
+                else
+                    [thisParEvents] = nsEventConditions(nsEvents,allPDS,lower(paradigms{par}));
+                end
                 
                 timeStampsShifted = thisParEvents.analogInfo.timeStampsShifted ./ double(thisParEvents.analogInfo.Fs);
 
@@ -146,7 +173,7 @@ for n = 1:length(currentFolderList)
                 % deal with single electrode recording neural data
               
                 if contains(info.probe_type{1},'Single')
-                    remoteDirSpikes = sprintf('/var/services/homes/fetschlab/data/%s/%s_neuro/%d/%s%ddots3DMP%04d/',subject,subject,info.date,subject,info.date,info.trellis_filenums(utf));
+                    remoteDirSpikes = sprintf('/var/services/homes/fetschlab/data/%s/%s_neuro/%d/%s%ddots3DMP%04d/',subject,subject,info.date,subject,info.date,unique_trellis_files(utf));
                     mountDir = sprintf('/Volumes/homes/fetschlab/data/%s/%s_neuro/%d/%s%ddots3DMP%04d/',subject,subject,info.date,subject,info.date,unique_trellis_files(utf));
                     
                     cmd = ['ssh ' IPadd ' ls ' remoteDirSpikes];
@@ -163,6 +190,7 @@ for n = 1:length(currentFolderList)
                     try
                         load([mountDir remoteFiles{contains(remoteFiles,'waveforms')}]);
                     catch
+                        if unique_trellis_files(utf)==6, keyboard, end
                         fprintf('Could not find or load waveforms file %d, id%04d\n',info.date,unique_trellis_files(utf))
                         continue
                     end
@@ -175,6 +203,8 @@ for n = 1:length(currentFolderList)
                     % paradigm within a set (we will shift the times below)
                     sp.st   = [sp.st; (waveforms.spikeTimes')/1000]; % mksort waveform times are in ms it seems
                     sp.clu  = [sp.clu; waveforms.units'];
+                    
+                    sp.waves = [sp.waves waveforms.waves];
                     
                     % for mksort, assume that clustering is consistent
                     % throughout!
@@ -196,9 +226,8 @@ for n = 1:length(currentFolderList)
                     % this shift is only necessary if multiple Trellis
                     % recordings were made for same location - these will
                     % have been concatenated for kilosort sorting, but
-                    % events will be separate
+                    % events will still be separate
                     
-%                     timeStampsShifted = thisParEvents.analogInfo.timeStampsShifted ./ double(thisParEvents.analogInfo.Fs);
                     timeLims = timeStampsShifted(1) + thisParEvents.Events.trStart([1 end]) + [-1 1]*20;
                     
                     thisFileSpikes    = (sp.st >= timeLims(1) & sp.st < timeLims(2));
@@ -237,15 +266,19 @@ for n = 1:length(currentFolderList)
             dataCell(sess).data.(paradigms{par}).cluster_type = cgs;
 
             % SJ 06/13/2022 
+            % store channel and depth information for each cluster (should do this if we
+            % want to reconstruct putative recording locations)
 %             dataCell(sess).data.(paradigms{par}).chs = chs;
 %             dataCell(sess).data.(paradigms{par}).depths = depths;
 
+            
+            % now, assign spiketimes for each unit to given cell
             for unit=1:sum(inds)
                 
                 theseSpikes = sp.clu==cids(unit) & thisParSpikes;   
 %                 dataCell{sess}.data.(paradigms{par}).spiketimes{unit} = spikeTimes(theseSpikes);
                 dataCell(sess).data.(paradigms{par}).spiketimes{unit} = spikeTimes(theseSpikes);
-
+                dataCell(sess).data.(paradigms{par}).waveforms{unit} = sp.waves(:,theseSpikes);
             end
             
         end
