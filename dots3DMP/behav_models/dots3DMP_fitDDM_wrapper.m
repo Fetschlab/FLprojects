@@ -17,7 +17,7 @@ load tempsim.mat
 
 %% or real data
 
-load lucio_20220301-20221006_clean
+% load lucio_20220301-20221006_clean
 
 
 %% some bookkeeping, then parse data, and plot if desired
@@ -75,13 +75,8 @@ options.errfun = 'dots3DMP_fit_2Dacc_err_singlebound_noMC_signed';
 options.runInterpFit = 1; 
 
 options.fitMethod = 'fms'; %'fms','global','multi','pattern','bads'
-% options.fitMethod = 'global';
-% options.fitMethod = 'multi';
-% options.fitMethod = 'pattern';
-% options.fitMethod = 'bads';
 
-guess = [origParams.kmult, origParam.B, origParams.theta,origParams.alpha, origParams.TndMean/1000]
-% fixed = [0 0 0 0 0 0 0 0 0];
+guess = [origParams.kmult, origParams.B, origParams.theta, origParams.alpha, origParams.TndMean/1000];
 fixed = zeros(1,length(guess));
 
 % ************************************
@@ -90,18 +85,15 @@ fixed(:)=1;
 % ************************************
 
 % plot error trajectory (prob doesn't work with parallel fit methods)
-options.ploterr  = 1;
-options.plot     = 1;
+options.plot     = 0;
 options.feedback = 2;
-
-if options.ploterr, options.fh = 400; end
 
 %%
 [X, err_final, fit, fitInterp] = dots3DMP_fitDDM(data,options,guess,fixed);
 % fitInterp is in fact not obsolete, and needs fixing in ^^
 
 % plot it!
-dots3DMP_plots_fit_byCoh(data,fitInterp,conftask,RTtask);
+dots3DMP_plots_fit_byCoh(data,fitInterp,options.conftask,options.RTtask);
 
 
 %% in progress

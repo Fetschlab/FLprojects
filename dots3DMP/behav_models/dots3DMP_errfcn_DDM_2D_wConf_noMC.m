@@ -1,4 +1,4 @@
-function [err,fit,parsedFit] = dots3DMP_errfcn_DDM_2D_wConf_noMC(param, guess, fixed, data, options)
+function [err,fit,parsedFit,logOddsMap] = dots3DMP_errfcn_DDM_2D_wConf_noMC(param, guess, fixed, data, options)
 
 % updated model calculations to Steven's method: 
 % SJ 10-11-2021 no Monte Carlo simulation for fitting, it's redundant!
@@ -8,12 +8,6 @@ function [err,fit,parsedFit] = dots3DMP_errfcn_DDM_2D_wConf_noMC(param, guess, f
 % ONLY FIT zero delta
 
 % SJ spawned from dots version, for dots3DMP
-
-% TO DO 
-% convert k to kmult/kves/kvis
-% replace coh with hdg
-% incorporate coh, mod,
-%
 
 tic
 
@@ -57,19 +51,27 @@ else, k = mean([kves kvis]);
 end
 
 timeToConf = 0; % placeholder
-% use method of images to calculate PDFs of DV and mapping to log odds corr
-R.t = 0.001:0.001:max_dur+timeToConf;
-R.Bup = B;
-R.drift = k * sind(hdgs(hdgs>=0)); % takes only unsigned drift rates
-R.lose_flag = 1; % we always need the losing densities
-R.plotflag = options.plot; % 1 = plot, 2 = plot nicer and export_fig (eg for talk)
-%     R.plotflag = 0; % manual override
-Pconf = images_dtb_2d(R); % /WolpertMOI
+    % use method of images to calculate PDFs of DV and mapping to log odds corr
+    R.t = 0.001:0.001:max_dur+timeToConf;
+    R.Bup = B;
+    R.drift = k * sind(hdgs(hdgs>=0)); % takes only unsigned drift rates
+    R.lose_flag = 1; % we always need the losing densities
+    R.plotflag = options.plot; % 1 = plot, 2 = plot nicer and export_fig (eg for talk)
+    R.plotflag = 1; % manual override
+    Pconf = images_dtb_2d(R); % /WolpertMOI
 
-dt = R.t(2)-R.t(1);
-skipT = floor(timeToConf/dt); 
-Pconf.t(1:skipT) = [];
-Pconf.logOddsCorrMap(:,1:skipT) = [];
+    % SJ need to check this works, and is in the right direction
+    dt = R.t(2)-R.t(1);
+    skipT = floor(timeToConf/dt);
+    Pconf.t = circshift(Pconf.t,skipT);
+    Pconf.logOddsCorrMap = circshift(Pconf.logOddsCorrMap,skipT,2);
+
+if options.dummyRun==0
+    logOddsMap = Pconf.logOddsCorrMap;
+else
+    logOddsMap = options.logOddsMap;
+end
+
 
 
 
@@ -121,11 +123,6 @@ for c = 1:length(cohs) % vis and comb
 %         PComb{c}{d} =  images_dtb_2d(RComb);
 %     end
 end
-
-
-
-% I Think we can just tweak images_dtb since it runs flux_img at each
-% timestep, to incorporate scaled drift rate...
 
 
 %% calculate likelihood of the observed data given the model parameters
@@ -201,10 +198,10 @@ for h = 1:length(hdgs)
 
         % calculate probabilities of the four outcomes: right/left x high/low
         % these are the intersections, e.g. P(R n H)
-        pRightHigh = sum(sum(Pxt2.*(Pconf.logOddsCorrMap>=theta(m))));
-        pRightLow = sum(sum(Pxt2.*(Pconf.logOddsCorrMap<theta(m))));
-        pLeftHigh = sum(sum(Pxt1.*(Pconf.logOddsCorrMap>=theta(m))));
-        pLeftLow =  sum(sum(Pxt1.*(Pconf.logOddsCorrMap<theta(m))));                                                             
+        pRightHigh = sum(sum(Pxt2.*(logOddsMap>=theta(m))));
+        pRightLow = sum(sum(Pxt2.*(logOddsMap<theta(m))));
+        pLeftHigh = sum(sum(Pxt1.*(logOddsMap>=theta(m))));
+        pLeftLow =  sum(sum(Pxt1.*(logOddsMap<theta(m))));                                                             
     
     else % rightward motion
         % if coh is positive, then pRight is p(correct), aka P.up
@@ -213,12 +210,14 @@ for h = 1:length(hdgs)
 
         % calculate probabilities of the four outcomes: right/left x high/low
         % these are the intersections, e.g. P(R n H)
-        pRightHigh = sum(sum(Pxt1.*(Pconf.logOddsCorrMap>=theta(m))));
-        pRightLow = sum(sum(Pxt1.*(Pconf.logOddsCorrMap<theta(m))));
-        pLeftHigh = sum(sum(Pxt2.*(Pconf.logOddsCorrMap>=theta(m))));
-        pLeftLow =  sum(sum(Pxt2.*(Pconf.logOddsCorrMap<theta(m))));                                                     
+        pRightHigh = sum(sum(Pxt1.*(logOddsMap>=theta(m))));
+        pRightLow = sum(sum(Pxt1.*(logOddsMap<theta(m))));
+        pLeftHigh = sum(sum(Pxt2.*(logOddsMap>=theta(m))));
+        pLeftLow =  sum(sum(Pxt2.*(logOddsMap<theta(m))));                                                     
     end
     
+%     if m==1 && hdgs(h)==0 && options.dummyRun, keyboard, end
+
     %ensure total prob sums to one (when it doesn't, it's because of unabsorbed prob)
     % THIS STEP WASN'T THOUGHT TO BE NECESSARY FOR PARAM RECOV, SO BE
     % CAREFUL AND REMOVE IT IF IT MUCKS IT UP
@@ -314,8 +313,8 @@ for h = 1:length(hdgs)
         % for RT conditioned on wager, it seems we don't need to do any
         % scaling by Ptb; the correct distribution is captured by the
         % conditional Pxts, we just sum them, dot product w t and normalize
-        PxtAboveTheta = sum(Pxt1.*(Pconf.logOddsCorrMap>=theta(m))); % shouldn't matter if Pxt1 or 2, it's symmetric
-        PxtBelowTheta = sum(Pxt1.*(Pconf.logOddsCorrMap<theta(m)));
+        PxtAboveTheta = sum(Pxt1.*(logOddsMap>=theta(m))); % shouldn't matter if Pxt1 or 2, it's symmetric
+        PxtBelowTheta = sum(Pxt1.*(logOddsMap<theta(m)));
         meanRThigh = PxtAboveTheta * R.t' / sum(PxtAboveTheta);
         meanRTlow = PxtBelowTheta * R.t' / sum(PxtBelowTheta);
         
@@ -532,7 +531,7 @@ if options.feedback
     fprintf('err: %f\n', err);
 end
 if options.feedback==2 && strcmp(options.fitMethod,'fms')
-    figure(options.fh);
+    figure(400);
     plot(call_num, err, '.','MarkerSize',14);
     drawnow;
 end

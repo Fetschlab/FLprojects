@@ -162,7 +162,7 @@ end
 % error value and model-generated data points (trial outcomes)
 options.ploterr = 0;
 options.dummyRun = 0;
-[err_final, fit] = feval(options.errfcn,X,X,true(size(X)),data,options);
+[err_final, fit, ~, logOddsMap] = feval(options.errfcn,X,X,true(size(X)),data,options);
 
 
 % THIS SHOULD ALL BECOME OBSOLETE, NO MORE MC!
@@ -214,6 +214,7 @@ end
 % [~,fitInterp] = dots3DMP_fitDDM_err(X,Dfit);
 fixed = true(size(X)); % fix all params
 options.dummyRun = 1;
+options.logOddsMap = logOddsMap;
 [~, fitInterp] = feval(options.errfcn,X,X,fixed,Dfit,options);
 
 else
