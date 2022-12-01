@@ -9,6 +9,11 @@ function parsedData = dots3DMP_parseData_byConf(data,mods,cohs,deltas,hdgs,conft
 if nargin < 7, RTtask = 0; end
 if conftask == 0, error('Cannot split data by confidence for non-conf task!'); end
 
+% switch back to 1:2 if 0:1 (e.g. from fitting code)
+if max(data.choice)==1
+    data.choice = data.choice+1;
+end
+
 %% parse data
 % create and use matrices of summary data indexed by variables of interest
 
