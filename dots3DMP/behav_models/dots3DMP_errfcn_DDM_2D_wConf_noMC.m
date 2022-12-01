@@ -39,7 +39,11 @@ cohs = unique(data.coherence);
 mods = unique(data.modality);
 hdgs = unique(data.heading);
 
-deltas = 0; % fit only zero delta with unsigned MOI
+if options.dummyRun == 0
+    deltas = 0; % fit only zero delta with unsigned MOI
+else
+    deltas = unique(data.delta);
+end
 
 % separate kvis and kves
 kvis  = kmult*cohs'; % assume drift proportional to coh, reduces nParams
@@ -50,21 +54,24 @@ if all(mods==1), k = kves;
 else, k = mean([kves kvis]);
 end
 
-timeToConf = 0; % placeholder
-    % use method of images to calculate PDFs of DV and mapping to log odds corr
-    R.t = 0.001:0.001:max_dur+timeToConf;
-    R.Bup = B;
-    R.drift = k * sind(hdgs(hdgs>=0)); % takes only unsigned drift rates
-    R.lose_flag = 1; % we always need the losing densities
-    R.plotflag = options.plot; % 1 = plot, 2 = plot nicer and export_fig (eg for talk)
-    R.plotflag = 1; % manual override
-    Pconf = images_dtb_2d(R); % /WolpertMOI
+% generate or load log odds correct map
 
-    % SJ need to check this works, and is in the right direction
-    dt = R.t(2)-R.t(1);
-    skipT = floor(timeToConf/dt);
-    Pconf.t = circshift(Pconf.t,skipT);
-    Pconf.logOddsCorrMap = circshift(Pconf.logOddsCorrMap,skipT,2);
+timeToConf = 0; % placeholder
+% use method of images to calculate PDFs of DV and mapping to log odds corr
+R.t = 0.001:0.001:max_dur+timeToConf;
+R.Bup = B;
+R.drift = k * sind(hdgs(hdgs>=0)); % takes only unsigned drift rates
+R.lose_flag = 1; % we always need the losing densities
+R.plotflag = options.plot; % 1 = plot, 2 = plot nicer and export_fig (eg for talk)
+% R.plotflag = 1; % manual override
+Pconf = images_dtb_2d(R); % /WolpertMOI
+
+% shift the logOdds Map to account for delay between choice and conf
+% report...is this mathematically valid given absorbed probability?
+dt = R.t(2)-R.t(1);
+skipT = floor(timeToConf/dt);
+Pconf.t(1:skipT) = [];
+Pconf.logOddsCorrMap(:,1:skipT) = [];
 
 if options.dummyRun==0
     logOddsMap = Pconf.logOddsCorrMap;
@@ -73,55 +80,62 @@ else
 end
 
 
+%% now compute a separate P for model choices and RTs (where drift rate is modality-specific)
 
-
-% now compute a separate P for model choices and RTs (modality-specific)
+% ves
 RVes.t = 0.001:0.001:max_dur;
 RVes.Bup = B;
 % *** marking differences in signed vs. unsigned ver ***
 RVes.drift = kves * sind(hdgs(hdgs>=0));
+RVes.driftSigned = kves * sind(hdgs);
+
 RVes.lose_flag = 1;
 RVes.plotflag = 0;
 PVes =  images_dtb_2d(RVes);
 
-for c = 1:length(cohs) % vis and comb
+% vis and comb, separate drift for each coh
+for c = 1:length(cohs)
     RVis.t = 0.001:0.001:max_dur;
     RVis.Bup = B;
 % *** marking differences in signed vs. unsigned ver ***
     RVis.drift = kvis(c) * sind(hdgs(hdgs>=0));
+    RVis.driftSigned = kvis(c) * sind(hdgs);
+
     RVis.lose_flag = 1;
     RVis.plotflag = 0;
     PVis(c) =  images_dtb_2d(RVis);
-    
-    kcomb(c) = sqrt(kves.^2 + kvis(c).^2); % optimal per Drugo
+
     RComb.t = 0.001:0.001:max_dur;
     RComb.Bup = B;
-% *** marking differences in signed vs. unsigned ver ***
-    RComb.drift = kcomb(c) * sind(hdgs(hdgs>=0));
     RComb.lose_flag = 1;
     RComb.plotflag = 0;
-    PComb(c) =  images_dtb_2d(RComb);
+
+    if options.dummyRun == 0
+      
+        kcomb(c) = sqrt(kves.^2 + kvis(c).^2); % optimal per Drugo
+        % *** marking differences in signed vs. unsigned ver ***
+        RComb.driftSigned = kcomb(c) * sind(hdgs);
+        RComb.drift = kcomb(c) * sind(hdgs(hdgs>=0));
+        PComb(c,1) =  images_dtb_2d(RComb);
 
     % compute w and mu to capture biases under cue conflict
-    % not needed/possible here without signed heading, right?
-    % so with unsigned hdg we can only fit delta=0
-    % then we can use fit params to predict conflict data
-%     wVes = sqrt( kves^2 / (kves^2 + kvis(c)^2) );
-%     wVis = sqrt( kvis(c)^2 / (kves^2 + kvis(c)^2) );
-%     for d = 1:length(deltas)
-%         clear Rcomb
-%         % positive delta defined as ves to the left, vis to the right
-%         muVes = kves    * sind(hdgs-deltas(d)/2);
-%         muVis = kvis(c) * sind(hdgs+deltas(d)/2);
-%         
-%         RComb.t = 0.001:0.001:duration;
-%         RComb.Bup = B;
-%         % *** marking differences in signed vs. unsigned ver ***
-%         RComb.drift = wVes.*muVes + wVis.*muVis;
-%         RComb.lose_flag = 1;
-%         RComb.plotflag = 0;
-%         PComb{c}{d} =  images_dtb_2d(RComb);
-%     end
+
+    else
+        
+        wVes = sqrt( kves^2 / (kves^2 + kvis(c)^2) );
+        wVis = sqrt( kvis(c)^2 / (kves^2 + kvis(c)^2) );
+        
+        for d = 1:length(deltas)
+            % positive delta defined as ves to the left, vis to the right
+            muVes = kves    * sind(hdgs-deltas(d)/2);
+            muVis = kvis(c) * sind(hdgs+deltas(d)/2);
+
+            % *** marking differences in signed vs. unsigned ver ***
+            RComb.driftSigned = wVes.*muVes + wVis.*muVis;
+            RComb.drift = abs(RComb.driftSigned);
+            PComb(c,d) =  images_dtb_2d(RComb);
+        end
+    end
 end
 
 
@@ -131,7 +145,7 @@ end
 usetrs_data = true(size(data.correct)); % try all trials
 
 % (for parsedFit, and some likelihood calculations)
-n = nan(length(mods),length(cohs),length(hdgs));
+n = nan(length(mods),length(cohs),length(deltas),length(hdgs));
 pRight_model        = n;
 pHigh_model         = n;
 pRightHigh_model    = n;
@@ -176,23 +190,38 @@ for m = 1:length(mods)
 
 for c = 1:length(cohs) 
 
-    if mods(m)==2, P = PVis(c);
-    elseif mods(m)==3, P = PComb(c);
-    end
 
 for d = 1:length(deltas)
+    
+    if deltas(d)~=0 && mods(m)~=3, continue, end
+
+    if mods(m)==2, P = PVis(c);
+    elseif mods(m)==3, P = PComb(c,d);
+    end
+
+
 for h = 1:length(hdgs)
 
+%     if deltas(d)==-3 && mods(m)==3, keyboard, end
     % index for images_dtb (unsigned hdg/drift corresponding to this signed hdg)                    
-    uh = abs(hdgs(h))==(hdgs(hdgs>=0));  % *** marking differences in signed vs. unsigned ver ***
-      
+    
+
+    if options.dummyRun==1 && mods(m)==3
+        uh = h;
+    else
+        uh = abs(hdgs(h))==(hdgs(hdgs>=0));  % *** marking differences in signed vs. unsigned ver ***
+    end
+
     % grab the distributions from images_dtb:
     Pxt1 = squeeze(P.up.distr_loser(uh,:,:))'; % losing race pdf given correct
     Pxt2 = squeeze(P.lo.distr_loser(uh,:,:))'; % losing race pdf given incorrect
-
+   
     % CHOICE & PDW
-    if hdgs(h)<0 % leftward motion
-        % if coh is negative, then pRight is p(incorrect), aka P.lo
+    % yes, we can fit non-zero bias, just need to use the bias-corrected signed
+    % drift rate, rather than the experimenter-defined headings!
+
+    if P.driftSigned(h)<0 % leftward motion
+        % if hdg is negative, then pRight is p(incorrect), aka P.lo
         pRight = P.lo.p(uh)/(P.up.p(uh)+P.lo.p(uh)); % normalized by total bound-crossing probability 
         pLeft = 1-pRight; % (evidently, the unabsorbed probability can be ignored when it comes to pRight)
 
@@ -203,8 +232,9 @@ for h = 1:length(hdgs)
         pLeftHigh = sum(sum(Pxt1.*(logOddsMap>=theta(m))));
         pLeftLow =  sum(sum(Pxt1.*(logOddsMap<theta(m))));                                                             
     
-    else % rightward motion
-        % if coh is positive, then pRight is p(correct), aka P.up
+    else % rightward motion (and zero motion is symmetrical so gets taken care of here too)
+
+        % if hdg is positive, then pRight is p(correct), aka P.up
         pRight = P.up.p(uh)/(P.up.p(uh)+P.lo.p(uh)); % normalized by total bound-crossing probability
         pLeft = 1-pRight;
 
@@ -215,8 +245,6 @@ for h = 1:length(hdgs)
         pLeftHigh = sum(sum(Pxt2.*(logOddsMap>=theta(m))));
         pLeftLow =  sum(sum(Pxt2.*(logOddsMap<theta(m))));                                                     
     end
-    
-%     if m==1 && hdgs(h)==0 && options.dummyRun, keyboard, end
 
     %ensure total prob sums to one (when it doesn't, it's because of unabsorbed prob)
     % THIS STEP WASN'T THOUGHT TO BE NECESSARY FOR PARAM RECOV, SO BE
@@ -366,6 +394,9 @@ fit = data;
 fit = rmfield(fit,'choice');
 try fit = rmfield(fit,'correct'); end %#ok<TRYNC>
 fit.pRight = pRight_model_trialwise;
+% fit.pRightHigh = pRightHigh_model_trialwise;
+% fit.pRightLow = pRightHigh_model_trialwise;
+
 if options.conftask==1 % SEP
     fit.conf = conf_model_trialwise;
     fit.PDW = nan(size(fit.conf));
@@ -375,6 +406,8 @@ elseif options.conftask==2 % PDW
 end
 if options.RTtask            
     fit.RT = RT_model_trialwise;
+%     fit.RThigh = RThigh_model_trialwise;
+%     fit.RTlow = RTlow_model_trialwise;
 end
 
 % also stored the 'parsed' values, for later plotting
