@@ -122,6 +122,8 @@ for c = 1:size(ucond,1)+1 % the extra one is for all conditions pooled
     end
 end
 
+% don't keep the error bars if we are going to show correct and error
+% trials separately, gets too messy
 if plotOption==2
     Ye = zeros(size(Ye));
     Yce = zeros(size(Yce));
@@ -133,7 +135,7 @@ end
 
 subplotInd = [2 3 4 5 6 1];
 mcols = {'Greys','Reds','Reds','Blues','Blues','Purples'};
-fsz = 16;
+fsz = 20;
 
 fh(1)=figure(16);
 set(gcf,'Color',[1 1 1],'Position',[200 200 950 950],'PaperPositionMode','auto');
@@ -177,8 +179,8 @@ for c = 1:size(ucond,1)+1 % the extra one is for all conditions pooled
 %         text(xVec(2),yVec(2),num2str(uhdg(h)),'color',cmap(h,:),'fontsize',12,'horizo','center');
 
 %         if c==size(ucond,1)+1
-            plot(xRange(2)*0.8+[0.08 0.15],0.9-0.15*h*ones(1,2),'color',cmap(h,:),'linewidth',3);
-            text(xRange(2)*0.8+0.25,0.9-0.15*h,sprintf('%.2g%s',uhdg(h),char(176)),'color','k','fontsize',fsz,'horizo','center');
+%             plot(xRange(2)*0.8+[0.08 0.15],0.9-0.15*h*ones(1,2),'color',cmap(h,:),'linewidth',3);
+            text(xRange(2)*0.8+0.25,0.9-0.15*h,sprintf('%.2g%s',uhdg(h),char(176)),'color',cmap(h,:),'fontsize',fsz,'horizo','center');
 %         end
        
     end
@@ -245,8 +247,8 @@ for c = 1:size(ucond,1)+1 % the extra one is for all conditions pooled
                 'LineStyle','-','Marker','o','MarkerSize',6,'MarkerFaceColor',cmap(h,:)); hold on;
         end
 %         if c==size(ucond,1)+1
-            plot(xRange(2)*0.8+[0.08 0.15],0.9-0.15*h*ones(1,2),'color',cmap(h,:),'linewidth',3);
-            text(xRange(2)*0.8+0.3,0.9-0.15*h,sprintf('%.2g%s',uhdg(h),char(176)),'color','k','fontsize',fsz,'horizo','center');
+%             plot(xRange(2)*0.8+[0.08 0.15],0.9-0.15*h*ones(1,2),'color',cmap(h,:),'linewidth',3);
+            text(xRange(2)*0.8+0.25,0.9-0.15*h,sprintf('%.2g%s',uhdg(h),char(176)),'color',cmap(h,:),'fontsize',fsz,'horizo','center');
 %         end
     end
     
@@ -256,7 +258,7 @@ for c = 1:size(ucond,1)+1 % the extra one is for all conditions pooled
     
     if c<size(ucond,1)+1 
         if ucond(c,1)==3,xlabel('RT (s)');
-        %else, set(gca,'xticklabel',[]);
+        else, set(gca,'xticklabel',[]);
         end
         if ucond(c,1)==2 && ucond(c,2)==ucoh(1)
             ylabel('Accuracy')
