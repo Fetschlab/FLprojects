@@ -14,22 +14,29 @@ clear; close all
 
 % cd(codefolder)
 
+modelID  = 1; % 1 will be 2Dacc model ('Candidate model' against which others are tested).
+modelVar = 1; % variation within model ID, e.g. velocity acceleration coding, confidence model, cue weighting in combined..
+
+
+% these will be obsolete with modelVar eventually
+confModel = 'evidence+time'; % 'evidence+time','evidence_only','time_only'
+useVelAcc = 1; 
+
+
 RTtask = 1;
 conftask = 2; % 1 - sacc endpoint, 2 - PDW
-confModel = 'evidence+time'; % 'evidence+time','evidence_only','time_only'
-useVelAcc = 0;
 
 % plotExampleTrials = 0; % obsolete, code archived for the time being
 
-nreps = 6000; % number of repetitions of each unique trial type
-              % start small to verify it's working, then increase
-              % (ntrials depends on num unique trial types)
+nreps = 100; % number of repetitions of each unique trial type
+             % start small to verify it's working, then increase
+             % (ntrials depends on num unique trial types)
 
 cohs = [0.4 0.8]; % visual coherence levels (these are really just labels, since k's are set manually)
 % hdgs = [-12 -6 -3 -1.5 -eps eps 1.5 3 6 12]; % don't know if we realy need two zeroes
 hdgs = [-12 -6 -3 -1.5 0 1.5 3 6 12];
 % deltas = [-3 0 3]; % conflict angle; positive means vis to the right
-deltas = 0; % conflict angle; positive means vis to the right
+deltas = 0;
 mods = [1 2 3]; % stimulus modalities: ves, vis, comb
 
 dT = 1; % time step, ms
@@ -45,14 +52,57 @@ allowNonHB = 0; % allow non-hit-bound trials? if set to 0 and a trial lasts
 % assigned RT = max_dur (affects comparison with mean RT in images_dtb, 
 % which is calculated only for bound crossings)
 
+%% create acceleration and velocity profiles
 
-%% PARAMS
+if useVelAcc
+    % SJ 04/2020
+    % Hou et al. 2019, peak vel = 0.37m/s, SD = 210ms
+    % 07/2020 lab settings...16cm in 1.3s, sigma=0.14
+    
+    % our theoretical settings (before tf)
+    ampl = 0.16; % movement in metres
+    pos = normcdf(1:max_dur,max_dur/2,140)*ampl;
+    vel = gradient(pos); % metres/s
+    acc = gradient(vel); 
 
-kmult = 30; % drift rate multiplier
+    % normalize (by max or by mean?) and take abs of acc 
+%     vel = vel/mean(vel);
+%     acc = abs(acc)/mean(abs(acc));
+    vel = vel/max(vel);
+    acc = acc/max(abs(acc));
+    acc(acc<0) = 0;
+
+    if useVelAcc==1 
+        sves = acc; svis = vel;
+    elseif useVelAcc==2 % both vel
+        sves = vel; svis = vel;
+    elseif useVelAcc==3 % both acc
+        sves = acc; svis = acc; 
+    end
+else
+    sves = ones(1,max_dur);
+    svis = sves;
+end
+
+%% PARAMS - these are things we will actually fit!
+
+% original sim, no acc/vel
+% kmult = 30;
+% B = 0.9;
+% sigma = 1;
+% theta = [1.2 0.9 1.05]; % threshold for high bet in logOdds [ves vis comb]
+% alpha = 0.03; % base rate of low bets (offset to PDW curve, as seen in data)
+% TndMean = [300 500 400]; % must have different Tnds for [ves, vis, comb]
+% TndSD = [0 0 0]; % 50-100 works well; set to 0 for fixed Tnd 
+
+
+
+
+kmult = 100; % drift rate multiplier
 kvis  = kmult*cohs; % assume drift proportional to coh, reduces nParams
 kves  = mean(kvis); % for now, assume 'straddling'
 % knoise = [0.07 0.07]; % additional variability added to drift rate; unused for now
-B = 0.9; % assume a single bound, but different Tnds for each modality
+B = 1.8; % assume a single bound, but different Tnds for each modality
 sigma = 1; % unit variance (Moreno-Bote 2010), not a free param!         
 sigmaVes = sigma; % assume same sigma for all modalities, for now
 sigmaVis = [sigma sigma]; % [at the very least, need to assume their average is 1]
@@ -61,44 +111,28 @@ alpha = 0.03; % base rate of low bets (offset to PDW curve, as seen in data)
 
  % Tnd = non-decision time (ms), to account for sensory/motor latencies
 TndMean = [300 500 400]; % must have different Tnds for [ves, vis, comb]
+TndMean = [0 0 0];
 TndSD = [0 0 0]; % 50-100 works well; set to 0 for fixed Tnd 
 TndMin = TndMean/2; % need to truncate the Tnd dist
 TndMax = TndMean+TndMin;
 
+Tconf = 0; % (ms), delay between choice and conf report
+
 % store the generative parameters, to use e.g. for (pre)param recovery
 origParams.kmult = kmult;
-origParams.kvis = kvis;
-origParams.kves = kves;
-origParams.B = B;
+origParams.kvis  = kvis;
+origParams.kves  = kves;
+origParams.B     = B;
 origParams.sigmaVes = sigmaVes;
 origParams.sigmaVis = sigmaVis;
 origParams.theta = theta;
 origParams.alpha = alpha;
 origParams.TndMean = TndMean;
-origParams.TndSD  = TndSD;
-origParams.TndMin = TndMin;
+origParams.TndSD   = TndSD;
+origParams.TndMin  = TndMin;
 origParams.TndMax  = TndMax;
+origParams.Tconf   = Tconf;
 
-
-%% create acceleration and velocity profiles (arbitrary for now);
-if useVelAcc
-    % SJ 04/2020
-    % Hou et al. 2019, peak vel = 0.37m/s, SD = 210ms
-    % 07/2020 lab settings...16cm in 1.3s, sigma=0.14
-    ampl = 0.16; % movement in metres
-    pos = normcdf(1:max_dur,max_dur/2,0.14*max_dur)*ampl;
-    vel = gradient(pos)*1000; % metres/s
-    acc = gradient(vel);
-
-    % normalize (by max or by mean?) and take abs of acc 
-    vel = vel/mean(vel);
-    acc = abs(acc)/mean(abs(acc));
-    % vel = vel/max(vel);
-    % acc = abs(acc)/max(abs(acc));
-else
-    vel = ones(1,max_dur);
-    acc = vel;
-end
 
 %% calculate log odds corr map using Wolpert Method of Images code (van den Berg 2016, after Moreno-Bote 2010)
 
@@ -111,17 +145,19 @@ if all(mods==1)
 else
     k = mean([kves kvis]);
 end
+
+% R.t = dT/1000:dT/1000:max_dur/1000+timeToConf;
 R.t = dT/1000:dT/1000:max_dur/1000;
 R.Bup = B;
 R.drift = k * sind(hdgs(hdgs>=0)); % takes only unsigned drift rates
 R.lose_flag = 1;
-R.plotflag = 1; % 1 = plot, 2 = plot and export_fig
-P = images_dtb_2d(R);
+R.plotflag = 0; % 1 = plot, 2 = plot and export_fig
+P = images_dtb_2d_varDrift(R);
 
 %% simulate bounded evidence accumulation
 
 % preallocate
-% dv_all = cell(ntrials,1); % shouldn't need to store every trial's DV, but if you want to, it's here
+dv_all = cell(ntrials,1); % shouldn't need to store every trial's DV, but if you want to, it's here
 choice          = nan(ntrials,1); % choices (left = -1, right = 1);
 RT              = nan(ntrials,1); % reaction time (or time-to-bound for fixed/variable duration task)
 finalV          = nan(ntrials,1); % now this is the value of the losing accumulator
@@ -130,11 +166,6 @@ logOddsCorr     = nan(ntrials,1); % log odds correct
 expectedPctCorr = nan(ntrials,1); % expected probability correct (converted to confidence rating)
 conf            = nan(ntrials,1); % confidence rating
 pdw             = nan(ntrials,1); % post-decision wager
-
-% for plotting example trials
-doneWith1 = 0;
-doneWith2 = 0;
-doneWith3 = 0;
 
 tic
 for n = 1:ntrials
@@ -151,7 +182,7 @@ for n = 1:ntrials
     switch modality(n)
         case 1
             % assume momentary evidence is proportional to sin(heading) (Drugowitsch14)
-            mu = acc * kves * sind(hdg(n)) * dT/1000; % mean of momentary evidence, scaled by delta-t
+            mu = sves * kves * sind(hdg(n)) * dT/1000; % mean of momentary evidence, scaled by delta-t
             
             % convert correlation to covariance matrix:
             % s is the standard deviaton vector,
@@ -159,12 +190,13 @@ for n = 1:ntrials
                      %^ variance is sigma^2*dt, so stdev is sigma*sqrt(dt),
                      % after converting from ms to seconds
         case 2
-            mu = vel .* kvis(cohs==coh(n)) * sind(hdg(n)) * dT/1000;
+            mu = svis .* kvis(cohs==coh(n)) * sind(hdg(n)) * dT/1000;
             s = [sigmaVis(cohs==coh(n))*sqrt(dT/1000) sigmaVis(cohs==coh(n))*sqrt(dT/1000)];
         case 3
+%             if hdg(n)==12, keyboard, end
             % positive delta defined as ves to the left, vis to the right
-            muVes = acc .* kves               * sind(hdg(n)-delta(n)/2) * dT/1000;
-            muVis = vel .* kvis(cohs==coh(n)) * sind(hdg(n)+delta(n)/2) * dT/1000;
+            muVes = sves .* kves               * sind(hdg(n)-delta(n)/2) * dT/1000;
+            muVis = svis .* kvis(cohs==coh(n)) * sind(hdg(n)+delta(n)/2) * dT/1000;
             
             % optimal weights (Drugo et al.)
             wVes = sqrt( kves^2 / (kvis(cohs==coh(n))^2 + kves^2) );
@@ -192,7 +224,7 @@ for n = 1:ntrials
     V = diag(s)*S*diag(s);
     dv = [0 0; cumsum(mvnrnd(Mu,V))]; % bivariate normrnd, where Mu is a
 
-%     dv_all{n} = dv; % uncomment if saving DV
+    dv_all{n} = dv; % uncomment if saving DV
 
     % decision outcome
     cRT1 = find(dv(1:dur(n),1)>=B, 1);
@@ -202,13 +234,13 @@ for n = 1:ntrials
     % (1) only right accumulator hits bound,
     if ~isempty(cRT1) && isempty(cRT2)
         RT(n) = cRT1;
-        finalV(n) = dv(cRT1,2); % only 1 hit, so 2 is the loser
+        finalV(n) = dv(cRT1+Tconf*1000,2); % only 1 hit, so 2 is the loser
         hitBound(n) = 1;
         choice(n) = 1;
     % (2) only left accumulator hits bound,
     elseif isempty(cRT1) && ~isempty(cRT2)
         RT(n) = cRT2;
-        finalV(n) = dv(cRT2,1); % only 2 hit, so 1 is the loser
+        finalV(n) = dv(cRT2+Tconf*1000,1); % only 2 hit, so 1 is the loser
         hitBound(n) = 1;
         choice(n) = -1;
     % (3) neither hits bound,
@@ -235,7 +267,7 @@ for n = 1:ntrials
     else
         RT(n) = min([cRT1 cRT2]);
         whichWon = [cRT1<=cRT2 cRT1>cRT2];
-        finalV(n) = dv(min([cRT1 cRT2]),~whichWon); % the not-whichWon is the loser
+        finalV(n) = dv(min([cRT1 cRT2])+Tconf*1000,~whichWon); % the not-whichWon is the loser
         hitBound(n) = 1;
         a = [1 -1];
         choice(n) = a(whichWon);
@@ -308,11 +340,11 @@ pdw(pdw==1 & rand(length(pdw),1)<alpha) = 0;
 
 % add non-decision time (truncated normal dist)
 Tnd = zeros(ntrials,1);
-for n = 1:ntrials
-    while Tnd(n)<=TndMin(modality(n)) || Tnd(n)>=TndMax(modality(n)) % simple trick for truncating, requires integers (ms)
-        Tnd(n) = round(normrnd(TndMean(modality(n)),TndSD(modality(n))));
-    end
-end
+% for n = 1:ntrials
+%     while Tnd(n)<=TndMin(modality(n)) || Tnd(n)>=TndMax(modality(n)) % simple trick for truncating, requires integers (ms)
+%         Tnd(n) = round(normrnd(TndMean(modality(n)),TndSD(modality(n))));
+%     end
+% end
 DT = RT; % rename this 'decision time'
 RT = DT+Tnd;
 
@@ -339,6 +371,7 @@ data.PDW_preAlpha = pdw_preAlpha;
 data.correct = correct;
 subject = 'simul';
 
+data.oneTargConf=false(size(hdg));
 
 %% plots
 if 1
@@ -361,6 +394,5 @@ end
 
 %% save it
 % cd(datafolder)
-save tempsim.mat data origParams allowNonHB
-% save(sprintf('2DAccSim_conftask%d_%dtrs.mat',conftask,ntrials),'data','cohs','deltas','hdgs','mods','origParams','RTtask','conftask','subject')
+save tempsim_accvel.mat data origParams allowNonHB sves svis
 

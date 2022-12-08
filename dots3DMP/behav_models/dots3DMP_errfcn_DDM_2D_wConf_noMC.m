@@ -25,24 +25,17 @@ kmult = param(1);
 B = abs(param(2)); % don't accept negative bound heights
 theta = abs(param(3:5)); % or negative thetas, one theta per mod
 alpha = param(6); % base rate of low-conf choices
-% % Tnd = param(7); % fixed Tnd, can't see any other way in this model
-Tnds = param(7:9);
-% if length(param)==7
-%     TndR = param(7); 
-%     TndL = param(7);
-% else
-%     TndR = param(7); % optionally, separate Tnds for L and R
-%     TndL = param(8);
-% end
+Tnds = param(7:9); % separate Tnd for each modality
+% perhaps this will become obsolete too with acc/vel
 
 cohs = unique(data.coherence);
 mods = unique(data.modality);
 hdgs = unique(data.heading);
 
 if options.dummyRun == 0
-    deltas = 0; % fit only zero delta with unsigned MOI
+    deltas = 0;                 % fit only zero delta
 else
-    deltas = unique(data.delta);
+    deltas = unique(data.delta); % predict all deltas
 end
 
 % separate kvis and kves
@@ -54,25 +47,56 @@ if all(mods==1), k = kves;
 else, k = mean([kves kvis]);
 end
 
+
+if options.useVelAcc
+    % SJ 04/2020
+    % Hou et al. 2019, peak vel = 0.37m/s, SD = 210ms
+    % 07/2020 lab settings...16cm in 1.3s, sigma=0.14
+    
+    % our theoretical settings (before tf)
+    ampl = 0.16; % movement in metres
+    pos = normcdf(1:max_dur*1000,max_dur*1000/2,0.14*1000)*ampl;
+    vel = gradient(pos)*1000; % metres/s
+    acc = gradient(vel); 
+
+    % normalize (by max or by mean?) and take abs of acc 
+%     vel = vel/mean(vel);
+%     acc = abs(acc)/mean(abs(acc));
+    vel = vel/max(vel);
+    acc = abs(acc)/max(abs(acc));
+
+    if options.useVelAcc==1 
+        sves = acc; svis = vel;
+    elseif options.useVelAcc==2 % both vel
+        sves = vel; svis = vel;
+    elseif options.useVelAcc==3 % both acc
+        sves = acc; svis = acc; 
+    end
+else
+    sves = ones(1,max_dur*1000);
+    svis = sves;
+end
+
 % generate or load log odds correct map
 
-timeToConf = 0; % placeholder
+tConf = 0; % placeholder, should be a fit param eventually
+
 % use method of images to calculate PDFs of DV and mapping to log odds corr
-R.t = 0.001:0.001:max_dur+timeToConf;
+R.t = 0.001:0.001:max_dur+tConf;
 R.Bup = B;
 R.drift = k * sind(hdgs(hdgs>=0)); % takes only unsigned drift rates
+
 R.lose_flag = 1; % we always need the losing densities
 R.plotflag = options.plot; % 1 = plot, 2 = plot nicer and export_fig (eg for talk)
 % R.plotflag = 1; % manual override
 Pconf = images_dtb_2d(R); % /WolpertMOI
 
-% shift the logOdds Map to account for delay between choice and conf
-% report...is this mathematically valid given absorbed probability?
-dt = R.t(2)-R.t(1);
-skipT = floor(timeToConf/dt);
-Pconf.t(1:skipT) = [];
-Pconf.logOddsCorrMap(:,1:skipT) = [];
+% dt = R.t(2)-R.t(1);
+% skipT = floor(tConf/dt);
+% Pconf.t(1:skipT) = [];
+% Pconf.logOddsCorrMap(:,1:skipT) = [];
 
+% use previously calculated logOddsMap if passed in
 if options.dummyRun==0
     logOddsMap = Pconf.logOddsCorrMap;
 else
@@ -85,20 +109,18 @@ end
 % ves
 RVes.t = 0.001:0.001:max_dur;
 RVes.Bup = B;
-% *** marking differences in signed vs. unsigned ver ***
-RVes.drift = kves * sind(hdgs(hdgs>=0));
-RVes.driftSigned = kves * sind(hdgs);
+RVes.drift = sves * kves * sind(hdgs(hdgs>=0));
+RVes.driftSigned = kves * sind(hdgs); % sves is not needed here
 
 RVes.lose_flag = 1;
 RVes.plotflag = 0;
-PVes =  images_dtb_2d(RVes);
+PVes =  images_dtb_2d_varDrift(RVes);
 
 % vis and comb, separate drift for each coh
 for c = 1:length(cohs)
     RVis.t = 0.001:0.001:max_dur;
     RVis.Bup = B;
-% *** marking differences in signed vs. unsigned ver ***
-    RVis.drift = kvis(c) * sind(hdgs(hdgs>=0));
+    RVis.drift = svis * kvis(c) * sind(hdgs(hdgs>=0));
     RVis.driftSigned = kvis(c) * sind(hdgs);
 
     RVis.lose_flag = 1;
@@ -113,14 +135,13 @@ for c = 1:length(cohs)
     if options.dummyRun == 0
       
         kcomb(c) = sqrt(kves.^2 + kvis(c).^2); % optimal per Drugo
-        % *** marking differences in signed vs. unsigned ver ***
         RComb.driftSigned = kcomb(c) * sind(hdgs);
-        RComb.drift = kcomb(c) * sind(hdgs(hdgs>=0));
-        PComb(c,1) =  images_dtb_2d(RComb);
 
-    % compute w and mu to capture biases under cue conflict
+        kcombT(:,c) = sqrt(sves.*kves.^2 + svis.*kvis(c).^2); % optimal per Drugo
+        RComb.drift = kcombT(:,c) * sind(hdgs(hdgs>=0));
+        PComb(c,1) =  images_dtb_2d_varDrift(RComb);
 
-    else
+    else     % compute w and mu to capture biases under cue conflict
         
         wVes = sqrt( kves^2 / (kves^2 + kvis(c)^2) );
         wVis = sqrt( kvis(c)^2 / (kves^2 + kvis(c)^2) );
@@ -130,10 +151,11 @@ for c = 1:length(cohs)
             muVes = kves    * sind(hdgs-deltas(d)/2);
             muVis = kvis(c) * sind(hdgs+deltas(d)/2);
 
-            % *** marking differences in signed vs. unsigned ver ***
             RComb.driftSigned = wVes.*muVes + wVis.*muVis;
-            RComb.drift = abs(RComb.driftSigned);
-            PComb(c,d) =  images_dtb_2d(RComb);
+            RComb.drift = abs(sves.*wVes.*muVes + svis.*wVis.*muVis);
+
+%             RComb.drift = abs(RComb.driftSigned);
+            PComb(c,d) =  images_dtb_2d_varDrift(RComb);
         end
     end
 end
@@ -457,7 +479,7 @@ if options.RTtask
     % Option 1a:
     % likelihood of mean RTs for each coherence, under Gaussian
     % approximation, NOT separated by high/low bet
-    L_RT = 1./(sigmaRT_data*sqrt(2*pi)) .* exp(-(meanRT_model-meanRT_data).^2 ./ (2*sigmaRT_data.^2));
+%     L_RT = 1./(sigmaRT_data*sqrt(2*pi)) .* exp(-(meanRT_model-meanRT_data).^2 ./ (2*sigmaRT_data.^2));
     
     % Option 1b:
     % assign means to trials and sum over those, to keep same order of magnitude as other LLs
@@ -468,9 +490,9 @@ if options.RTtask
     
     % Option 2a:
     % separate by high/low bet, fit mean RT for each coherence
-    L_RT_high = 1./(sigmaRThigh_data*sqrt(2*pi)) .* exp(-(meanRThigh_model-meanRThigh_data).^2 ./ (2*sigmaRThigh_data.^2));
-    L_RT_low = 1./(sigmaRTlow_data*sqrt(2*pi)) .* exp(-(meanRTlow_model-meanRTlow_data).^2 ./ (2*sigmaRTlow_data.^2));
-    LL_RT = log(max(minP,L_RT_high)) + log(max(minP,L_RT_low)); % this doesn't seem right; likelihoods are greater than 1
+%     L_RT_high = 1./(sigmaRThigh_data*sqrt(2*pi)) .* exp(-(meanRThigh_model-meanRThigh_data).^2 ./ (2*sigmaRThigh_data.^2));
+%     L_RT_low = 1./(sigmaRTlow_data*sqrt(2*pi)) .* exp(-(meanRTlow_model-meanRTlow_data).^2 ./ (2*sigmaRTlow_data.^2));
+%     LL_RT = log(max(minP,L_RT_high)) + log(max(minP,L_RT_low)); % this doesn't seem right; likelihoods are greater than 1
 
     % Option 2b:
     % separate by high/low bet and assign to trials, to keep order of mag consistent
@@ -542,13 +564,13 @@ elseif options.conftask==2 % PDW
 end
 
 % total -LL
-% err = -(LL_choice + LL_conf + LL_RT);
+err = -(LL_choice + LL_conf + LL_RT);
 % OR
 % err = -(LL_choice + LL_conf);
 % OR
 % err = -(LL_multinom + LL_RT);
 % OR
-err = -LL_multinom;
+% err = -LL_multinom;
 
 
 % OR: fit choice and RT first, then hold those fixed to find theta
