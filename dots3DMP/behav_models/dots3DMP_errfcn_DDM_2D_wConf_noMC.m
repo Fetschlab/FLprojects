@@ -21,7 +21,7 @@ else
     max_dur = 2.3;
 end
 
-kmult = param(1);
+kmult = param(1)*100; % scale up
 B = abs(param(2)); % don't accept negative bound heights
 theta = abs(param(3:5)); % or negative thetas, one theta per mod
 alpha = param(6); % base rate of low-conf choices
@@ -109,7 +109,7 @@ end
 % ves
 RVes.t = 0.001:0.001:max_dur;
 RVes.Bup = B;
-RVes.drift = sves * kves * sind(hdgs(hdgs>=0));
+RVes.drift = sves .* kves .* sind(hdgs(hdgs>=0));
 RVes.driftSigned = kves * sind(hdgs); % sves is not needed here
 
 RVes.lose_flag = 1;
@@ -120,12 +120,12 @@ PVes =  images_dtb_2d_varDrift(RVes);
 for c = 1:length(cohs)
     RVis.t = 0.001:0.001:max_dur;
     RVis.Bup = B;
-    RVis.drift = svis * kvis(c) * sind(hdgs(hdgs>=0));
+    RVis.drift = svis .* kvis(c) .* sind(hdgs(hdgs>=0));
     RVis.driftSigned = kvis(c) * sind(hdgs);
 
     RVis.lose_flag = 1;
     RVis.plotflag = 0;
-    PVis(c) =  images_dtb_2d(RVis);
+    PVis(c) =  images_dtb_2d_varDrift(RVis);
 
     RComb.t = 0.001:0.001:max_dur;
     RComb.Bup = B;
@@ -137,8 +137,8 @@ for c = 1:length(cohs)
         kcomb(c) = sqrt(kves.^2 + kvis(c).^2); % optimal per Drugo
         RComb.driftSigned = kcomb(c) * sind(hdgs);
 
-        kcombT(:,c) = sqrt(sves.*kves.^2 + svis.*kvis(c).^2); % optimal per Drugo
-        RComb.drift = kcombT(:,c) * sind(hdgs(hdgs>=0));
+        kcombT(c,:) = sqrt(sves.*kves.^2 + svis.*kvis(c).^2); % optimal per Drugo
+        RComb.drift = kcombT(c,:) .* sind(hdgs(hdgs>=0));
         PComb(c,1) =  images_dtb_2d_varDrift(RComb);
 
     else     % compute w and mu to capture biases under cue conflict
@@ -172,6 +172,8 @@ pRight_model        = n;
 pHigh_model         = n;
 pRightHigh_model    = n;
 pRightLow_model     = n;
+pLeftHigh_model     = n;
+pLeftLow_model      = n;
 pHighCorr_model     = n;
 pHighErr_model      = n;
 meanConf_model      = n;
@@ -188,6 +190,8 @@ sigmaRTlow_data     = n;
 meanConf_data       = n;
 sigmaConf_data      = n;
 nCor                = n;
+
+nTrials             = n;
 
 % trialwise vars
 m = nan(length(data.heading),1);
@@ -227,6 +231,21 @@ for h = 1:length(hdgs)
 %     if deltas(d)==-3 && mods(m)==3, keyboard, end
     % index for images_dtb (unsigned hdg/drift corresponding to this signed hdg)                    
     
+    Jdata  = data.modality==mods(m) & data.coherence==cohs(c) & data.heading==hdgs(h) & data.delta==deltas(d);
+    nTrials(m,c,d,h) = sum(Jdata);
+
+    % empirical probabilities from data (actually just take counts
+    % 'successes', for pdf functions
+    nRight_data(m,c,d,h) = sum(Jdata & data.choice==1); % choice is logical 0..1!!
+    
+    if options.conftask==2
+        nHigh_data(m,c,d,h)  = sum(Jdata & data.PDW==1); 
+
+        nRightHigh_data(m,c,d,h) = sum(Jdata & data.choice==1 & data.PDW==1);
+        nRightLow_data(m,c,d,h)  = sum(Jdata & data.choice==1 & data.PDW==0);
+        nLeftHigh_data(m,c,d,h)  = sum(Jdata & data.choice==0 & data.PDW==1);
+        nLeftLow_data(m,c,d,h)   = sum(Jdata & data.choice==0 & data.PDW==0);
+    end
 
     if options.dummyRun==1 && mods(m)==3
         uh = h;
@@ -277,8 +296,12 @@ for h = 1:length(hdgs)
     pLeftHigh  = pLeftHigh/Ptot;
     pLeftLow   = pLeftLow/Ptot;
 
+    pRightHigh_model(m,c,d,h) = pRightHigh;
+    pRightLow_model(m,c,d,h) = pRightLow;
+    pLeftHigh_model(m,c,d,h) = pLeftHigh;
+    pLeftLow_model(m,c,d,h) = pLeftLow;
+
     % copy intersections to trials, for multinomial likelihood
-    Jdata  = data.modality==mods(m) & data.coherence==cohs(c) & data.heading==hdgs(h) & data.delta==deltas(d);
     pRightHigh_model_trialwise(Jdata) = pRightHigh;
     pRightLow_model_trialwise(Jdata) = pRightLow;
     pLeftHigh_model_trialwise(Jdata) = pLeftHigh;
@@ -317,11 +340,11 @@ for h = 1:length(hdgs)
     % copy to vectors for parsedFit struct
     pRight_model(m,c,d,h) = pRight;
     pHigh_model(m,c,d,h) = pHigh_wAlpha; % includes the effect of alpha
-    pRightHigh_model(m,c,d,h) = pRight_High; % does NOT include the effect of alpha
-    pRightLow_model(m,c,d,h) = pRight_Low; % does NOT include the effect of alpha
+%     pRightHigh_model(m,c,d,h) = pRight_High; % does NOT include the effect of alpha
+%     pRightLow_model(m,c,d,h) = pRight_Low; % does NOT include the effect of alpha
     
-% % %     pLeftHigh_model(m,c,d,h) = pLeftHigh; % MAYBE TEMP: SEE LIKELIHOOD
-% % %     pLeftLow_model(m,c,d,h) = pLeftLow;  % MAYBE TEMP: SEE LIKELIHOOD
+%     pLeftHigh_model(m,c,d,h) = pLeftHigh; % MAYBE TEMP: SEE LIKELIHOOD
+%     pLeftLow_model(m,c,d,h) = pLeftLow;  % MAYBE TEMP: SEE LIKELIHOOD
     
     pHighCorr_model(m,c,d,h) = pHigh_Corr; % includes the effect of alpha
     pHighErr_model(m,c,d,h) = pHigh_Err; % includes the effect of alpha
@@ -455,9 +478,14 @@ end
 
 %% Next, calculate error (negative log-likelihood) under binomial/gaussian assumptions
 
+% SJ 12-8-2022 this was missing before! Need choice to be 0..1
+if max(data.choice)==2
+    data.choice = data.choice-1;
+end
+
 % convert data vars to logicals
 choice = logical(data.choice);
-PDW = logical(data.PDW);
+PDW    = logical(data.PDW);
 
 % to avoid log(0) issues:
 % minP = eps;
@@ -470,7 +498,11 @@ pHigh_model_trialwise(pHigh_model_trialwise<=0) = minP;
 
 % CHOICE
 % log likelihood of rightward choice on each trial, under binomial assumptions:
-LL_choice = sum(log(pRight_model_trialwise(choice))) + sum(log(1-pRight_model_trialwise(~choice)));
+% LL_choice = sum(log(pRight_model_trialwise(choice))) + sum(log(1-pRight_model_trialwise(~choice)));
+
+L_choice = binopdf(nRight_data,nTrials,pRight_model); 
+L_choice(L_choice==0) = minP;
+LL_choice = nansum(log(L_choice(:)));
 
 % RT
 LL_RT = 0;
@@ -479,13 +511,16 @@ if options.RTtask
     % Option 1a:
     % likelihood of mean RTs for each coherence, under Gaussian
     % approximation, NOT separated by high/low bet
-%     L_RT = 1./(sigmaRT_data*sqrt(2*pi)) .* exp(-(meanRT_model-meanRT_data).^2 ./ (2*sigmaRT_data.^2));
-    
+    L_RT = 1./(sigmaRT_data*sqrt(2*pi)) .* exp(-(meanRT_model-meanRT_data).^2 ./ (2*sigmaRT_data.^2));
+%     L_RT = exp(-(meanRT_model-meanRT_data).^2 ./ (2*sigmaRT_data.^2));
+
     % Option 1b:
     % assign means to trials and sum over those, to keep same order of magnitude as other LLs
-    I = usetrs_data;
-    L_RT = 1./(sigmaRT_data_trialwise(I)*sqrt(2*pi)) .* exp(-(RT_model_trialwise(I) - data.RT(I)).^2 ./ (2*sigmaRT_data_trialwise(I).^2));
-    L_RT(L_RT==0) = min(L_RT(L_RT~=0)); % this seems weird; there shouldn't be any 0 vals anyway...
+%     I = usetrs_data;
+%     L_RT = 1./(sigmaRT_data_trialwise(I)*sqrt(2*pi)) .* exp(-(RT_model_trialwise(I) - data.RT(I)).^2 ./ (2*sigmaRT_data_trialwise(I).^2));
+%     L_RT(L_RT==0) = min(L_RT(L_RT~=0)); % this seems weird; there shouldn't be any 0 vals anyway...
+
+    L_RT(L_RT==0) = minP;
     LL_RT = nansum(log(L_RT(:))); % sum over all conditions (or trials)
     
     % Option 2a:
@@ -496,18 +531,17 @@ if options.RTtask
 
     % Option 2b:
     % separate by high/low bet and assign to trials, to keep order of mag consistent
-%     I = usetrs_data & data.PDW_preAlpha==1;
-    I = usetrs_data & data.PDW==1;
-    L_RT_high = 1./(sigmaRThigh_data_trialwise(I)*sqrt(2*pi)) .* exp(-(RThigh_model_trialwise(I) - data.RT(I)).^2 ./ (2*sigmaRThigh_data_trialwise(I).^2));    
-    L_RT_high(L_RT_high==0) = minP;
-%     I = usetrs_data & data.PDW_preAlpha==0;    
-    I = usetrs_data & data.PDW==0;    
-    L_RT_low = 1./(sigmaRTlow_data_trialwise(I)*sqrt(2*pi)) .* exp(-(RTlow_model_trialwise(I) - data.RT(I)).^2 ./ (2*sigmaRTlow_data_trialwise(I).^2));
-    L_RT_low(L_RT_low==0) = minP;
-
-    
-% % % %     LL_RT = nansum(log(L_RT_high(:))) + nansum(log(L_RT_low(:)));
-% % %     LL_RT = nansum(log(L_RT_high(:))) / 385; % TEMP: ignore RTlow for now, and scale to same order of mag
+%     % I = usetrs_data & data.PDW_preAlpha==1;
+%     I = usetrs_data & data.PDW==1;
+%     L_RT_high = 1./(sigmaRThigh_data_trialwise(I)*sqrt(2*pi)) .* exp(-(RThigh_model_trialwise(I) - data.RT(I)).^2 ./ (2*sigmaRThigh_data_trialwise(I).^2));    
+%     L_RT_high(L_RT_high==0) = minP;
+%     % I = usetrs_data & data.PDW_preAlpha==0;    
+%     I = usetrs_data & data.PDW==0;    
+%     L_RT_low = 1./(sigmaRTlow_data_trialwise(I)*sqrt(2*pi)) .* exp(-(RTlow_model_trialwise(I) - data.RT(I)).^2 ./ (2*sigmaRTlow_data_trialwise(I).^2));
+%     L_RT_low(L_RT_low==0) = minP;
+% 
+%     LL_RT = nansum(log(L_RT_high(:))) + nansum(log(L_RT_low(:)));
+%     LL_RT = nansum(log(L_RT_high(:))) / 385; % TEMP: ignore RTlow for now, and scale to same order of mag
 
     
     % Option 3: fit full RT distributions!
@@ -519,58 +553,54 @@ end
 % CONF
 LL_conf = 0;
 if options.conftask==1 % SEP
+    
     keyboard % this is unfinished
     % likelihood of mean conf ratings for each condition, under Gaussian approximation
     L_conf = 1./(sigmaConf_data*sqrt(2*pi)) .* exp(-(meanConf_model - meanConf_data).^2 ./ (2*sigmaConf_data.^2));
     L_conf(L_conf==0) = min(L_conf(L_conf~=0));
     LL_conf = nansum(log(L_conf(:))); % sum over all conditions
-elseif options.conftask==2 % PDW
-    % log likelihood of high bet on each trial, under binomial assumptions:
-    LL_conf = sum(log(pHigh_model_trialwise(PDW))) + sum(log(1-pHigh_model_trialwise(~PDW)));
-    
-    % OR multinomial likelihood with n=1 and k=4 (categorial distribution)
-    RH = data.choice==1 & data.PDW==1;
-    RL = data.choice==1 & data.PDW==0;
-    LH = data.choice==0 & data.PDW==1;
-    LL = data.choice==0 & data.PDW==0;
-    LL_multinom = sum(log(max(pRightHigh_model_trialwise(RH),minP))) + sum(log(max(pRightLow_model_trialwise(RL),minP))) + ...
-                  sum(log(max(pLeftHigh_model_trialwise(LH),minP)))  + sum(log(max(pLeftLow_model_trialwise(LL),minP)));
-    
-%     % sanity check: go coh by coh, should be the same
-%     LL_choice_pdw2 = 0;
-%     for c = 1:length(cohs)
-%         I = data.scoh==cohs(c);
-%         RH = I & data.choice==1 & data.PDW==1;
-%         RL = I & data.choice==1 & data.PDW==0;
-%         LH = I & data.choice==0 & data.PDW==1;
-%         LL = I & data.choice==0 & data.PDW==0;
-%         LL_c = sum(log(max(pRightHigh_model_trialwise(RH),minP))) + sum(log(max(pRightLow_model_trialwise(RL),minP))) + ...
-%                sum(log(max(pLeftHigh_model_trialwise(LH),minP)))  + sum(log(max(pLeftLow_model_trialwise(LL),minP)));
-%         LL_choice_pdw2 = LL_choice_pdw2 + LL_c;
-%         % yep, close enough.
-%            
-% %         % is this the same as summing over k, using the total number of
-% %         % occurrences of each outcome (as in "bag of words" blog post)?
-% %         % [cannot include the factorial terms, xi is too large, turns inf]
-% %         LL_choice_pdw3 = ...
-% %         sum(RH)*log(max(pRightHigh_model(c),minP)) + ...
-% %         sum(RL)*log(max(pRightLow_model(c),minP)) + ...
-% %         sum(LH)*log(max(pLeftHigh_model(c),minP)) + ...
-% %         sum(LL)*log(max(pLeftLow_model(c),minP));
-% %           % definitely not. oh well.
-%     
-%     end
 
+elseif options.conftask==2 % PDW
+
+    % log likelihood of high bet on each trial, under binomial assumptions:
+%     LL_conf = sum(log(pHigh_model_trialwise(PDW))) + sum(log(1-pHigh_model_trialwise(~PDW)));
+
+    L_conf = binopdf(nHigh_data,nTrials,pHigh_model);
+    L_conf(L_conf==0) = minP;
+    LL_conf = nansum(log(L_conf(:)));
+
+   
+    % OR multinomial likelihood with n=1 and k=4 (categorial distribution)
+%     RH = data.choice==1 & data.PDW==1;
+%     RL = data.choice==1 & data.PDW==0;
+%     LH = data.choice==0 & data.PDW==1;
+%     LL = data.choice==0 & data.PDW==0;
+%     LL_multinom = sum(log(max(pRightHigh_model_trialwise(RH),minP))) + sum(log(max(pRightLow_model_trialwise(RL),minP))) + ...
+%                   sum(log(max(pLeftHigh_model_trialwise(LH),minP)))  + sum(log(max(pLeftLow_model_trialwise(LL),minP)));
+
+    % reorganize for mnpdf input (needs k cols, one per outcome)
+    X = cat(5,nRightHigh_data,nRightLow_data,nLeftLow_data,nLeftHigh_data);
+    P = cat(5,pRightHigh_model,pRightLow_model,pLeftLow_model,pLeftHigh_model);
+
+    X(1,2,:,:,:) = NaN; % vestibular 'high' coh
+    P(1,2,:,:,:) = NaN; % not strictly necessary but for consistency
+
+    X = reshape(X,[],4);
+    P = reshape(P,[],4);
+
+    L_multinom = mnpdf(X,P);
+    L_multinom(L_multinom==0) = minP;
+    LL_multinom = nansum(log(L_multinom(:)));
 end
 
 % total -LL
-err = -(LL_choice + LL_conf + LL_RT);
+% err = -(LL_choice + LL_conf + LL_RT);
 % OR
 % err = -(LL_choice + LL_conf);
 % OR
-% err = -(LL_multinom + LL_RT);
+%err = -(LL_multinom + LL_RT);
 % OR
-% err = -LL_multinom;
+err = -LL_multinom;
 
 
 % OR: fit choice and RT first, then hold those fixed to find theta
@@ -580,14 +610,17 @@ err = -(LL_choice + LL_conf + LL_RT);
 
 %% print progress report!
 if options.feedback
+    % TODO, optionally list only non-fixed params
     fprintf('\n\n\n****************************************\n');
     fprintf('run %d\n', call_num);
-    fprintf('\tk= %g\n\tB= %g\n\tthetaVes= %g\n\tthetaVis= %g\n\tthetaComb= %g\n\talpha= %g\n\tTndVes= %g\n\tTndVis= %g\n\tTndComb= %g\n', kmult, B, theta, alpha, Tnds(1),Tnds(2),Tnds(3));
+%     fprintf('\tk= %g\n\tB= %g\n\tthetaVes= %g\n\tthetaVis= %g\n\tthetaComb= %g\n\talpha= %g\n\tTndVes= %g\n\tTndVis= %g\n\tTndComb= %g\n', kmult, B, theta, alpha, Tnds(1),Tnds(2),Tnds(3));
+    fprintf('\tk= %g\n\tB= %g\n', kmult, B);
     fprintf('err: %f\n', err);
 end
 if options.feedback==2 && strcmp(options.fitMethod,'fms')
-    figure(400);
-    plot(call_num, err, '.','MarkerSize',14);
+    figure(400); hold on;
+    plot(call_num, err, '.','color','k','markersize',14);
+    xlim([0 call_num+1])
     drawnow;
 end
 call_num = call_num + 1;
@@ -596,7 +629,9 @@ toc
 
 %************
 % temp
-fprintf('\nerrChoice= %g\nerrRT= %g\nerrRTlo= %g\nerrRThi= %g\nerrConf= %g\nerrMult= %g\n', -LL_choice, -LL_RT, -nansum(log(L_RT_low(:))), -nansum(log(L_RT_high(:))), -LL_conf, -LL_multinom);
+if options.dummyRun==0
+% fprintf('\nerrChoice= %g\nerrRT= %g\nerrRTlo= %g\nerrRThi= %g\nerrConf= %g\nerrMult= %g\n', -LL_choice, -LL_RT, -nansum(log(L_RT_low(:))), -nansum(log(L_RT_high(:))), -LL_conf, -LL_multinom);
+end
 % LOW has smaller error than HIGH even though it looks way off by eye!
 %************
 

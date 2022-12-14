@@ -1,4 +1,4 @@
-function [X, err_final, fit, fitInterp] = dots3DMP_fitDDM(data,options,guess,fixed)
+function [X, err_final, fit, parsedFit, fitInterp] = dots3DMP_fitDDM(data,options,guess,fixed)
 
 % parameter bounds for fitting
 
@@ -19,6 +19,8 @@ global call_num; call_num=1;
 global paramVals; paramVals = guess';
 global errVals; errVals = NaN;
 
+options.dummyRun = 0;
+
 if all(fixed)
     X = guess;
 else
@@ -26,14 +28,14 @@ else
     switch options.fitMethod
         case 'fms'
             fitOptions = optimset('Display', 'iter', 'MaxFunEvals', 100*sum(fixed==0), 'MaxIter', ... 
-                100*sum(fixed==0), 'TolX',1e-2,'TolFun',100,'UseParallel','Always');
+                100*sum(fixed==0), 'TolX',1e-3,'TolFun',1e-3,'UseParallel','Always');
             [X, fval, ~] = fminsearch(@(x) feval(options.errfcn,x,guess,fixed,data,options), guess(fixed==0), fitOptions);
     %         [X, fval, exitflag] = fminunc(@(x) feval(options.errfcn,x,guess,fixed,data,options), guess(fixed==0), fitOptions);
     %         fprintf('fval: %f\n', fval);
 
         case 'fmsbnd'
             fitOptions = optimset('Display', 'iter', 'MaxFunEvals', 100*sum(fixed==0), 'MaxIter', ... 
-                100*sum(fixed==0), 'TolX',1e-1,'TolFun',1e-1,'UseParallel','Always');
+                100*sum(fixed==0), 'TolX',1e-3,'TolFun',1e-3,'UseParallel','Always');
             [X, fval, ~] = fminsearchbnd(@(x) feval(options.errfcn,x,guess,fixed,data,options), guess(fixed==0), LB(fixed==0), UB(fixed==0), fitOptions);
 
         case 'global'
@@ -161,8 +163,8 @@ end
 %% run err func again at the fitted/fixed params to generate a final
 % error value and model-generated data points (trial outcomes)
 options.ploterr = 0;
-options.dummyRun = 0;
-[err_final, fit, ~, logOddsMap] = feval(options.errfcn,X,X,true(size(X)),data,options);
+
+[err_final, fit, parsedFit, logOddsMap] = feval(options.errfcn,X,X,true(size(X)),data,options);
 
 
 % THIS SHOULD ALL BECOME OBSOLETE, NO MORE MC!

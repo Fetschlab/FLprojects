@@ -4,6 +4,7 @@
 % CF started it 2016
 % heavily modified early 2019
 % switched to 2D accumulator model 06/2020
+% modified again 11/2022
 
 %% build expt and hand-pick some model params
 
@@ -28,7 +29,7 @@ conftask = 2; % 1 - sacc endpoint, 2 - PDW
 
 % plotExampleTrials = 0; % obsolete, code archived for the time being
 
-nreps = 100; % number of repetitions of each unique trial type
+nreps = 300; % number of repetitions of each unique trial type
              % start small to verify it's working, then increase
              % (ntrials depends on num unique trial types)
 
@@ -70,7 +71,12 @@ if useVelAcc
 %     acc = abs(acc)/mean(abs(acc));
     vel = vel/max(vel);
     acc = acc/max(abs(acc));
-    acc(acc<0) = 0;
+    acc(acc<0) = 0; % hmm
+
+% step functions
+%     acc = [zeros(max_dur/2,1); ones(max_dur/2,1)];
+%     vel = [ones(max_dur/2,1); zeros(max_dur/2,1)];
+
 
     if useVelAcc==1 
         sves = acc; svis = vel;
@@ -86,19 +92,8 @@ end
 
 %% PARAMS - these are things we will actually fit!
 
-% original sim, no acc/vel
-% kmult = 30;
-% B = 0.9;
-% sigma = 1;
-% theta = [1.2 0.9 1.05]; % threshold for high bet in logOdds [ves vis comb]
-% alpha = 0.03; % base rate of low bets (offset to PDW curve, as seen in data)
-% TndMean = [300 500 400]; % must have different Tnds for [ves, vis, comb]
-% TndSD = [0 0 0]; % 50-100 works well; set to 0 for fixed Tnd 
 
-
-
-
-kmult = 100; % drift rate multiplier
+kmult = 150; % drift rate multiplier
 kvis  = kmult*cohs; % assume drift proportional to coh, reduces nParams
 kves  = mean(kvis); % for now, assume 'straddling'
 % knoise = [0.07 0.07]; % additional variability added to drift rate; unused for now
@@ -111,8 +106,22 @@ alpha = 0.03; % base rate of low bets (offset to PDW curve, as seen in data)
 
  % Tnd = non-decision time (ms), to account for sensory/motor latencies
 TndMean = [300 500 400]; % must have different Tnds for [ves, vis, comb]
-TndMean = [0 0 0];
 TndSD = [0 0 0]; % 50-100 works well; set to 0 for fixed Tnd 
+
+% original sim, no acc/vel
+% kmult = 30;
+% kvis  = kmult*cohs; % assume drift proportional to coh, reduces nParams
+% kves  = mean(kvis); % for now, assume 'straddling'
+% B = 0.9;
+% sigma = 1;
+% sigmaVes = sigma;
+% sigmaVis = [sigma sigma];
+% theta = [1.2 0.9 1.05]; % threshold for high bet in logOdds [ves vis comb]
+% alpha = 0.03; % base rate of low bets (offset to PDW curve, as seen in data)
+% TndMean = [300 500 400]; % must have different Tnds for [ves, vis, comb]
+% TndSD = [0 0 0]; % 50-100 works well; set to 0 for fixed Tnd 
+
+
 TndMin = TndMean/2; % need to truncate the Tnd dist
 TndMax = TndMean+TndMin;
 
@@ -340,11 +349,11 @@ pdw(pdw==1 & rand(length(pdw),1)<alpha) = 0;
 
 % add non-decision time (truncated normal dist)
 Tnd = zeros(ntrials,1);
-% for n = 1:ntrials
-%     while Tnd(n)<=TndMin(modality(n)) || Tnd(n)>=TndMax(modality(n)) % simple trick for truncating, requires integers (ms)
-%         Tnd(n) = round(normrnd(TndMean(modality(n)),TndSD(modality(n))));
-%     end
-% end
+for n = 1:ntrials
+    while Tnd(n)<=TndMin(modality(n)) || Tnd(n)>=TndMax(modality(n)) % simple trick for truncating, requires integers (ms)
+        Tnd(n) = round(normrnd(TndMean(modality(n)),TndSD(modality(n))));
+    end
+end
 DT = RT; % rename this 'decision time'
 RT = DT+Tnd;
 
