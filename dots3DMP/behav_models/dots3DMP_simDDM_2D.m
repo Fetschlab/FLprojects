@@ -8,12 +8,17 @@
 
 %% build expt and hand-pick some model params
 
+% at some point, build these settings out into a proper wrapper script
+
 clear; close all
 
 % datafolder = '/Users/chris/Documents/MATLAB';
 % codefolder = '/Users/chris/Documents/MATLAB/Projects/offlineTools/dots3DMP/behav_models';
 
-% cd(codefolder)
+datafolder = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/data/dots3DMP_DDM';
+codefolder = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/FLprojects/dots3DMP/behav_models';
+
+cd(codefolder)
 
 modelID  = 1; % 1 will be 2Dacc model ('Candidate model' against which others are tested).
 modelVar = 1; % variation within model ID, e.g. velocity acceleration coding, confidence model, cue weighting in combined..
@@ -22,7 +27,6 @@ modelVar = 1; % variation within model ID, e.g. velocity acceleration coding, co
 % these will be obsolete with modelVar eventually
 confModel = 'evidence+time'; % 'evidence+time','evidence_only','time_only'
 useVelAcc = 1; 
-
 
 RTtask = 1;
 conftask = 2; % 1 - sacc endpoint, 2 - PDW
@@ -73,25 +77,25 @@ if useVelAcc
     acc = acc/max(abs(acc));
     acc(acc<0) = 0; % hmm
 
-% step functions
+% step functions, for testing param recovery and LL comparisons
 %     acc = [zeros(max_dur/2,1); ones(max_dur/2,1)];
 %     vel = [ones(max_dur/2,1); zeros(max_dur/2,1)];
 
 
-    if useVelAcc==1 
+    if useVelAcc==1 % ves follow acc, vis follows vel
         sves = acc; svis = vel;
     elseif useVelAcc==2 % both vel
         sves = vel; svis = vel;
     elseif useVelAcc==3 % both acc
         sves = acc; svis = acc; 
     end
-else
+else % or fixed, i.e. no vel/acc weighting
     sves = ones(1,max_dur);
     svis = sves;
 end
 
 %% PARAMS - these are things we will actually fit!
-
+% also maybe move this to wrapper script
 
 kmult = 150; % drift rate multiplier
 kvis  = kmult*cohs; % assume drift proportional to coh, reduces nParams
@@ -368,19 +372,20 @@ pHitBound_zeroHdg = sum(hitBound(Z))/sum(Z)
 choice(choice==0) = sign(randn)*eps; % should have no actual zeros, but if so, sign them randomly;
                                % this is just to assign a direction and correct/error
 choice(choice==1) = 2; choice(choice==-1) = 1; % 1=left, 2=right
-data.modality = modality;
-data.heading = hdg;
-data.coherence = coh;
-data.delta = delta;
-data.choice = choice;
-data.RT = RT/1000; % change to seconds
-data.conf = conf;
-data.PDW = pdw;
-data.PDW_preAlpha = pdw_preAlpha;
-data.correct = correct;
-subject = 'simul';
 
-data.oneTargConf=false(size(hdg));
+data.modality   = modality;
+data.heading    = hdg;
+data.coherence  = coh;
+data.delta      = delta;
+data.choice     = choice;
+data.RT         = RT/1000; % change to seconds
+data.conf       = conf;
+data.PDW        = pdw;
+data.PDW_preAlpha = pdw_preAlpha;
+data.correct    = correct;
+subject         = 'simul';
+
+data.oneTargConf = false(size(data.heading));
 
 %% plots
 if 1

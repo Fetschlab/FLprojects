@@ -201,18 +201,13 @@ catch
     parsedFit = fit;
 end
 
-
-% plot it!
-
-% first, single-cues + zero-delta comb
-
 %ves %vis %comb
 % clr{1} = {'k-','m-','c-'};
 clr{1} = {'k-','r-','b-'};
 clr{2} = {'k-','r-','b-'};
 clr{3} = {'k-','y-','g-'};
 
-hdgs = linspace(-12,12,33);
+% hdgs = linspace(-12,12,33);
 figure(101);
 for c = 1:length(cohs)
     subplot(spRows,length(cohs),c);

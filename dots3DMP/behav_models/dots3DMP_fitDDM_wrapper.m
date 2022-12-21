@@ -19,7 +19,6 @@ load tempsim.mat
 
 % load lucio_20220301-20221006_clean
 
-
 %% some bookkeeping, then parse data, and plot if desired
 
 if ~exist('allowNonHB','var'); allowNonHB=0; end
@@ -51,7 +50,7 @@ end
 % plot it
 % dots3DMP_plots(parsedData,mods,cohs,deltas,hdgs,options.conftask,options.RTtask)
 
-% convert choice (back) to 0:1
+% convert choice (back) to 0...1, for fitting
 if max(data.choice(~isnan(data.choice)))==2
     data.choice = logical(data.choice-1);    
 end
@@ -70,24 +69,24 @@ modelID=1; options.errfcn = @dots3DMP_errfcn_DDM_2D_wConf_noMC; % 2D DDM aka ant
 % SJ 10/2021, no longer doing model fits via Monte Carlo
 options.runInterpFit = 1; 
 
-options.fitMethod = 'fms'; %'fms','global','multi','pattern','bads'
+options.fitMethod = 'multi'; %'fms','global','multi','pattern','bads'
 
-% guess = [origParams.kmult/100, origParams.B, origParams.theta, origParams.alpha, origParams.TndMean/1000];
-guess = [0.1, origParams.B, origParams.theta, origParams.alpha, origParams.TndMean/1000];
+guess = [origParams.kmult, origParams.B, origParams.theta, origParams.alpha, origParams.TndMean/1000];
+guess = guess.*rand(size(guess));
+% guess = [20, 1.5, origParams.theta, origParams.alpha, origParams.TndMean/1000];
 
 fixed = zeros(1,length(guess));
 
 % ************************************
 % set all fixed to 1 for hand-tuning, or 0 for full fit
-%fixed(:)=1;
+% fixed(:)=1;
 % ************************************
 
-fixed = [0 1 1 1 1 1 1 1 1];
+% fixed = [0 0 1 1 1 1 1 1 1];
 
 
 options.plot     = 0; % plot confidence maps
-options.feedback = 1; % plot error trajectory (prob doesn't work with parallel fit methods)
-
+options.feedback = 2; % plot error trajectory (prob doesn't work with parallel fit methods)
 options.useVelAcc = 0;
 
 %%
@@ -97,7 +96,7 @@ options.useVelAcc = 0;
 %% plot it!
 dots3DMP_plots_fit_byCoh(data,fitInterp,options.conftask,options.RTtask);
 
-% dots3DMP_plots_fit_byConf(data,parsedFit,options.conftask,options.RTtask);
+dots3DMP_plots_fit_byConf(data,parsedFit,options.conftask,options.RTtask);
 % incomplete
 
 %% in progress
