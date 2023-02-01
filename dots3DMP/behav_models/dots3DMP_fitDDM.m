@@ -28,7 +28,7 @@ else
     switch options.fitMethod
         case 'fms'
             fitOptions = optimset('Display', 'iter', 'MaxFunEvals', 100*sum(fixed==0), 'MaxIter', ... 
-                100*sum(fixed==0), 'TolX',1e-3,'TolFun',1e-3,'UseParallel','Always');
+                100*sum(fixed==0), 'TolX',1e-1,'TolFun',1e-1,'UseParallel','Always');
             [X, fval, ~] = fminsearch(@(x) feval(options.errfcn,x,guess,fixed,data,options), guess(fixed==0), fitOptions);
     %         [X, fval, exitflag] = fminunc(@(x) feval(options.errfcn,x,guess,fixed,data,options), guess(fixed==0), fitOptions);
     %         fprintf('fval: %f\n', fval);
@@ -160,11 +160,14 @@ else
 
 end
     
-%% run err func again at the fitted/fixed params to generate a final
+%%
+% run err func again at the fitted/fixed params to generate a final
 % error value and model-generated data points (trial outcomes)
+
 options.ploterr = 0;
 
-[err_final, fit, parsedFit, logOddsMap] = feval(options.errfcn,X,X,true(size(X)),data,options);
+options.whichFit  = {'multinom','RT'}; % choice, conf, RT, multinom (choice+conf)
+[err_final, fit, parsedFit] = feval(options.errfcn,X,X,true(size(X)),data,options);
 
 
 % THIS SHOULD ALL BECOME OBSOLETE, NO MORE MC!
@@ -216,7 +219,6 @@ end
 % [~,fitInterp] = dots3DMP_fitDDM_err(X,Dfit);
 fixed = true(size(X)); % fix all params
 options.dummyRun = 1;
-options.logOddsMap = logOddsMap;
 [~, fitInterp] = feval(options.errfcn,X,X,fixed,Dfit,options);
 
 else

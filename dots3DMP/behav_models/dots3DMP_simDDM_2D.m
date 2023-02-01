@@ -15,47 +15,86 @@ clear; close all
 % datafolder = '/Users/chris/Documents/MATLAB';
 % codefolder = '/Users/chris/Documents/MATLAB/Projects/offlineTools/dots3DMP/behav_models';
 
+
+addpath(genpath('/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/FLprojects/'))
+addpath(genpath('/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/FLutils/'))
+
+% addpath(genpath('/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/third-party-codes/WolpertMOI_collapse'))
+addpath(genpath('/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/third-party-codes/WolpertMOI'))
+
 datafolder = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/data/dots3DMP_DDM';
 codefolder = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/FLprojects/dots3DMP/behav_models';
 
 cd(codefolder)
 
+%% MODEL SPECIFICATIONS and CONDITIONS
+
 modelID  = 1; % 1 will be 2Dacc model ('Candidate model' against which others are tested).
-modelVar = 1; % variation within model ID, e.g. velocity acceleration coding, confidence model, cue weighting in combined..
+% modelVar = 1; % variation within model ID, e.g. velocity acceleration coding, confidence model, cue weighting in combined..
 
-
-% these will be obsolete with modelVar eventually
-confModel = 'evidence+time'; % 'evidence+time','evidence_only','time_only'
-useVelAcc = 1; 
-
-RTtask = 1;
+% task type
+RTtask   = 1;
 conftask = 2; % 1 - sacc endpoint, 2 - PDW
 
-% plotExampleTrials = 0; % obsolete, code archived for the time being
+nreps = 100; % number of repetitions of each unique trial type % (ntrials depends on num unique trial types)
 
-nreps = 300; % number of repetitions of each unique trial type
-             % start small to verify it's working, then increase
-             % (ntrials depends on num unique trial types)
-
-cohs = [0.4 0.8]; % visual coherence levels (these are really just labels, since k's are set manually)
-% hdgs = [-12 -6 -3 -1.5 -eps eps 1.5 3 6 12]; % don't know if we realy need two zeroes
-hdgs = [-12 -6 -3 -1.5 0 1.5 3 6 12];
+% stimulus conditions
+mods  = [1 2 3]; % stimulus modalities: ves, vis, comb
+cohs  = [0.4 0.8]; % visual coherence levels (these are really just labels, since k's are set manually)
+hdgs  = [-12 -6 -3 -1.5 0 1.5 3 6 12];
 % deltas = [-3 0 3]; % conflict angle; positive means vis to the right
-deltas = 0;
-mods = [1 2 3]; % stimulus modalities: ves, vis, comb
+deltas  = 0;
 
-dT = 1; % time step, ms
+
+% time information
+dT      = 1; % time step, ms
 max_dur = 2100; % stimulus duration (ms)
 
-% build trial list
-[hdg, modality, coh, delta, ntrials] = dots3DMP_create_trial_list(hdgs,mods,cohs,deltas,nreps,0); % don't shuffle
+% maybe these become obsolete with modelVar eventually
+confModel = 'evidence+time'; % 'evidence+time','evidence_only','time_only'
+useVelAcc = 0; 
 
-dur = ones(ntrials,1) * max_dur;
+% if we have different temporal profiles for each modality, then how do we
+% set the confidence mapping? could stick with a fixed drift rate for
+% common confidence map, but how do we set this? if so, k needs to be
+% different...but this seems arbitrary
 
 allowNonHB = 0; % allow non-hit-bound trials? if set to 0 and a trial lasts
 % longer than max_dur, it is discarded. If set to 1, those trials are
 % assigned RT = max_dur (affects comparison with mean RT in images_dtb, 
 % which is calculated only for bound crossings)
+
+
+%% PARAMS - these are things we will actually fit!
+
+% drift rate and bound
+kmult       = 30;              % drift rate multiplier
+kvis        = kmult*cohs;       % assume drift proportional to coh, reduces nParams
+kves        = mean(kvis);       % for now, assume 'straddling'
+% knoise      = [0.07 0.07];    % additional variability added to drift rate; unused for now
+B           = 0.8;              % assume a single bound, but different Tnds for each modality
+
+% diffusion
+sigma       = 1;                % unit variance (Moreno-Bote 2010), not a free param!         
+sigmaVes    = sigma;            % assume same sigma for all modalities, for now
+sigmaVis    = [sigma sigma];    % [at the very least, need to assume their average is 1]
+
+% PDW
+theta       = [1.0 0.8 0.9];   % threshold for high bet in logOdds [ves vis comb]
+alpha       = 0.03;             % base rate of low bets (offset to PDW curve, as seen in data)
+Tconf       = 0;                % (ms), delay between choice and conf report (not implemented yet)
+
+ % Tnd = non-decision time (ms), to account for sensory/motor latencies
+TndMean     = [300 500 400];    % must have different Tnds for [ves, vis, comb]
+TndSD       = [0 0 0];          % 50-100 works well; set to 0 for fixed Tnd 
+TndMin      = TndMean/2;        % need to truncate the Tnd dist
+TndMax      = TndMean+TndMin;
+
+
+%% build trial list
+
+[hdg, modality, coh, delta, ntrials] = dots3DMP_create_trial_list(hdgs,mods,cohs,deltas,nreps,0); % don't shuffle
+dur = ones(ntrials,1) * max_dur;
 
 %% create acceleration and velocity profiles
 
@@ -94,44 +133,8 @@ else % or fixed, i.e. no vel/acc weighting
     svis = sves;
 end
 
-%% PARAMS - these are things we will actually fit!
-% also maybe move this to wrapper script
+%% store the generative parameters, to use e.g. for (pre)param recovery
 
-kmult = 150; % drift rate multiplier
-kvis  = kmult*cohs; % assume drift proportional to coh, reduces nParams
-kves  = mean(kvis); % for now, assume 'straddling'
-% knoise = [0.07 0.07]; % additional variability added to drift rate; unused for now
-B = 1.8; % assume a single bound, but different Tnds for each modality
-sigma = 1; % unit variance (Moreno-Bote 2010), not a free param!         
-sigmaVes = sigma; % assume same sigma for all modalities, for now
-sigmaVis = [sigma sigma]; % [at the very least, need to assume their average is 1]
-theta = [1.2 0.9 1.05]; % threshold for high bet in logOdds [ves vis comb]
-alpha = 0.03; % base rate of low bets (offset to PDW curve, as seen in data)
-
- % Tnd = non-decision time (ms), to account for sensory/motor latencies
-TndMean = [300 500 400]; % must have different Tnds for [ves, vis, comb]
-TndSD = [0 0 0]; % 50-100 works well; set to 0 for fixed Tnd 
-
-% original sim, no acc/vel
-% kmult = 30;
-% kvis  = kmult*cohs; % assume drift proportional to coh, reduces nParams
-% kves  = mean(kvis); % for now, assume 'straddling'
-% B = 0.9;
-% sigma = 1;
-% sigmaVes = sigma;
-% sigmaVis = [sigma sigma];
-% theta = [1.2 0.9 1.05]; % threshold for high bet in logOdds [ves vis comb]
-% alpha = 0.03; % base rate of low bets (offset to PDW curve, as seen in data)
-% TndMean = [300 500 400]; % must have different Tnds for [ves, vis, comb]
-% TndSD = [0 0 0]; % 50-100 works well; set to 0 for fixed Tnd 
-
-
-TndMin = TndMean/2; % need to truncate the Tnd dist
-TndMax = TndMean+TndMin;
-
-Tconf = 0; % (ms), delay between choice and conf report
-
-% store the generative parameters, to use e.g. for (pre)param recovery
 origParams.kmult = kmult;
 origParams.kvis  = kvis;
 origParams.kves  = kves;
@@ -160,12 +163,18 @@ else
 end
 
 % R.t = dT/1000:dT/1000:max_dur/1000+timeToConf;
-R.t = dT/1000:dT/1000:max_dur/1000;
+R.t = (dT/1000:dT/1000:max_dur/1000)';
 R.Bup = B;
+
+% new for MOIcollapse
+R.grid   = linspace(-4*R.Bup,0,500); % this is now an argument in MOIcollapse
+R.k_urg  = 1;
+R.low_th = -R.Bup-R.Bup/4;
+
 R.drift = k * sind(hdgs(hdgs>=0)); % takes only unsigned drift rates
 R.lose_flag = 1;
-R.plotflag = 0; % 1 = plot, 2 = plot and export_fig
-P = images_dtb_2d_varDrift(R);
+R.plotflag = 1; % 1 = plot, 2 = plot and export_fig
+P = images_dtb_2d(R);
 
 %% simulate bounded evidence accumulation
 
@@ -408,5 +417,5 @@ end
 
 %% save it
 % cd(datafolder)
-save tempsim_accvel.mat data origParams allowNonHB sves svis
+save tempsim_2023.mat data origParams allowNonHB sves svis
 

@@ -1,18 +1,21 @@
 % dots3DMP_fitDDM_wrapper.m
 
-% Generalized wrapper script for Dots DDM fitting, formerly a part of
-% Dots_offlineAnalysis.m
+% Generalized wrapper script for dots3DMP behavior fitting
+% SJ 12-2022
 
-% requires a struct data with at minimum a variable for choice and one for
-% signed coherence
+% TO DO
 
-% CF updated 12/2021, again in 07/2022
+% 
+
 
 clear; close all;
-
+addpath(genpath('/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/FLprojects/'))
+% addpath(genpath('/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/third-party-codes/WolpertMOI_collapse'))
+addpath(genpath('/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/third-party-codes/WolpertMOI'))
 
 %% try fitting simulated data to recover the generative parameters
 
+cd /Users/stevenjerjian/Desktop/FetschLab/Analysis/data/dots3DMP_DDM
 load tempsim.mat
 
 %% or real data
@@ -23,15 +26,11 @@ load tempsim.mat
 
 if ~exist('allowNonHB','var'); allowNonHB=0; end
 
-if allowNonHB==0
 % ignore unabsorbed probability, ie no need for weighted sum with max_dur
 % in RT calculation, e.g. when sim excluded trials that failed to hit bound
-    options.ignoreUnabs = 1;
-else
-    options.ignoreUnabs = 0;    
-end
+options.ignoreUnabs = ~allowNonHB;
 
-options.RTtask = 1;
+options.RTtask   = 1; 
 options.conftask = 2; % 1=continuous/rating, 2=PDW
 
 % parse trial data into aggregated and other support vars
@@ -39,6 +38,7 @@ mods   = unique(data.modality);
 cohs   = unique(data.coherence);
 deltas = unique(data.delta);
 hdgs   = unique(data.heading);
+
 RTCorrOnly = 0;
 if ~exist('parsedData','var')  % e.g., if simulation was run
     parsedData = dots3DMP_parseData(data,mods,cohs,deltas,hdgs,options.conftask,options.RTtask);
@@ -47,7 +47,6 @@ end
 % **** 
 % optional [data will be plotted below regardless, along with the fits]
 % forTalk = 0;
-% plot it
 % dots3DMP_plots(parsedData,mods,cohs,deltas,hdgs,options.conftask,options.RTtask)
 
 % convert choice (back) to 0...1, for fitting
@@ -58,7 +57,6 @@ end
 
 %% now the fitting itself
 
-
 %****** first select which model to fit ********
 modelID=1; options.errfcn = @dots3DMP_errfcn_DDM_2D_wConf_noMC; % 2D DDM aka anticorrelated race, for RT+conf [Kiani 14 / van den Berg 16 (uses Wolpert's images_dtb_2d (method of images, from Moreno-Bote 2010))]
 %***********************************************
@@ -67,29 +65,31 @@ modelID=1; options.errfcn = @dots3DMP_errfcn_DDM_2D_wConf_noMC; % 2D DDM aka ant
 % options.confModel = 'evidence+time';
 
 % SJ 10/2021, no longer doing model fits via Monte Carlo
-options.runInterpFit = 1; 
+options.runInterpFit = 0; 
 
-options.fitMethod = 'multi'; %'fms','global','multi','pattern','bads'
+options.fitMethod = 'fms'; %'fms','global','multi','pattern','bads'
 
 guess = [origParams.kmult, origParams.B, origParams.theta, origParams.alpha, origParams.TndMean/1000];
-guess = guess.*rand(size(guess));
+% guess = guess.*(0.9+0.2.*rand(size(guess)));
 % guess = [20, 1.5, origParams.theta, origParams.alpha, origParams.TndMean/1000];
 
 fixed = zeros(1,length(guess));
 
 % ************************************
 % set all fixed to 1 for hand-tuning, or 0 for full fit
-% fixed(:)=1;
+fixed(:)=1;
 % ************************************
 
-% fixed = [0 0 1 1 1 1 1 1 1];
+% fixed = [0 0 0 0 0 1 1 1 1];
 
 
-options.plot     = 0; % plot confidence maps
-options.feedback = 2; % plot error trajectory (prob doesn't work with parallel fit methods)
+options.plot      = 0; % plot confidence maps
+options.feedback  = 2; % plot error trajectory (prob doesn't work with parallel fit methods)
 options.useVelAcc = 0;
+options.whichFit  = {'choice','RT'}; % choice, conf, RT, multinom (choice+conf)
 
 %%
+profile off;
 [X, err_final, fit, parsedFit, fitInterp] = dots3DMP_fitDDM(data,options,guess,fixed);
 % fitInterp is in fact not obsolete, and needs fixing in ^^
 
@@ -97,7 +97,6 @@ options.useVelAcc = 0;
 dots3DMP_plots_fit_byCoh(data,fitInterp,options.conftask,options.RTtask);
 
 dots3DMP_plots_fit_byConf(data,parsedFit,options.conftask,options.RTtask);
-% incomplete
 
 %% in progress
 
