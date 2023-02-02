@@ -14,10 +14,9 @@ end
 PLB = guess/2;
 PUB = guess*2;
 
-global call_num; call_num=1;
-
-global paramVals; paramVals = guess';
-global errVals; errVals = NaN;
+% global call_num; call_num=1;
+% global paramVals; paramVals = guess';
+% global errVals; errVals = NaN;
 
 options.dummyRun = 0;
 
@@ -161,14 +160,22 @@ else
 end
     
 %%
+
+% I think the interpFit part at least (and possibly all of this) should go
+% outside of this function...
+
+
 % run err func again at the fitted/fixed params to generate a final
 % error value and model-generated data points (trial outcomes)
 
 options.ploterr = 0;
 
+% override, the original, we are not really fitting here, but we want the
+% model predictions for all behavioral outcomes, even the ones we didn't use for fitting
+% or do we? then err_final is going to include LL from variables we didn't
+% use for fitting.
 options.whichFit  = {'multinom','RT'}; % choice, conf, RT, multinom (choice+conf)
 [err_final, fit, parsedFit] = feval(options.errfcn,X,X,true(size(X)),data,options);
-
 
 % THIS SHOULD ALL BECOME OBSOLETE, NO MORE MC!
 if options.runInterpFit
