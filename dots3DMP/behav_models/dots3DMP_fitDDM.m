@@ -1,4 +1,5 @@
-function [X, err_final, fit, parsedFit, fitInterp] = dots3DMP_fitDDM(data,options,guess,fixed)
+function X = dots3DMP_fitDDM(data,options,guess,fixed)
+%function [X, err_final, fit, parsedFit, fitInterp] = dots3DMP_fitDDM(data,options,guess,fixed)
 
 % parameter bounds for fitting
 
@@ -14,19 +15,13 @@ end
 PLB = guess/2;
 PUB = guess*2;
 
-% global call_num; call_num=1;
-% global paramVals; paramVals = guess';
-% global errVals; errVals = NaN;
-
-options.dummyRun = 0;
-
 if all(fixed)
     X = guess;
 else
     
     switch options.fitMethod
         case 'fms'
-            fitOptions = optimset('Display', 'iter', 'MaxFunEvals', 100*sum(fixed==0), 'MaxIter', ... 
+            fitOptions = optimset('Display', 'iter', 'PlotFcns', @optimplotfval, 'MaxFunEvals', 100*sum(fixed==0), 'MaxIter', ... 
                 100*sum(fixed==0), 'TolX',1e-1,'TolFun',1e-1,'UseParallel','Always');
             [X, fval, ~] = fminsearch(@(x) feval(options.errfcn,x,guess,fixed,data,options), guess(fixed==0), fitOptions);
     %         [X, fval, exitflag] = fminunc(@(x) feval(options.errfcn,x,guess,fixed,data,options), guess(fixed==0), fitOptions);
@@ -161,19 +156,22 @@ end
     
 %%
 
-% I think the interpFit part at least (and possibly all of this) should go
-% outside of this function...
+%{
+if 0
+    % SJ 02-2023 moved all this outside of this function
 
+% I think the interpFit part at least should go outside of this function,
+% as it's own call to the error function
+% e.g. a dots3DMP_evalDDM function which returns err and fit, the err_fin
 
 % run err func again at the fitted/fixed params to generate a final
 % error value and model-generated data points (trial outcomes)
 
-options.ploterr = 0;
+options.feedback = 0;
+options.dummyRun = 1;
 
 % override, the original, we are not really fitting here, but we want the
-% model predictions for all behavioral outcomes, even the ones we didn't use for fitting
-% or do we? then err_final is going to include LL from variables we didn't
-% use for fitting.
+% model predictions for all stimuli and behavioral outcomes, even the ones we didn't use for fitting
 options.whichFit  = {'multinom','RT'}; % choice, conf, RT, multinom (choice+conf)
 [err_final, fit, parsedFit] = feval(options.errfcn,X,X,true(size(X)),data,options);
 
@@ -232,5 +230,6 @@ else
     fitInterp = fit;
 end
 
-
+end
+%}
 

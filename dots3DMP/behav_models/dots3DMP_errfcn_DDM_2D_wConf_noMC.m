@@ -1,32 +1,23 @@
 function [err,fit,parsedFit] = dots3DMP_errfcn_DDM_2D_wConf_noMC(param, guess, fixed, data, options)
 
 % updated model calculations to Steven's method:
-% SJ 10-11-2021 no Monte Carlo simulation for fitting, it's redundant!
-% just use model predictions directly
+% SJ 10-11-2021 no Monte Carlo simulation for fitting, it's redundant! just use model predictions directly
 
-% uses UNSIGNED cohs for MOI calculation
-% ONLY FIT zero delta
+% uses UNSIGNED cohs for initial MOI calculation
+% and only fits zero conflict conditions
+
+% dummyRun==1 will use signed cohs for conflict-adjusted drift rates
+% but we need to find a simple way to not re-compute the logOddsMaps
 
 % SJ spawned 12-2022 from dots version, for dots3DMP
 
-% SJ 02-2023 
-% added R.lose_flag for all PDW related calculations - we don't need to
-% compute losing distributions if not fitting conf
+% SJ 02-2023 s
+% added R.lose_flag for all PDW related calculations - we don't need to compute losing distributions if not fitting conf
+
 
 errFuncStart = tic;
 
-% SJ 02-2023 change to persistent
-persistent call_num
-if isempty(call_num)
-    call_num = 0;
-end
-call_num = call_num + 1;
 
-persistent err_iter
-if isempty(err_iter)
-    err_iter = 0;
-    
-end
 
 
 
@@ -215,17 +206,25 @@ for m = 1:length(mods)
                                                     % (for predicting cue conflict effects, and appropriate use of p.up and p.lo)
             
             elseif mods(m)==2
-                R.drift = svis .* kvis(c) .* sind(hdgs(hdgs>=0));
-                R.driftSigned = kvis(c) * sind(hdgs);
-            
+
+                % for dummyRun==0 (i.e. real fitting), collapse kvis across
+                % coherences, mean(kvis) = kves for now, but could change
+                if options.dummyRun == 0
+                    R.drift = svis .* mean(kvis) .* sind(hdgs(hdgs>=0));
+                    R.driftSigned = mean(kvis) * sind(hdgs);
+                else
+                    R.drift = svis .* kvis(c) .* sind(hdgs(hdgs>=0));
+                    R.driftSigned = kvis(c) * sind(hdgs);
+                end
+
             elseif mods(m)==3
 
                 if options.dummyRun == 0
-                    % 'kcomb'
-                    R.driftSigned = sqrt(kves.^2 + kvis(c).^2) * sind(hdgs);
-                    R.drift     = sqrt(sves.*kves.^2 + svis.*kvis(c).^2) .* sind(hdgs(hdgs>=0));
+                    % 'kcomb', fixed across coherences
+                    R.driftSigned = sqrt(kves.^2 + mean(kvis).^2) * sind(hdgs);
+                    R.drift     = sqrt(sves.*kves.^2 + svis.*mean(kvis).^2) .* sind(hdgs(hdgs>=0));
 
-                else     % compute w and mu, and use signed headings, to capture biases under cue conflict
+                else     % compute w and mu, and use signed headings, to capture biases under cue conflict in model prediction
 
                     wVes = sqrt( kves^2 / (kves^2 + kvis(c)^2) );
                     wVis = sqrt( kvis(c)^2 / (kves^2 + kvis(c)^2) );
@@ -241,17 +240,10 @@ for m = 1:length(mods)
 
             end
             
+            % run MOI
             P = images_dtb_2d_varDrift(R);
 
-%             if options.dummyRun==0
-                logOddsMap = P.logOddsCorrMap;
-%             else
-%                 % if not a dummyRun, we don't want to recalculate the
-%                 maps with cue-conflict headings, we want ot use the same
-%                 maps as before (either pass them in, or fix vars)
-%                 for some reason, also an issue with interpolated
-%                 headings, conf map is different even for same range
-%             end
+            %if options.dummyRun we want to somehow use stored logOddsMap
 
 
             for h = 1:length(hdgs)
@@ -315,10 +307,10 @@ for m = 1:length(mods)
                     if R.lose_flag
                         % calculate probabilities of the four outcomes: right/left x high/low
                         % these are the intersections, e.g. P(R n H)
-                        pRightHigh = sum(sum(Pxt1.*(logOddsMap>=theta(m))));
-                        pRightLow  = sum(sum(Pxt1.*(logOddsMap<theta(m))));
-                        pLeftHigh  = sum(sum(Pxt2.*(logOddsMap>=theta(m))));
-                        pLeftLow   =  sum(sum(Pxt2.*(logOddsMap<theta(m))));
+                        pRightHigh = sum(sum(Pxt1.*(P.logOddsCorrMap>=theta(m))));
+                        pRightLow  = sum(sum(Pxt1.*(P.logOddsCorrMap<theta(m))));
+                        pLeftHigh  = sum(sum(Pxt2.*(P.logOddsCorrMap>=theta(m))));
+                        pLeftLow   =  sum(sum(Pxt2.*(P.logOddsCorrMap<theta(m))));
                     end
                 end
 
@@ -490,8 +482,8 @@ for m = 1:length(mods)
                         % for RT conditioned on wager, it seems we don't need to do any
                         % scaling by Ptb; the correct distribution is captured by the
                         % conditional Pxts, we just sum them, dot product w t and normalize
-                        PxtAboveTheta = sum(Pxt1.*(logOddsMap>=theta(m))); % shouldn't matter if Pxt1 or 2, it's symmetric
-                        PxtBelowTheta = sum(Pxt1.*(logOddsMap<theta(m)));
+                        PxtAboveTheta = sum(Pxt1.*(P.logOddsCorrMap>=theta(m))); % shouldn't matter if Pxt1 or 2, it's symmetric
+                        PxtBelowTheta = sum(Pxt1.*(P.logOddsCorrMap<theta(m)));
 
 %                         PxtAboveTheta2 = sum(Pxt2.*(logOddsMap>=theta(m))); % shouldn't matter if Pxt1 or 2, it's symmetric
 %                         PxtBelowTheta2 = sum(Pxt2.*(logOddsMap<theta(m)));
@@ -552,13 +544,13 @@ for m = 1:length(mods)
                     end
 
                     % grab the mean and sd(se?) for corresponding data
-                    %I = Jdata & usetrs_data;
+                    %}
+                    I = Jdata & usetrs_data;
                     %n_RT_data(m,c,d,h) = sum(I);
                     %meanRT_data(m,c,d,h) = mean(data.RT(I));
                     %sigmaRT_data(m,c,d,h) = std(data.RT(I))/sqrt(sum(I)); % SD or SEM? --*obsolete even if not using full dists, use Sigma from the dist itself
                     %sigmaRT_data_trialwise(Jdata) = sigmaRT_data(c); % copy to trials, for alternate LL calculation below
                     % (should this be Jdata or I?)
-                    %}
 
                     % but we can just get the likelihood directly from the PDF!
                     PDF = P.up.pdf_t(uh,:)/sum(P.up.pdf_t(uh,:)); % renormalize % WHY ONLY P.UP HERE??
@@ -843,15 +835,16 @@ if R.lose_flag
 end
 
 % total -LL
+err = 0;
 for f = 1:length(options.whichFit)
     err = err - eval(['LL_',options.whichFit{1}]);
 end
-err_iter(end+1) = err;
+%err_iter(end+1) = err;
 
 %% print progress report!
 if options.feedback
     fprintf('\n\n\n****************************************\n');
-    fprintf('run %d\n', call_num);
+    %fprintf('run %d\n', call_num);
     %     fprintf('\tkmult= %g\n\tB= %g\n\tthetaVes= %g\n\tthetaVis= %g\n\tthetaComb= %g\n\talpha= %g\n\tTndVes= %g\n\tTndVis= %g\n\tTndComb= %g\n', kmult, B, theta, alpha, Tnds(1),Tnds(2),Tnds(3));
 
     for p = 1:length(param)
@@ -863,22 +856,24 @@ if options.feedback
     fprintf('err: %f\n', err);
 
 end
-if options.feedback==2 && strcmp(options.fitMethod,'fms')
-    if call_num == 1
-        figure(400); h = plot(call_num,err_iter,'.','color','k','markersize',14);
-        h.Parent.XLabel.String = 'Iteration';
-        h.Parent.YLabel.String = 'Total Error';
-        set(h,'YDataSource','err_all');
-        set(h,'XDataSource','call_num');
-    else
-        set(h,'XData',call_num,'YData',err_iter); drawnow;
-    end
-%     figure(400); hold on;
-%     plot(call_num, err, '.','color','k','markersize',14);
-%     xlim([0 call_num])
-%     drawnow;
-end
-errFuncElapsed = toc(errFuncStart)
+
+% if options.feedback==2 && strcmp(options.fitMethod,'fms')
+%     if call_num == 1
+%         figure(400); h = plot(call_num,err_iter,'.','color','k','markersize',14);
+%         h.Parent.XLabel.String = 'Iteration';
+%         h.Parent.YLabel.String = 'Total Error';
+%         set(h,'YDataSource','err_all');
+%         set(h,'XDataSource','call_num');
+%     else
+%         set(h,'XData',call_num,'YData',err_iter); drawnow;
+%     end
+% %     figure(400); hold on;
+% %     plot(call_num, err, '.','color','k','markersize',14);
+% %     xlim([0 call_num])
+% %     drawnow;
+% end
+errFuncElapsed = toc(errFuncStart);
+fprintf('Time in errfcn: %2.2fs',errFuncElapsed);
 
 
 %************

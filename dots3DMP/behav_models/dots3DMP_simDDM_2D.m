@@ -25,11 +25,12 @@ addpath(genpath('/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/third-par
 datafolder = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/data/dots3DMP_DDM';
 codefolder = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/FLprojects/dots3DMP/behav_models';
 
-cd(codefolder)
+savefilename = 'tempsim_sepConfMaps_accvel';
 
 %% MODEL SPECIFICATIONS and CONDITIONS
 
-modelID  = 1; % 1 will be 2Dacc model ('Candidate model' against which others are tested).
+% === model type ==== unused for now
+modelID = 1; % 1 will be 2Dacc model ('Candidate model' against which others are tested).
 % modelVar = 1; % variation within model ID, e.g. velocity acceleration coding, confidence model, cue weighting in combined..
 
 % task type
@@ -39,40 +40,36 @@ conftask = 2; % 1 - sacc endpoint, 2 - PDW
 nreps = 100; % number of repetitions of each unique trial type % (ntrials depends on num unique trial types)
 
 % stimulus conditions
-mods  = [1 2 3]; % stimulus modalities: ves, vis, comb
-cohs  = [0.4 0.8]; % visual coherence levels (these are really just labels, since k's are set manually)
+mods  = [1 2 3];        % stimulus modalities: ves, vis, comb
+cohs  = [0.4 0.8];      % visual coherence levels (these are really just labels, since k's are set manually)
 hdgs  = [-12 -6 -3 -1.5 0 1.5 3 6 12];
-% deltas = [-3 0 3]; % conflict angle; positive means vis to the right
+% deltas = [-3 0 3];    % conflict angle; positive means vis to the right
 deltas  = 0;
-
 
 % time information
 dT      = 1; % time step, ms
 max_dur = 2100; % stimulus duration (ms)
 
-% maybe these become obsolete with modelVar eventually
-confModel = 'evidence+time'; % 'evidence+time','evidence_only','time_only'
-useVelAcc = 0; 
-
-% if we have different temporal profiles for each modality, then how do we
-% set the confidence mapping? could stick with a fixed drift rate for
-% common confidence map, but how do we set this? if so, k needs to be
-% different...but this seems arbitrary
-
+% maybe these become supplanted by modelVar eventually
+confModel  = 'evidence+time'; % 'evidence+time','evidence_only','time_only'
+useVelAcc  = 1; 
 allowNonHB = 0; % allow non-hit-bound trials? if set to 0 and a trial lasts
 % longer than max_dur, it is discarded. If set to 1, those trials are
 % assigned RT = max_dur (affects comparison with mean RT in images_dtb, 
 % which is calculated only for bound crossings)
 
+urgency = 0;
+plotSimulatedData = 1; % plot average psychometric curves etc.
 
-%% PARAMS - these are things we will actually fit!
+
+%% generative model parameters
 
 % drift rate and bound
-kmult       = 30;              % drift rate multiplier
+kmult       = 25;               % drift rate multiplier
 kvis        = kmult*cohs;       % assume drift proportional to coh, reduces nParams
 kves        = mean(kvis);       % for now, assume 'straddling'
-% knoise      = [0.07 0.07];    % additional variability added to drift rate; unused for now
-B           = 0.8;              % assume a single bound, but different Tnds for each modality
+% knoise      = [0.07 0.07];    % additional variability added to drift rate, unused for now
+B           = 2;              % assume a single bound, but different Tnds for each modality
 
 % diffusion
 sigma       = 1;                % unit variance (Moreno-Bote 2010), not a free param!         
@@ -80,16 +77,15 @@ sigmaVes    = sigma;            % assume same sigma for all modalities, for now
 sigmaVis    = [sigma sigma];    % [at the very least, need to assume their average is 1]
 
 % PDW
-theta       = [1.0 0.8 0.9];   % threshold for high bet in logOdds [ves vis comb]
+theta       = [0.8 0.7 1.0];    % threshold for high bet in logOdds [ves vis comb]
 alpha       = 0.03;             % base rate of low bets (offset to PDW curve, as seen in data)
-Tconf       = 0;                % (ms), delay between choice and conf report (not implemented yet)
+% Tconf       = 0;              % (ms), delay between choice and conf report, unused for now
 
  % Tnd = non-decision time (ms), to account for sensory/motor latencies
-TndMean     = [300 500 400];    % must have different Tnds for [ves, vis, comb]
+TndMean     = [300 300 300];    % must have different Tnds for [ves, vis, comb]
 TndSD       = [0 0 0];          % 50-100 works well; set to 0 for fixed Tnd 
 TndMin      = TndMean/2;        % need to truncate the Tnd dist
 TndMax      = TndMean+TndMin;
-
 
 %% build trial list
 
@@ -110,16 +106,16 @@ if useVelAcc
     acc = gradient(vel); 
 
     % normalize (by max or by mean?) and take abs of acc 
-%     vel = vel/mean(vel);
-%     acc = abs(acc)/mean(abs(acc));
-    vel = vel/max(vel);
-    acc = acc/max(abs(acc));
-    acc(acc<0) = 0; % hmm
+    vel = vel/mean(vel);
+    acc = abs(acc)/mean(abs(acc));
+%     vel = vel/max(vel);
+%     acc = acc/max(abs(acc));
+%     %acc(acc<0) = 0;
+%     acc = abs(acc);
 
 % step functions, for testing param recovery and LL comparisons
 %     acc = [zeros(max_dur/2,1); ones(max_dur/2,1)];
 %     vel = [ones(max_dur/2,1); zeros(max_dur/2,1)];
-
 
     if useVelAcc==1 % ves follow acc, vis follows vel
         sves = acc; svis = vel;
@@ -147,7 +143,7 @@ origParams.TndMean = TndMean;
 origParams.TndSD   = TndSD;
 origParams.TndMin  = TndMin;
 origParams.TndMax  = TndMax;
-origParams.Tconf   = Tconf;
+% origParams.Tconf   = Tconf;
 
 
 %% calculate log odds corr map using Wolpert Method of Images code (van den Berg 2016, after Moreno-Bote 2010)
@@ -162,19 +158,34 @@ else
     k = mean([kves kvis]);
 end
 
-% R.t = dT/1000:dT/1000:max_dur/1000+timeToConf;
 R.t = (dT/1000:dT/1000:max_dur/1000)';
 R.Bup = B;
+R.lose_flag = 1;
+R.plotflag  = 0; % 1 = plot, 2 = plot and export_fig
 
 % new for MOIcollapse
-R.grid   = linspace(-4*R.Bup,0,500); % this is now an argument in MOIcollapse
-R.k_urg  = 1;
-R.low_th = -R.Bup-R.Bup/4;
 
-R.drift = k * sind(hdgs(hdgs>=0)); % takes only unsigned drift rates
-R.lose_flag = 1;
-R.plotflag = 1; % 1 = plot, 2 = plot and export_fig
-P = images_dtb_2d(R);
+if urgency
+    R.grid   = linspace(-4*R.Bup,0,500); % this is now an argument in MOIcollapse
+    R.k_urg  = 1;
+    R.low_th = -R.Bup-R.Bup/4;
+end
+
+% R.drift = k * sind(hdgs(hdgs>=0)); % takes only unsigned drift rates
+% P = images_dtb_2d(R);
+
+
+% SJ 02-2023 separate logOdds map for each modality, variable drift rates
+
+R.drift = sves .* kves .* sind(hdgs(hdgs>=0))';
+P(1) = images_dtb_2d_varDrift(R); % ves
+
+R.drift = svis .* mean(kvis) .* sind(hdgs(hdgs>=0))';
+P(2)    = images_dtb_2d_varDrift(R); % vis
+
+R.drift = sqrt(sves.*kves.^2 + svis.*mean(kvis).^2) .* sind(hdgs(hdgs>=0))';
+P(3)    = images_dtb_2d_varDrift(R); % comb
+
 
 %% simulate bounded evidence accumulation
 
@@ -215,7 +226,6 @@ for n = 1:ntrials
             mu = svis .* kvis(cohs==coh(n)) * sind(hdg(n)) * dT/1000;
             s = [sigmaVis(cohs==coh(n))*sqrt(dT/1000) sigmaVis(cohs==coh(n))*sqrt(dT/1000)];
         case 3
-%             if hdg(n)==12, keyboard, end
             % positive delta defined as ves to the left, vis to the right
             muVes = sves .* kves               * sind(hdg(n)-delta(n)/2) * dT/1000;
             muVis = svis .* kvis(cohs==coh(n)) * sind(hdg(n)+delta(n)/2) * dT/1000;
@@ -256,13 +266,13 @@ for n = 1:ntrials
     % (1) only right accumulator hits bound,
     if ~isempty(cRT1) && isempty(cRT2)
         RT(n) = cRT1;
-        finalV(n) = dv(cRT1+Tconf*1000,2); % only 1 hit, so 2 is the loser
+        finalV(n) = dv(cRT1,2); % only 1 hit, so 2 is the loser
         hitBound(n) = 1;
         choice(n) = 1;
     % (2) only left accumulator hits bound,
     elseif isempty(cRT1) && ~isempty(cRT2)
         RT(n) = cRT2;
-        finalV(n) = dv(cRT2+Tconf*1000,1); % only 2 hit, so 1 is the loser
+        finalV(n) = dv(cRT2,1); % only 2 hit, so 1 is the loser
         hitBound(n) = 1;
         choice(n) = -1;
     % (3) neither hits bound,
@@ -289,38 +299,42 @@ for n = 1:ntrials
     else
         RT(n) = min([cRT1 cRT2]);
         whichWon = [cRT1<=cRT2 cRT1>cRT2];
-        finalV(n) = dv(min([cRT1 cRT2])+Tconf*1000,~whichWon); % the not-whichWon is the loser
+        finalV(n) = dv(min([cRT1 cRT2]),~whichWon); % the not-whichWon is the loser
         hitBound(n) = 1;
         a = [1 -1];
         choice(n) = a(whichWon);
     end
     
+    % calculate confidence
     if hitBound(n)==0 && allowNonHB==0
         logOddsCorr(n) = NaN;
         conf(n) = NaN;
         pdw(n) = NaN;
-    else        
-        diffV = abs((P.y+B)-finalV(n));
+    else    
+        Pm = P(modality(n));
+        diffV = abs((Pm.y+B)-finalV(n));
         diffT = abs(R.t*1000-RT(n));
+        
         switch confModel
             case 'evidence+time'
                 % use map to look up log-odds that the motion is rightward
                 thisV = find(diffV==min(diffV));
                 thisT = find(diffT==min(diffT));
-                logOddsCorr(n) = P.logOddsCorrMap(thisV(1), thisT(1));
+                
+                logOddsCorr(n) = Pm.logOddsCorrMap(thisV(1), thisT(1));
                 expectedPctCorr(n) = logistic(logOddsCorr(n)); % convert to pct corr
+                
                 conf(n) = 2*expectedPctCorr(n) - 1; % convert to 0..1
-                pdw(n) = logOddsCorr(n) > theta(modality(n));
+                pdw(n) = logOddsCorr(n) > theta(modality(n)); % threshold
             case 'evidence_only'
-                conf(n) = max(diffV) ./ range(P.y);
+                conf(n) = max(diffV) ./ range(Pm.y);
                 pdw(n) = max(diffV) > theta(modality(n));
             case 'time_only'
-                conf(n) = 1 - (RT(n)/1000) ./ range(P.t);
+                conf(n) = 1 - (RT(n)/1000) ./ range(Pm.t);
                 pdw(n) = (RT(n)/1000) < theta(modality(n));
         end
         if isnan(conf(n)), conf(n)=0; end % if dvs are almost overlapping, force conf to zero as it can sometimes come out as NaN
     end
-    if isnan(conf(n)), conf(n)=0; end % if dvs are almost overlapping, force conf to zero as it can sometimes come out as NaN
 end
 toc
 
@@ -334,6 +348,7 @@ pCorrect_total = sum(correct) / ntrials
 
 % remove NaNs (ie non-HBs, if not allowed)
 remove = isnan(choice);
+dv_all(remove) = [];
 modality(remove)=[];
 hdg(remove)=[];
 coh(remove)=[];
@@ -397,7 +412,7 @@ subject         = 'simul';
 data.oneTargConf = false(size(data.heading));
 
 %% plots
-if 1
+if plotSimulatedData
     mods   = unique(data.modality);
     cohs   = unique(data.coherence);
     deltas = unique(data.delta);
@@ -416,6 +431,5 @@ end
 
 
 %% save it
-% cd(datafolder)
-save tempsim_2023.mat data origParams allowNonHB sves svis
+save(fullfile(datafolder,[savefilename '.mat']), 'data', 'origParams', 'allowNonHB', 'sves', 'svis');
 
