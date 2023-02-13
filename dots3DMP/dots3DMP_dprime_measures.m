@@ -1,55 +1,55 @@
-function dots3DMP_dprime_measures(data,mods,cohs,deltas)
+function [d, meta_d] = dots3DMP_dprime_measures(data,mods,cohs,deltas)
 
-% dprime and meta-dprime for individual subjects, and for each condition
+% dprime and meta-dprime across subjs, for individual subjects, and for each condition
 
 subjs = unique(data.subj);
-fnames = fieldnames(data);
-% across all subjs
+nsubj = length(subjs);
 
-meta_d_subjCond = nan(length(mods),length(cohs),length(deltas)+1,length(subjs));
-meta_crit_subjCond = nan(length(mods),length(cohs),length(deltas)+1,length(subjs));
+[d.dprime{1},meta_d.dprime{1},d.crit{1},meta_d.crit{1}] = deal(nan(nsubj,1));
+
+N = nan(length(mods),length(cohs),length(deltas)+1,nsubj);
+
+d.dprime{2} = N;
+d.crit{2}   = N;
+meta_d.dprime{2} = N;
+meta_d.crit{2} = N;
 
 for s = 1:length(subjs)+1
-    if s == length(subjs)+1
-        
-        [dp(s), crit(s)] = dprime(double(data.heading>0),data.choice-1);
 
-        [meta_d(s), meta_crit(s)] = dprime(double(data.correct), double(data.conf>=median(data.conf)));
+    I = ~isnan(data.choice) & ~isnan(data.conf);
 
-    else
-        temp = data;
-        for f = 1:length(fnames)
-            temp.(fnames{f})(~strcmp(data.subj,subjs{s})) = [];
-        end
-        
-        % confidence should be set to median withi each subject and within
-        % each condition - i.e. criterion for that condition
-%         medianconf = median(temp.conf); 
-        
-        [meta_d(s), meta_crit(s)] = dprime(double(temp.correct), double(temp.conf>=median(temp.conf)));
-        [dp(s), crit(s)] = dprime(double(temp.heading>0),temp.choice-1);
+    if s < length(subjs)+1
+        I = I & strcmp(data.subj,subjs{s});
+    end
 
-        
-        for m=1:length(mods)
-            for c = 1:length(cohs)
-                for d = 1:length(deltas)+1
-                    if d == length(deltas)+1
-                        J = temp.modality==mods(m) & temp.coherence==cohs(c);
-                    else
-                        J = temp.modality==mods(m) & temp.coherence==cohs(c) & temp.delta==deltas(d);
-                    end
-                    
-                    [meta_d_subjCond(m,c,d,s), meta_crit_subjCond(m,c,d,s)] = ...
-                        dprime(double(temp.correct(J)), double(temp.conf(J)>=median(temp.conf(J))));
-                    
-                    [d_subjCond(m,c,d,s), crit_subjCond(m,c,d,s)] = ...
-                        dprime(double(temp.heading(J)>0),temp.choice(J)-1);
+    [d.dprime{1}(s), d.crit{1}(s)] = dprime(double(data.heading(I)>0),data.choice(I)-1);
+    [meta_d.dprime{1}(s), meta_d.crit{1}(s)] = dprime(double(data.correct(I)), double(data.conf(I)>=median(data.conf(I))));
 
-                    
+    % repeat for individual conditions
+    for m=1:length(mods)
+        for c = 1:length(cohs)
+            for d = 1:length(deltas)+1
+                if d == length(deltas)+1
+                    J = temp.modality==mods(m) & temp.coherence==cohs(c);
+                else
+                    J = temp.modality==mods(m) & temp.coherence==cohs(c) & temp.delta==deltas(d);
                 end
+
+                if s < length(subjs)+1
+                    J = J & strcmp(data.subj,subjs{s});
+                end
+
+
+                [d.dprime{2}(s), d.crit{2}(s)] = ...
+                    dprime(double(temp.heading(J)>0),temp.choice(J)-1);
+
+                [meta_d.dprime{2}(s), meta_d.crit{2}(s)] = ...
+                    dprime(double(temp.correct(J)), double(temp.conf(J)>=median(temp.conf(J))));
+
             end
         end
-
-
     end
+
+
 end
+      

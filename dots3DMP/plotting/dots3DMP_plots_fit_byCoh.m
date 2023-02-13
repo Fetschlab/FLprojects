@@ -42,7 +42,7 @@ end
 % plot as individual points with error bars
 
 useAbsHdg = 0;
-RTCorrOnly = 1; % when fitting correct RTs only, only compare to those in the data
+RTCorrOnly = 0; % when fitting correct RTs only, only compare to those in the data
 
 parsedData = dots3DMP_parseData(data,mods,cohs,deltas,hdgs,conftask,RTtask,useAbsHdg,RTCorrOnly); 
 
@@ -187,7 +187,7 @@ if conftask
 end
 if RTtask
     parsedFit.RTmean = RTmean;
-end
+    end
 
 
 % plot it!
