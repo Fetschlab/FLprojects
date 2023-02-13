@@ -39,7 +39,7 @@ end
 %% first, for all trials irrespective of delta
 
 % SJ add D as option, 11/21/2022
-if isempty(D) || nargin < 7
+if nargin < 7 || isempty(D)
     D = length(deltas)+1; % (the extra column we made for pooling across deltas)
     % OR select just delta=0:
 %     D = find(deltas==0);

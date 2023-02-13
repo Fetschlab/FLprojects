@@ -11,11 +11,17 @@
 
 clear; clc; close all
 cd /Users/stevenjerjian/Desktop/FetschLab/PLDAPS_data/dataStructs
-addpath(genpath('/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/'))
+addpath(genpath('/Users/stevenjerjian/Desktop/FetschLab/Analysis/FLprojects/'))
+
+
+% TODO 02-2023
+
+% check that plotting and labelling works correctly
+% compare RT profiles in ves and comb split by heading and coherence
 
 %% select subject, load the data
 
-subject = 'lucio';
+subject = 'zarya';
 export_figs = 0;
 
 switch subject
@@ -31,7 +37,7 @@ switch subject
         RTlims = [0.25 2.25];
 
     case 'zarya'
-        load('zarya_20220301-20220920_clean.mat') % recent lucio data, PDW + RT
+        load('zarya_20221207-20221222_clean.mat') % recent lucio data, PDW + RT
 
         conftask = 2; % 1=colorbars, 2=PDW
         RTtask   = 1;
@@ -78,7 +84,7 @@ if strcmp(subject,'human') && RTtask
     end
 end
 
-mods   = unique(data.modality); 
+mods   = 2; %unique(data.modality); 
 cohs   = unique(data.coherence); 
 deltas = unique(data.delta);
 % deltas = [-3 3];
@@ -93,7 +99,7 @@ hdgs   = unique(data.heading);
 
 % means per condition, logistic fits
 parsedData = dots3DMP_parseData(data,mods,cohs,deltas,hdgs,conftask,RTtask); 
-% dots3DMP_plots(parsedData,mods,cohs,deltas,hdgs,conftask,RTtask)
+dots3DMP_plots(parsedData,mods,cohs,deltas,hdgs,conftask,RTtask)
 
 %% gaussian fits and plots
 gfit = dots3DMP_fit_cgauss(data,mods,cohs,deltas,conftask,RTtask); 
@@ -102,7 +108,9 @@ gfit = dots3DMP_fit_cgauss(data,mods,cohs,deltas,conftask,RTtask);
 gfits_fig = dots3DMP_plots_cgauss_byCoh(gfit,parsedData,mods,cohs,deltas,hdgs,conftask,RTtask);
 
 if export_figs, exportgraphics(gfits_fig,'gaussFitBehavior.pdf','Resolution',300); end
-% or...separate subplots for each mod/delta, and all cohs on same subplot - this one needs tidying to look nice if it's going to be used
+
+% or separate subplots for each mod/delta, and all cohs on same subplot -
+% needs work to look nice if it's going to be used publicly
 % dots3DMP_plots_cgauss_byModDelta(gfit,parsedData,mods,cohs,deltas,hdgs,conftask,RTtask)
 
 %% psychophysical cue weights

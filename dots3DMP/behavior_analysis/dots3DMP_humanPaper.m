@@ -1,49 +1,41 @@
-%% dots3DMP human paper
+%% dots3DMP behavioral paper
 
-% first, make sure we have cleaned datasets
-
-% human non-RT
-% human RT
-
-% clean means no breakfix trials, only 2-target trials, only 'good'
-% subjects, coherence and headings standardized, normalized conf
-% see dots3DMP_cleanHumanData
-% (keeping raw cohs, headings and conf values as well)
+% first demonstration of confidence and RT in self-motion paradigm
+% key result is putative common mechanism giving rising to all 3 behavioral
+% measures
 
 clear; clc; close all
 cd /Users/stevenjerjian/Desktop/FetschLab/PLDAPS_data/dataStructs
 addpath(genpath('/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/'))
 
-%%
-
 printFigs = 0;
 
-subject = 'human';
-conftask = 1;
-RTtask   = 1; 
+%% Load in relevant data
+
+subject = 'human'; conftask = 1; RTtask   = 1;      % human RT
+% subject = 'human'; conftask = 1; RTtask   = 0;    % human non-RT (fix dur)
+% subject = 'lucio'; conftask = 2; RTtask   = 1;    % monkey 1 (PDW + RT)
+% subject = 'zarya'; conftask = 2; RTtask   = 1;    % monkey 2 (PDW + RT)
+
+data = dots3DMP_loadBehaviorData(subject,conftask,RTtask);
 
 
-if ~RTtask
-    load('human_20190625-20191231_nonRT_clean_Apr2022.mat');% human non-RT
+if strcmp(subject, 'human')
+    data.oneTargConf = false(size(data.heading)); % move to cleanUP
+
     subjs2keep = [1 2 3 4 5];
+    subjs = unique(data.subj);
+    
+    fnames = fieldnames(data);
+    removethese = ~ismember(data.subj,subjs(subjs2keep));
+    for f=1:length(fnames), data.(fnames{f})(removethese) = []; end
 
-else
-    load('human_20200213-20220317_RT_clean_Apr2022.mat') % human RT
-    subjs2keep = [1 2 4 5];
-    
-%     data.Confnorm = data.conf;
-%     data.conf = data.confRaw;
-    
+    % remove zero heading trials, insufficient data
+    removethese = data.heading==0;
+    for f=1:length(fnames), data.(fnames{f})(removethese) = []; end
+
 end
 
-subjs = unique(data.subj);
-fnames = fieldnames(data);
-removethese = ~ismember(data.subj,subjs(subjs2keep));
-for f=1:length(fnames), data.(fnames{f})(removethese) = []; end
-
-% remove zero heading trials, insufficient data
-% fnames = fieldnames(data);
-% for f=1:length(fnames), data.(fnames{f})(data.heading==0) = []; end
 
 
 % if doing pooled analysis, then just go forward with data
@@ -63,65 +55,60 @@ for f=1:length(fnames), data.(fnames{f})(removethese) = []; end
 %       - conf to accuracy
 %       - cue conflict to conf, 
 
+% 2D Acc model fit
+% alternative models - intuition + maths
+
 
 
 %% basic data parsing and visualization
 
-% these will be useful in multiple places
 mods   = unique(data.modality); 
 cohs   = unique(data.coherence); 
 deltas = unique(data.delta);
-% deltas = [-3 3]; % for showing only non-zero deltas
 hdgs   = unique(data.heading);
+
+% deltas = [-3 3]; % for showing only non-zero deltas
 
 % means per condition, logistic and gaussian fits
 parsedData  = dots3DMP_parseData(data,mods,cohs,deltas,hdgs,conftask,RTtask); 
 gfit        = dots3DMP_fit_cgauss(data,mods,cohs,deltas,conftask,RTtask); 
-% dots3DMP_plots(parsedData,mods,cohs,deltas,hdgs,conftask,RTtask)
-f1=dots3DMP_plots_cgauss_byCoh(gfit,parsedData,mods,cohs,deltas,hdgs,conftask,RTtask); % eventually will just go straight to plotting fits of model?
-if printFigs
-    printfig(f1(1),'Behavior_AllSubj_Modalities','pdf');
-    printfig(f1(2),'Behavior_AllSubj_CueConflict','pdf');
-end
+
+% plotting
+fig_logistic = dots3DMP_plots(parsedData,mods,cohs,deltas,hdgs,conftask,RTtask); % logistic fits
+fig_gaussFits = dots3DMP_plots_cgauss_byCoh(gfit,parsedData,mods,cohs,deltas,hdgs,conftask,RTtask); % eventually will just go straight to plotting fits of model?
     
 %% 1. relationship between confidence and accuracy
 
 % 1. conf vs P(right) for each modality
-f2=dots3DMP_plots_confchoice(parsedData,cohs,deltas,conftask);
-if printFigs, printfig(f2,'ConfVsPRight','pdf'), end
-
+fig_ConfvsAcc = dots3DMP_plots_confchoice(parsedData,cohs,deltas,conftask);
+ 
 %% 2. relationship between confidence and RT
 
 % TODO review confidence distributions within each subject to determine
 % threshold for high/lo (currently just the median normalized value)?
 
-parsedData_byConf = dots3DMP_parseData_byConf(data,mods,cohs,deltas,hdgs,conftask,RTtask); 
-gfit_byConf       = dots3DMP_fit_cgauss_byConf(data,mods,cohs,deltas,conftask,RTtask);
-dots3DMP_plots_cgauss_byConf(gfit_byConf,parsedData_byConf,mods,cohs,deltas,hdgs,conftask,RTtask)
+% for human data, 
 
+% D = find(deltas==0); 
+D = length(deltas)+1;
+
+parsedData_byConf = dots3DMP_parseData_byConf(data,mods,cohs,deltas,hdgs,conftask,RTtask); 
+gfit_byConf       = dots3DMP_fit_cgauss_byConf(data,mods,cohs,deltas,conftask,RTtask,D);
+dots3DMP_plots_cgauss_byConf(gfit_byConf,parsedData_byConf,mods,2,deltas,hdgs,conftask,RTtask,D) % just 1 coh
+
+%% 2b. RT quantiles
 % 0 - plot errors/low bet only, 1 - plot correct/high bet only, 2 - plot correct/error or high/low bet separately, -1 - plot all trials
+
 if RTtask
-    dots3DMP_RTquantiles(data,conftask,1); 
+    dots3DMP_RTquantiles(data,conftask,2); 
 %     confRT_distrs(data,mods,cohs,conftask,RTtask)
 end
-if printFigs
-    printfig(fh(1),'RTquantiles_Conf','pdf');
-    printfig(fh(2),'RTquantiles_Acc','pdf')
-end
-
-
-% Technical TODO
-% make sure each figure is numbered and sized and saves, then make a
-% wrapper that does analyses with each subject's data, by sub-sampling
-% relevant trials from data
-
-
 
 %% meta-sensitivity
 
 % how good are subjects at reflecting on their own confidence
 % across all
-% dots3DMP_dprime_measures(data,mods,cohs,deltas) % NEED THE OUTPUTS!
+[d,meta_d] = dots3DMP_dprime_measures(data,mods,cohs,deltas); % NEED THE OUTPUTS!
 %
 % 
 % 
@@ -137,9 +124,16 @@ end
 % dots3DMP_plotCueWeights(wves,wvesBoot,cohs,conftask) % plot the weights
 
 
-%% individual subjects psychometric curve, and cue conflict shift/SE comparisons
+%% individual days (NHP) or subjects (human)
 
-subjs = unique(data.subj);
+switch subject
+    case 'human'
+        uF = data.subj;
+    case {'lucio','zarya'}
+        uF = data.subjDate;
+end
+        
+uss = unique(uF);
 fnames = fieldnames(data);
 
 mods   = unique(data.modality); 
@@ -147,22 +141,35 @@ cohs   = unique(data.coherence);
 deltas = unique(data.delta);
 hdgs   = unique(data.heading);
 
-clear parsedData gfit
-for s = 1:length(subjs)
+clear parsedData_bySess gfit_bySess
+for s = 1:length(uss)
     temp = data;
     for f = 1:length(fnames)
-        temp.(fnames{f})(~strcmp(data.subj,subjs{s})) = [];
+        temp.(fnames{f})(~strcmp(uF,uss{s})) = [];
     end
-    
-    
-    parsedData(s)= dots3DMP_parseData(temp,mods,cohs,deltas,hdgs,conftask,RTtask);
-    gfit(s)      = dots3DMP_fit_cgauss(temp,mods,cohs,deltas,conftask,RTtask);
-%     f1           = dots3DMP_plots_cgauss_byCoh(gfit(s),parsedData(s),mods,cohs,deltas,hdgs,conftask,RTtask); 
-%     set(f1(1),'Units','centimeters'); set(f2(1),'Units','centimeters');
-%     printfig(f1(1),sprintf('Behavior_IndivSubjs_Modalities_%s',subjs{s}),'pdf');
-%     printfig(f1(2),sprintf('Behavior_IndivSubjs_CueConflict_%s',subjs{s}),'pdf');
+
+    parsedData_bySess(s) = dots3DMP_parseData(temp,mods,cohs,deltas,hdgs,conftask,RTtask);
+    gfit_bySess(s)       = dots3DMP_fit_cgauss(temp,mods,cohs,deltas,conftask,RTtask);
+%     f1           = dots3DMP_plots_cgauss_byCoh(gfit_bySess(s),parsedData_bySess(s),mods,cohs,deltas,hdgs,conftask,RTtask); 
 end
 
+
+%% plot 1 subject/session
+
+s=5;
+dots3DMP_plots_cgauss_byCoh(gfit_bySess(s),parsedData(s),mods,cohs,deltas,hdgs,conftask,RTtask); 
+
+
+%% 
+
+
+
+
+
+
+
+%% 
+% this should be another analysis function
 % plot subject cue conflict shifts
 
 clear shift error

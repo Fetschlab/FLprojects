@@ -1,4 +1,4 @@
-% function dots3DMP_regressionAnalyses(data,mods,cohs,deltas,conftask,RTtask)
+function outputStats = dots3DMP_regressionAnalyses(data,mods,cohs,deltas,conftask,RTtask)
 
 % SJ 06/2020 started
 % SJ 10/2021 modified significantly
@@ -7,7 +7,7 @@
 % Choice/Correct data is going to be fitted by logistic regression (MLE method
 % under binomial assumptions i.e. trials are a list of Bernoulli coin tosses)
 % Same with PDW
-% SEP will require linear reg
+% SEP and RT require linear methods
 
 % Regression models
 
@@ -18,15 +18,11 @@
 % 3. effect of heading strength and RT on probability correct (logistic)
 % 4. improvement in accuracy when high bet is chosen
 
-
 subjs = unique(data.subj);
 
 % general tstatistic function for logistic regression to calculate p-value
 tstatfun = @(beta,se) 1-tcdf(beta./se,length(beta)-1);
 
-mods = unique(data.modality);
-cohs = unique(data.coherence);
-deltas = unique(data.delta);
 
 %% 1. improvement in accuracy with combined condition (non-conflict only)
 

@@ -124,20 +124,22 @@ if conftask==2 % PDW
 end
 
 % copy vestib-only data to all coherences, to aid plotting
-for c=1:length(cohs)
-    n(1,c,:,:) = n(1,1,:,:);
-    pRight(1,c,:,:) = pRight(1,1,:,:);
-    pRightSE(1,c,:,:) = pRightSE(1,1,:,:);
-    pCorrect(1,c,:,:) = pCorrect(1,1,:,:);
-    pCorrectSE(1,c,:,:) = pCorrectSE(1,1,:,:);
-    confMean(1,c,:,:) = confMean(1,1,:,:);
-    confSE(1,c,:,:) = confSE(1,1,:,:);
-    RTmean(1,c,:,:) = RTmean(1,1,:,:);
-    RTse(1,c,:,:) = RTse(1,1,:,:);
-    yVals(1,c,:,:) = yVals(1,1,:,:);
-    plotLogistic(1,c,:) = plotLogistic(1,1,:);
-    B(1,c,:) = B(1,1,:);
-    stats(1,c,:) = stats(1,1,:);
+if any(mods==1)
+    for c=1:length(cohs)
+        n(1,c,:,:) = n(1,1,:,:);
+        pRight(1,c,:,:) = pRight(1,1,:,:);
+        pRightSE(1,c,:,:) = pRightSE(1,1,:,:);
+        pCorrect(1,c,:,:) = pCorrect(1,1,:,:);
+        pCorrectSE(1,c,:,:) = pCorrectSE(1,1,:,:);
+        confMean(1,c,:,:) = confMean(1,1,:,:);
+        confSE(1,c,:,:) = confSE(1,1,:,:);
+        RTmean(1,c,:,:) = RTmean(1,1,:,:);
+        RTse(1,c,:,:) = RTse(1,1,:,:);
+        yVals(1,c,:,:) = yVals(1,1,:,:);
+        plotLogistic(1,c,:) = plotLogistic(1,1,:);
+        B(1,c,:) = B(1,1,:);
+        stats(1,c,:) = stats(1,1,:);
+    end
 end
 
 parsedData = struct();
