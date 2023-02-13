@@ -39,24 +39,34 @@ for s = 1:length(dataStruct)
         numSpikes(par,:) = cellfun(@length,units.spiketimes);
         numTrials(par,1)   = length(events.trStart);
 
+        % 01-2023 this didn't account for good vs bad trials!
         if contains(parSelect{par},'dots3DMP')
             stimCondList = [events.heading; events.modality; events.coherence; events.delta]';
+        else
+            stimCondList = [events.targetR; events.targetTheta; events.coherence; events.numDirs; events.apertureDiam; events.amplitude]';
         end
 
         if par==1
             enoughTrials = nan(length(parSelect),length(units.cluster_id));
         end
 
+        stimCondList = stimCondList(events.goodtrial,:);
+           
         for u = 1:length(units.cluster_id)
 
+            itr_start = 1;
+            itr_end   = length(events.trStart(events.goodtrial));
+
             if ~isempty(units.spiketimes{u})
-                [~,t] = min(abs(events.trStart-units.spiketimes{u}(1)));
+                [~,t] = min(abs(events.trStart(events.goodtrial)-units.spiketimes{u}(1)));
                 if ~isempty(t), itr_start=t; end
-                [~,t] = min(abs(events.trStart-units.spiketimes{u}(end)));
+                [~,t] = min(abs(events.trStart(events.goodtrial)-units.spiketimes{u}(end)));
                 if ~isempty(t), itr_end=t; end
             end
 
+            
             [uStimConds,~,ic]    = unique(stimCondList(itr_start:itr_end,:),'rows');
+            
             [nTrConds,~]         = hist(ic,unique(ic));
             enoughTrials(par,u)  = all(nTrConds>=minTrs(par));
         end

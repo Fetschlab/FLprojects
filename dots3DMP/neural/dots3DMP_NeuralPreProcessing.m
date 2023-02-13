@@ -25,7 +25,7 @@
 %       'spiketimes'   :  1 x N cell array containing spike times for each cluster, within the range of the given paradigm
 %       'moreInfo'     :  1 x N cell array containing additional useful metadata      
 % 
-% **** A few notes for the user ****
+% **** Further notes for the user ****
 % 
 % 1. Each unique row of dataStruct pertains to an individual 'set' of
 % recordings, i.e. data recorded at a particular location. 
@@ -37,25 +37,22 @@
 % multiple Trellis files or a single one - the "rec_group" group field in info struct is therefore critical!
 % 
 % 
-%
+% SJ 01-2023 all recordings use phy format clusters
 % SJ 08-2022 added in metadata (getUnitInfo.m)
 % SJ 08-2022 cleanUp option - to sub-select desirable units
 % SJ 06-2022 significant updates
-%            Fixed issues with processing of mksort data, 
+%            Modified processing of mksort data, 
 %            + shifting of timestamps of multiple recordings. 
 %            Switched dataCell from {} to dataStruct () struct format.
 %
-% Future improvements: 
-% - include metadata about recorded units - depth, ch etc. (WORK IN
-% PROGRESS 1) need to standardize for non-kilosort recordings too 2) need to store MDI and stopper depth)
-% 
-% - add option to load and append to existing dataStruct instead of
-% generating from scratch at each run
+%
+% Feature list to implement: 
+% - include metadata about recorded units (WORK IN PROGRESS)
+% - add option to load and append to existing dataStruct instead of generating from scratch at each run
 % - consider whether any other info merits its own field in top level of
-% dataStruct - MDI and stopper depth? distance to first contact, 'actual'
+% dataStruct
+% - MDI and stopper depth? distance to first contact, 'actual'
 % distances between contacts
-% could put this into the kilosort chanmap directly...instead of the
-% unitless 1:32 currently used
 %
 % I should add to nsEventConditions to fix up the cohInd so that >0.5 coh
 % is always '2' in the index? and ves is always low coh, or lowest within
@@ -74,12 +71,12 @@ paradigms = {'dots3DMPtuning','dots3DMP','RFMapping','VesMapping'};
 % per second, or the number of trials of any of the unique stimulus
 
 subject = 'lucio';
+area    = 'MST';
 
-% dateRange = [20220223:20220331 20220512:20220531];
-dateRange = 20220805:20221003;
 
-% dateRange = 20220901:20220902;
-% dateRange = 20221003;
+dateRange = 20220512:20230131;
+
+dateRange = dots3DMP_getSessionDates(subject, area);
 
 dateStr = num2str(dateRange(1));
 for d = 2:length(dateRange)
@@ -87,6 +84,7 @@ for d = 2:length(dateRange)
 end
 
 %%
+
 keepMU = 1;           % include all SU and MU
 useSCP = 1;
 useVPN = 0;
@@ -119,7 +117,6 @@ createSessionData;
 %% exclude cells which were not adequately recorded in ALL fundamental experiments
 
 runCleanUp = 0; % don't do this here, do it later before analysis
-
 
 % inputs to dots3DMP_NeuralStruct_runCleanUp
 parSelect  = {'dots3DMPtuning','dots3DMP','RFmapping','VesMapping'}; 
