@@ -1,4 +1,4 @@
-function processTrellisData(info,createBinaryFiles)
+ function processTrellisData(info,createBinaryFiles,createEvents,checkOverwrite)
 % processTrellis Data
 %
 % extract behavioural events, and online detected/sorted spikes
@@ -6,18 +6,17 @@ function processTrellisData(info,createBinaryFiles)
 % sorting
 
 % SJ updated 01/2022
-% SJ 04/2022 now called by createBinaryFiles, which can be run from command
-% line
+% SJ 04/2022 now called by createBinaryFiles script, which can be run from command line
 % SJ 04/2022 - tweaked to handle single Trellis recording for multiple
-% PLDAPS (will work either way - nsEvents still created for each Trellis
-% recording)
+% PLDAPS (will work either way - nsEvents still created for each Trellis recording)
 % SJ 06/2022 using sequential fwrite and memory-mapping to handle large GB
 % ns5 files, as rawData could not all be loaded into the workspace before
 % being written to int16 file (RAM issues). file is closed when end of the
 % 'set' is reached. fseek used to reset the file to the beginnig at the
-% beginning of a set, so previous bin file will be overwritten! (could add
-% a user-warning for this?). Could do away with memmapfile and just read
-% the data with fread
+% beginning of a set, so previous bin file will be overwritten! 
+% SJ 08/2022 - 10/2022 various bug fixes. Addition of flags for
+% creatingBinaryFiles, checking overwrite of existing binary files, and
+% creating nsEvents
 
 % This is the main script to run after a recording for extracting and
 % formatting synced task and neural data.
@@ -39,6 +38,12 @@ function processTrellisData(info,createBinaryFiles)
 
 % clear;clc
 
+if nargin<4, checkOverwrite=0; end
+if nargin<3, createEvents=1; end
+if nargin<2, createBinaryFiles=1; end
+
+ADCtoUV = 0.25; % from Grapevine
+
 %%
 % files should be in date directory, and on NAS
 nevFiles = dir([info.filepath '*.nev']);
@@ -48,14 +53,15 @@ end
 
 [uFiles,ia,ic] = unique(info.trellis_filenums);
 
-% still create one nsEvents for each trellis file, but concatenate trellis
-% files from same recording 'set'/group to create one binary file for  Kilosort
-% presumably if trellis is recording over multiple PLDAPs files, trellis
-% ids will each corresponding to unique 'set', but this is agnostic to that
-% - so rec_group is maintained as a separate variable
-% even within the same session, this allows flexibility to record PLDAPS
-% protocols in separate trellis files or the same one
+% still create one nsEvents for each trellis file, but concatenate trellis files from same recording 'set'/group to create one binary file for  Kilosort
+% presumably if trellis is recording over multiple PLDAPs files, trellis ids will each corresponding to unique 'set', but this is agnostic to that
+% - so rec_group is maintained as a separate variable even within the same session, this allows flexibility to record PLDAPS protocols in separate trellis files or the same one
 
+
+% SJ 12-2022 this works fine if each Trellis file belongs to only one rec_set. Otherwise no!
+
+
+% matFiles={};
 for f = 1:length(uFiles)
     % select all the valid PLDAPS files coming from the same trellis recording
     theseFiles = find(ic==f & ~isnan(info.pldaps_filetimes)');
@@ -69,15 +75,17 @@ for f = 1:length(uFiles)
     [~,name,~] = fileparts(nev_filename);
 
     % create and save nsEvents, one per .ns5 file
-    fprintf('\n processing task events for file %s ...\n',nev_filename)
-    nsEvents = createEventStruct_dots3DMP_NS_multiPDS(nev_filename,info.par(theseFiles),pldaps_filenames,info.filepath); % newer 04/2022
+    if createEvents
+        fprintf('\n processing task events for file %s ...\n',nev_filename)
+        nsEvents = createEventStruct_dots3DMP_NS_multiPDS(nev_filename,info.par(theseFiles),pldaps_filenames,info.filepath); % newer 04/2022
+    end
 
     if ~isempty(info.chanlist)
 
-        % online sorted spikes from chans of interest
         for ch=1:length(info.chanlist)
             thisChan = info.chanlist(ch);
 
+            % online sorted spikes from chans of interest
             if isfield(info,'chanInterest')
                 for chI = 1:length(info.chanInterest{f})
                     if info.chanInterest{f}(chI)==info.chanlist(ch)
@@ -90,121 +98,171 @@ for f = 1:length(uFiles)
         end
 
 
-        % identify trellis files corresponding to one recording set (this
-        % allows for flexibility in mapping between trellis files and 'sets')
+        % identify trellis files corresponding to one recording set (this allows for flexibility in mapping between trellis files and 'sets')
         set_ind = find(info.rec_group==info.rec_group(ia(f)));
         thisFile = find(set_ind==ia(f));
 
-        % if at the first file in the rec set, set some vars, make the dir if needed, and set
-        % a bof start position in the binary file
+        % if at the first file in the rec set, set some vars, make the dir if needed, and set a bof start position in the binary file
         if thisFile==1
             startInd=1; endInd=0;
 
             if createBinaryFiles
+                bin_folder   = sprintf('%s%d_%d',info.subject,info.date,info.rec_group(ia(f)));
+%                 bin_folder   = sprintf('%s%d_%d_ks25',info.subject,info.date,info.rec_group(ia(f)));
                 bin_filename = sprintf('%s%d_%d',info.subject,info.date,info.rec_group(ia(f)));
-                if ~exist([info.filepath bin_filename],'dir'), mkdir([info.filepath bin_filename]); end
-                %                 rawData=int16([]); % old ver, create rawData in memory
+                if ~exist([info.filepath bin_folder],'dir'), mkdir([info.filepath bin_folder]); end
 
-                fid = fopen([info.filepath '\' bin_filename '\' bin_filename '.bin'],'w');
+                if checkOverwrite && exist([info.filepath '\' bin_folder '\' bin_filename '.bin'],'file')
+                    answer = questdlg('Binary file for this dataset already exists...would you like to proceed (and overwrite)?','Yes','No');
+                    if strcmp(answer,'No')
+                        return
+                    end
+                end 
+
+                % rewind the binary file
+                fid = fopen([info.filepath '\' bin_folder '\' bin_filename '.bin'],'w');
+%                 fid = fopen([info.filepath '\' bin_folder '\' bin_filename '_test.bin'],'w'); % SJ 10/06/2022 testing
+
                 fseek(fid,0,'bof');
             end
         end
 
-        % 04/15/2022 use read_nsx tool to read data
-        % 05/2022...still running into 'Out of memory' issues with
-        % 20GB+ files, fundamental RAM issue
-        % 06/2022 write the data to file in sequence
+        % 04/15/2022 trying to read entire ns5 file into memory is resulting in errors, they are too big
+        % 06/2022 writing sequentially to file is the only way...
 
-        fprintf('extracting raw data from file %s, %d of %d in set\n',[name '.ns5'],thisFile,numel(set_ind))
+        fprintf('extracting raw data from file %s, %d of %d in set\n',[name '.ns5'],thisFile,numel(unique(info.trellis_filenums(set_ind))))
+  
+        % attempts to read in whole ns5 file in one go, doomed to failure
+%         temp = read_nsx(fullfile(info.filepath,[name '.ns5']),'keepint',true);
+%         data = openNSxHL(fullfile(info.filepath,[name '.ns5']));
+%         NSxToHL(fullfile(info.filepath,[name '.ns5']))
 
-        % SJ 05/2022 read_nsx was being used before, but these all run
-        % into memory issues with the large file sizes common for long
-        % Trellis recordings (in practice, anything >20GB)
-        %             temp = read_nsx(fullfile(info.filepath,[name '.ns5']),'keepint',true);
-        %             data = openNSxHL(fullfile(info.filepath,[name '.ns5']));
-        %             NSxToHL(fullfile(info.filepath,[name '.ns5']))
+        % so just read the header info, and then memory-map the raw data.
+        % pos tracks the start of the actual data in .ns5 file (i.e. after header info), so that we can offset the memory-mapping to this point
 
-        % read the header info, and then memory-map the raw data.
-        % pos tracks the start of the actual data (i.e. after header info in ns5 is done), so that we can
-        % offset the memory-mapping to this point
-        [temp,pos] = read_nsx_SJ(fullfile(info.filepath,[name '.ns5']),'keepint',true,'readdata',false);
+        % actually modified this version to not read in the data at all,
+        % just get the pos. keep data as int16
+        [temp,pos] = read_nsx_SJ(fullfile(info.filepath,[name '.ns5']),'keepint',true); 
 
         nsEvents.analogInfo = temp.hdr;
         nsEvents.analogInfo.timeStampsShifted = nsEvents.analogInfo.timeStamps + endInd; % in samples, will divide by 30000 to get to seconds
         endInd = startInd-1 + nsEvents.analogInfo.nSamples;
 
         if createBinaryFiles
-            % use fread instead? NOT YET TESTED SJ 06/2022
-            % could copy kilosort method, use fseek explicitly each time to
-            % update buffer position, for robustness
+            fprintf('Saving to binary file %s in %s\n',bin_filename,bin_folder)
+            % read data sequentially (in nMin-length at a time, arbitrary but reasonable number)
+            nMin     = 2; %5
+            samps    = double(nsEvents.analogInfo.Fs)*60*nMin;
+
+            % option 1: sequential fread? 08-11-2022
 %             fid_ns5 = fopen(fullfile(info.filepath,[name '.ns5']),'r');
-%             fseek(fid_ns5,pos,'bof');
+%             fseek(fid_ns5,pos,'bof'); % go to the beginning of the data
 %             while ~feof(fid_ns5)
-%                 data = fread(fid_ns5,[nsEvents.analogInfo.nChans,samps,'*int16');
-%                 fwrite(fid,data,'int16')
+%                 data = fread(fid_ns5,[nsEvents.analogInfo.nChans,samps],'*int16'); % this is the right orientation! SJ 08-11-2022
+%                 fwrite(fid,data,'*int16')
 %             end
 
-            m=memmapfile(fullfile(info.filepath,[name '.ns5']),'Offset',pos,'Format','int16');
+%           % option 2: sequential using read_nsx
+%             begsample = 1;
+%             endsample = 0;
+%             samps = double(nsEvents.analogInfo.Fs)*3;
+%             while endsample < nsEvents.analogInfo.nSamples
+%                 endsample = min(samps+begsample-1, nsEvents.analogInfo.nSamples);
+%                 
+%                 data = read_nsx(fullfile(info.filepath,[name '.ns5']),'begsample',begsample,'endsample',endsample,'keepint',true,'readdata',true);
+%                 fwrite(fid,data,'*int16')
+% 
+%                 begsample = endsample+1;
+%             end
+            
 
-            % read data sequentially (in nMin segments at a time, arbitrary but reasonable number)
-            % this is basically the same as how kilosort reads the binary
-            % files, in 'batches'
-            nMin     = 5;
-            samps    = double(nsEvents.analogInfo.Fs)*60*nMin;
+            % option 3: memmapfile
+            % only for memory-mapped file, because m.data is vector
             dataMins = ceil(nsEvents.analogInfo.nSamples/samps); % number of nMin segments in data
-            dpts     = double(samps*nsEvents.analogInfo.nChans); % number of datapoints per segment
+            dpts     = double(samps*nsEvents.analogInfo.nChans); % number of datapoints per segment            
+            mmf        = memmapfile(fullfile(info.filepath,[name '.ns5']),'Offset',pos,'Format','int16');
 
             for mm=1:dataMins   
                 if mm==dataMins
-                    theseSamples = (dpts*(mm-1)+1):length(m.Data);
+                    theseSamples = (dpts*(mm-1)+1):length(mmf.Data);
                 else
                     theseSamples = (1:dpts)+dpts*(mm-1);
                 end
-                fprintf('writing segment %d of %d (samples %d-%d)...\n',mm,dataMins,theseSamples(1),theseSamples(end))
-                data = m.Data(theseSamples);
- 
-                % data should be nChans x nSamples, for kilosort
+                fprintf('writing segment %d of %d (time %d-%d)...\n',mm,dataMins,theseSamples(1),theseSamples(end))
+%                 data = ADCtoUV*mmf.Data(theseSamples);
+                data = mmf.Data(theseSamples);
+
+                % data should be nChans x nSamples for kilosort
+                % fwrite writes in column order, so this concatenates
+                % samples for each channel correctly!
                 data = reshape(data,nsEvents.analogInfo.nChans,[]);
-                fwrite(fid,data,'int16');
+                fwrite(fid,data,'int16'); 
             end
 
-%             rawData(1:nsEvents.analogInfo.nChans,startInd:endInd) = temp.data; % store the rawData in memory
+            clear mmf 
 
             % if we've reached the end of a set, close the file
             if thisFile==numel(set_ind)
-
-                % old version, only writing to the file once all the data
-                % was in RAM, this wasn't sustainable
-%                 fid = fopen([info.filepath '\' bin_filename '\' bin_filename '.bin'],'w');
-%                 fwrite(fid,rawData,'int16');
-
                 fprintf('closing binary file %s\n',bin_filename)
                 fclose(fid);
-
             end
 
-             % for debugging only, to view some data (this will fail if
-             % trying to load a full length file, but could work for
-             % smaller files or partly created ones)
-%              fid = fopen([info.filepath '\' bin_filename '\' bin_filename '.bin'],'r');
+             % for debugging only, to view some data (need to load a subset
+             % of the data only)
+%              fid = fopen([info.filepath '\' bin_folder '\' bin_filename '.bin'],'r');
 %              X = fread(fid,'int16');
 %              fclose(fid);
+        
+        
+        else % don't create binary files, create files for Wave_Clus instead
+
+%             wcf = sprintf('%s%d_wc',info.subject,info.date);
+%             if ~exist(wcf,'dir')
+%                 fprintf('%s directory does not exist yet...creating it',wcf)
+%                 mkdir([info.filepath wcf]);
+%             end
+% 
+%             for ch=1:temp.hdr.nChans
+%                 data = temp.data(ch,:);
+%                 matfilename = [name '_' num2str(temp.hdr.label{ch}) '.mat'];
+%                 sr = temp.hdr.Fs; % default sr is 30kHz anyway, but set it to data here to be foolproof
+%                 save(fullfile(info.filepath,wcf,matfilename),'data','sr') % the variable needs to be called 'data'!
+%                 matFiles{f} = matfilename;
+%             end
+            
+           
         end
         startInd = endInd+1;
 
     else
         disp('channel list is empty...no neural data extracted')
     end
-
-    fprintf('saving nsEvents...\n')
-    save([info.filepath name '_RippleEvents.mat'],'nsEvents');
-    
+ 
+    if createEvents
+        fprintf('saving nsEvents...\n')
+        save([info.filepath name '_RippleEvents.mat'],'nsEvents');
+    end
 end
 
-
+% run Wave_Clus
 %{
+if ~createBinaryFiles
+    param.stdmin = 3.5;
+    param.detection = 'neg';
+    cd(fullfile(info.filepath,wcf));
+    Get_spikes(matFiles,'par',param);
+
+    spikes_files = dir([info.filepath wcf '/*_spikes.mat']);
+    spikes_files = {spikes_files.name};
+    Do_cluster0ing(spikes_files);
+ end
+ %}
+
+
+%{ 
 %%----------------
-% OLD, assumes that trellis files and pldaps files are a one-to-one match!
+% OLD, deprecated
+% assumes that trellis files and pldaps files are a one-to-one match!
 
 for f=1:length(nevFiles)
 

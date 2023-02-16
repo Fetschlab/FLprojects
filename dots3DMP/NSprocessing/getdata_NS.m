@@ -14,7 +14,7 @@ function [nsData] = getdata_NS(completeFilePath, dataType, dataChannel)
                    
                    
 % Open the file and extract some basic information
-[ns_status, hFile] = ns_OpenFile(completeFilePath); 
+[ns_status, hFile] = ns_OpenFileSJ(completeFilePath, 'single'); 
 
 % Determine correct entityID for desired datastream
 switch dataType    

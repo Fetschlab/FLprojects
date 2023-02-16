@@ -45,7 +45,10 @@ fseek(fh, 2, 0); %skip file spec
 %% get bytes in headers (used to jump to begining of data)
 bytesInHeaders = fread(fh, 1, '*uint32');
 %% get label
-label          = fread(fh, 16, '*char')'; 
+% label          = fread(fh, 16, '*char')'; % this is actually very slow, and breaks for large files because MATLAB 
+                                            % has to read a lot of the file to work out char encoding.
+label  = fread(fh, 16, 'uint8=>char');      % https://www.mathworks.com/matlabcentral/answers/527084-what-did-they-change-to-fread-on-2020a, 01-29-2023
+label  = strjoin(cellstr(label),'');
 fseek(fh, 256, 0);
 %% get sampling frequency
 period         = fread(fh, 1, '*uint32');
@@ -68,7 +71,8 @@ for i = 1:chanCount
     maxD         = fread(fh, 1, 'int16');
     minA         = fread(fh, 1, 'int16');
     maxA         = fread(fh, 1, 'int16');
-    unit(i)      = {deblank(fread(fh, 16, '*char')')}; 
+%     unit(i)      = {deblank(fread(fh, 16, '*char')')}; 
+    unit(i)      = {strjoin(cellstr(fread(fh, 16, 'uint8=>char')),'')}; % as above
     scale(i)        = (maxA - minA)/(maxD - minD);  
     fseek(fh, 22, 0);
 end
@@ -107,7 +111,7 @@ nvec           = double(cumsum(double(ndataPoints)));
     if endsample<0
         endsample=nvec(end);
     end
-    data           = zeros(chanCount, endsample-begsample+1, 'int16');
+%     data           = zeros(chanCount, endsample-begsample+1, 'int16');
     if any(chanindx<0),chanindx=1:chanCount;end
     fseek(fh, bytesInHeaders, -1);
     bytes2skip = (begsample-1)*2*double(chanCount); %this should be the number of data samples to skip... -ACS 09May2012 %-re-casted chanCount as double to avoid misreading huge files -ACS 16Jun2015
@@ -135,11 +139,11 @@ nvec           = double(cumsum(double(ndataPoints)));
     else
         error('read_nsx:pauseInRequestedTrial','The NSX file %s was paused during the requested data segement (samples %d to samples %d), which is an error.',filename,begsample,endsample);
     end
-    if ~keepint
-        out.data = bsxfun(@times,double(data(chanindx,:)),double(scale(chanindx)));
-    else
-        out.data = data;
-    end
+%     if ~keepint
+%         out.data = bsxfun(@times,double(data(chanindx,:)),double(scale(chanindx)));
+%     else
+%         out.data = data;
+%     end
 % end
 %% package output
 hdr.Fs = fs;
