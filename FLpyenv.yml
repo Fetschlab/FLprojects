@@ -1,0 +1,14 @@
+name: neuro
+channels:
+  - defaults
+dependencies:
+  - numpy
+  - pandas
+  - jupyterlab
+  - scikit-learn
+  - seaborn
+  - scikit-learn-intelex
+  - scipy=1.9
+  - python=3.9
+  - matplotlib
+  - statsmodels
