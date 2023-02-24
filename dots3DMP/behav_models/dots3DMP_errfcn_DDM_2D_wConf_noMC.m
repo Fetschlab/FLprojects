@@ -17,10 +17,6 @@ function [err,fit,parsedFit] = dots3DMP_errfcn_DDM_2D_wConf_noMC(param, guess, f
 
 errFuncStart = tic;
 
-
-
-
-
 %% parse parameter inputs & relevant conditions, and set up for images_dtb
 
 % retrieve the full parameter set given the adjustable and fixed parameters
@@ -60,13 +56,13 @@ else,                   max_dur = 2.3;
 end
 
 % going to calculate separate confidence mapping for each modality since we
-% are using temporal weighting
-% can preset these R structs to be the same for all conditions
+% are using temporal weighting by stimulus physical profile (which might vary)
+% but some of R struct will be the same regardless
 % SJ 01-2023 
 
 R.t = 0.001:0.001:max_dur;
 R.Bup = B;
-R.lose_flag = any(contains(options.whichFit,{'conf','multinom'})); % only get losing distributions if we are fitting confidence
+R.lose_flag = any(contains(options.whichFit,{'conf','multinom'})); % only get the losing distributions if we are fitting confidence
 R.plotflag  = 0;
 
 if options.useVelAcc
@@ -243,8 +239,11 @@ for m = 1:length(mods)
             % run MOI
             P = images_dtb_2d_varDrift(R);
 
-            %if options.dummyRun we want to somehow use stored logOddsMap
+            if R.lose_flag
+                P = images_dtb_calcLPOandPlot(R,P);
+            end
 
+            %if options.dummyRun we want to somehow use a stored logOddsMap
 
             for h = 1:length(hdgs)
 
