@@ -12,14 +12,13 @@ function [au, nUnits] = dots3DMP_FRmatrix_fromDataStruct(dataStruct,par,timingIn
 %           - tStart        :
 %           - tEnd          :
 %           - binSize       : e.g. 0.05 (50ms)
-%
+%           - overlap       : e.g. 0.5
 % conds      : c * n matrix, with one row per unique condition, and n columns to cover all the settings for one condition e.g. mod, coh, hdg
 % condlabels : c x 1 cell array of strings, should match the order of conds, and refer to fields in dataStruct.events e.g. {'modality','coherence','heading'}
 % opts       :
 
 
 if ~isfield(opts,'keepMU'), opts.keepMU = 1; end
-if ~isfield(opts,'calcTuning'), opts.calcTuning = 0; end
 if ~isfield(opts,'smoothFR'), opts.smoothFR = 0; end
                 
 if opts.smoothFR==1 && ~isfield(opts,'convKernel')
@@ -27,6 +26,7 @@ if opts.smoothFR==1 && ~isfield(opts,'convKernel')
 end
 
 if ~isfield(opts,'keepSingleTrials'), opts.keepSingleTrials = 0; end
+if ~isfield(timingInfo,'overlap'), timingInfo.overlap = 0; end
 
 % set defaults for timingInfo
 
@@ -35,6 +35,7 @@ otherEvents = timingInfo.otherEvents;
 tStart      = timingInfo.tStart;
 tEnd        = timingInfo.tEnd;
 binSize     = timingInfo.binSize;
+overlap     = timingInfo.overlap;
 
 %% now loop over the dataStruct
 
@@ -75,14 +76,14 @@ for ses = 1:length(dataStruct)
     end
 
     % force cohInd to match coh
+    modCol = strcmp(condlabels,'modality');
     cohCol = contains(condlabels,'coherence');
     if length(unique(condlist(:,cohCol)))==1 && strcmp(condlabels{cohCol},'coherenceInd')
-        condlist(:,cohCol) = double(temp.events.coherence>=0.5)+1;
+        condlist(condlist(:,modCol)>1,cohCol) = double(temp.events.coherence(condlist(:,modCol)>1)>=0.5)+1;
         %fprintf('Session %d: only 1 coh above 0.5, changing "coherence index" from 1 to 2 for consistency\n',ses)
     end
 
     % THEN force ves to be lowest coh in the set, kluge
-    modCol = strcmp(condlabels,'modality');
     if any(cohCol) && any(modCol)
         condlist(condlist(:,modCol)==1,cohCol) = min(condlist(:,cohCol));
     end
@@ -92,11 +93,7 @@ for ses = 1:length(dataStruct)
     % e.g. we want -1.5, 0, 1.5 heading trials but want to group them
     % together, so need to specify anoither grouping variable for headings
     % to re-assign condI
-%     collapsedCondList = condlist;
-%     collapsedCondList(:,logical(opts.collapse)) = -99;
-%     conds(:,logical(opts.collapse))    = -99;
-%     conds = unique(conds,'rows','stable');
-
+    
     % remove any unwanted trials - brfix, or condition not in the conds list
     isInCondList = false(1,Ntr);
     condI        = nan(1,Ntr); 
@@ -143,6 +140,11 @@ for ses = 1:length(dataStruct)
             end
         end
 
+        au.times.evTimes_bySession{iae} = nan(size(conds,1),length(otherEvents{iae}),length(dataStruct));
+        for ic = 1:size(conds,1)
+            au.times.evTimes_bySession{iae}(ic,:,ses) = nanmedian(oe_times(condI==ic,:),1);
+        end
+
         unitInd = startInd; % back to the 'top' (i.e. startInd), so that we are adding to the same unit index for each alignment event
         
         for u = 1:length(unit_inds)
@@ -156,7 +158,7 @@ for ses = 1:length(dataStruct)
             au.hdr.unitType(unitInd) = temp.units.cluster_type(unit_inds(u));
 
             % calculate time-resolved and average firing rate within desired intervals
-            [fr, x, fr_mean, durs, aeI]  = trial_psth(temp.units.spiketimes{unit_inds(u)},ae,'tStart',tStart(iae),'tEnd',tEnd(iae),'binSize',binSize);
+            [fr, x, fr_mean, durs, aeI]  = trial_psth(temp.units.spiketimes{unit_inds(u)},ae,'tStart',tStart(iae),'tEnd',tEnd(iae),'binSize',binSize,'overlap',overlap);
 
             % now get activity across trials of each condition in conds
 
@@ -168,6 +170,8 @@ for ses = 1:length(dataStruct)
 
             trialFR      = cell(size(conds,1),1);  
             trialFR_mean = cell(size(conds,1),1); 
+
+            au.times.evTimes_byUnit{iae}(:,:,unitInd) = nan(size(conds,1),length(otherEvents{iae}));
 
             for ic = 1:size(conds,1)
                 
@@ -185,67 +189,14 @@ for ses = 1:length(dataStruct)
                     condFR_mean(ic)  = nanmean(trialFR_mean{ic},1);
                     condFR_sem(ic)   = nanstd(trialFR_mean{ic},[],1)/sqrt(cond_ntrs(ic));
 
-                    try
-                        % store median time of 'otherEvents' relative to alignment event, for each condition (for marking on PSTHs)
-                        au.times.evTimes{iae}(ic,:,unitInd) = nanmedian(oe_times(condI==ic,:),1);
-                    catch
-                        keyboard % TEMP for debug issues
-                    end
+                    % store other event times for each unit (for PSTH plot marking)
+                    au.times.evTimes_byUnit{iae}(ic,:,unitInd) = nanmedian(oe_times(condI==ic,:),1);
+
                     durs_median(ic)  = nanmedian(durs(condI==c)); % and median duration
-                else
-                    au.times.evTimes{iae}(ic,:,unitInd) = nan;
                 end
             end
 
 
-            %{
-            % this doesn't belong here, we just need to save out the
-            % individual trial firing rates
-            if opts.calcTuning && sum(hdgCol)
-
-                % pull out headings list and trial headings
-                hdgs = unique(conds(:,hdgCol));
-                hdg  = condlist(:,hdgCol);
-
-                [uconds,~,ic2] = unique(conds(:,~hdgCol),'rows');
-                for uc=1:size(uconds,1)
-                    theseTrials = all(condlist(:,~hdgCol)==uconds(uc,:),2);
-                    au.stat.ntrsCond(uc,unitInd) = sum(theseTrials);
-
-                    if any(theseTrials)
-                        thisCond_trialFR = fr_mean(theseTrials)';
-                        thisCond_meanFR  = condFR_mean(ic2==uc);
-
-                        % to exclude headings that weren't used in this block
-                        nanidx = isnan(thisCond_meanFR);                    
-
-                        % should keep track of the strength of pref too
-                        % (sum(Right)-sum(Left)/sum(Right)+sum(Left)
-                        
-                        % empirical heading pref - which heading dir (left or right) has higher firing?
-                        au.stat.prefAmp(uc,unitInd) = (sum(thisCond_meanFR(hdgs>0 & ~nanidx)) - sum(thisCond_meanFR(hdgs<0 & ~nanidx))) / sum(thisCond_meanFR(hdgs~=0 & ~nanidx));
-                        au.stat.prefDir(uc,unitInd) = double(sum(thisCond_meanFR(hdgs>0 & ~nanidx)) > sum(thisCond_meanFR(hdgs<0 & ~nanidx)))+1; % +1 since choice is 1,2 for L,R
-
-                        % or where is the peak?
-                        %                 [~,peak] = max(thisCond_meanFR);
-                        %                 au.prefDir(uc,unitInd) = sign(hdgs(peak));
-
-                        % or fit von Mises (work in progress)
-                        % vonMises params: b = [ampl, kappa, theta, offset]
-                        %                 guess = [max(thisCond_meanFR)-min(thisCond_meanFR), 1.5, peak, min(thisCond_meanFR)];
-                        %                 [beta, fval] = fminsearch(@(x) tuning_vonMises_err(x,hdg(theseTrials),thisCond_trialFR), guess);
-
-                        % simple calc of tuning significance (no comparison to baseline)
-                        [au.stat.pHdg(uc,unitInd)]=anova1(thisCond_trialFR,hdg(theseTrials),'off');
-                    else
-                        au.stat.prefAmp(uc,unitInd) = NaN;
-                        au.stat.prefDir(uc,unitInd) = NaN;
-                        au.stat.pHdg(uc,unitInd)    = NaN;
-                    end
-                end
-            end
-            %}
-            
             if opts.smoothFR
                 condFR = smoothRaster ( condFR , opts.convKernel );
             end
