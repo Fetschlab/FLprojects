@@ -3,21 +3,6 @@
 % Generalized wrapper script for dots3DMP behavior fitting
 % SJ 12-2022
 
-% TO DO
-
-% run fms fitting
-% plot splits by PDW after fitting
-% urgency version
-% post-fit confidence
-% move interpFit out of fitDDM
-
-
-clear; close all;
-addpath(genpath('/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/FLprojects/'))
-% addpath(genpath('/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/third-party-codes/WolpertMOI_collapse'))
-addpath(genpath('/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/third-party-codes/WolpertMOI'))
-addpath(genpath('/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/SJsandbox'))
-
 %% try fitting simulated data to recover the generative parameters
 
 cd /Users/stevenjerjian/Desktop/FetschLab/Analysis/data/dots3DMP_DDM
@@ -50,7 +35,7 @@ options.fitMethod = 'fms'; %'fms','global','multi','pattern','bads'
 options.whichFit  = {'choice','RT'}; % choice, conf, RT, multinom (choice+conf)
 
 % ==== implementation ====
-options.dummyRun = 0;
+options.dummyRun = 0; % dummyRun=1
 options.ignoreUnabs = ~allowNonHB;
 options.useVelAcc = 0; % use stimulus physical profiles in drift rates
 % options.confModel = 'evidence+time'; % unused for now
