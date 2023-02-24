@@ -1,5 +1,5 @@
 function [nsEvents] = nsEventConditions(nsEvents,PDS,par)
-% [nsEvents] = NSEVENTCONDITIONS(nsEvents,PDS)
+% [nsEvents] = NSEVENTCONDITIONS(nsEvents,PDS,PAR)
 %
 % pulls in useful trial info from relevant PLDAPS file into nsEvent struct
 % 
@@ -40,11 +40,34 @@ matchTrials = ismember(NSutn,PDSutn,'rows');
 % later, which serves the same purpose (this might be good to fix at some point)
 try nsEvents.Events = rmfield(nsEvents.Events,'breakfix'); catch; end
 
+% 02-2023 actually don't do this, in case we want to concatenate events from all sessions together
+
 % remove fields only relevant to RFmapping if par is not RFmapping
-if ~strcmpi(par,'RFmapping')
-    try nsEvents.Events = rmfield(nsEvents.Events,'dotOrder'); catch; end
-    try nsEvents.Events = rmfield(nsEvents.Events,'stimOn_all'); catch; end
-    try nsEvents.Events = rmfield(nsEvents.Events,'stimOff_all'); catch; end
+% if ~strcmpi(par,'RFmapping')
+%     try nsEvents.Events = rmfield(nsEvents.Events,'dotOrder'); catch; end
+%     try nsEvents.Events = rmfield(nsEvents.Events,'stimOn_all'); catch; end
+%     try nsEvents.Events = rmfield(nsEvents.Events,'stimOff_all'); catch; end
+% end
+% remove fields which are all nans, irrelevent for chosen paradigm
+% (presumably)
+% fnames = fieldnames(nsEvents.Events);
+% for f = 1:length(fnames)
+%     if ~iscell(nsEvents.Events.(fnames{f})) && all(isnan(nsEvents.Events.(fnames{f})))
+%         try nsEvents.Events = rmfield(nsEvents.Events,fnames{f}); catch; end
+%     end
+% end
+
+% seems like VesMapping events didn't have stimOff_all, so if VesMapping is
+% done at the end the vector was the wrong length, so assign empties
+% 02-22-2023
+if nsEvents.pldaps.parNum(end)==4
+    nsEvents.Events.stimOff_all(end+1:length(nsEvents.Events.stimOn_all)) = {[]};
+end
+
+% now replace all empties with stimOff if there's only one
+empty_inds = find(cellfun(@isempty,nsEvents.Events.stimOff_all));
+for c = 1:length(empty_inds)
+    nsEvents.Events.stimOff_all(empty_inds(c)) = {nsEvents.Events.stimOff(empty_inds(c))};
 end
 
 %%
@@ -78,14 +101,7 @@ PDSconditions = PDSconditions(matchTrials2);
 PDSdata = PDSdata(matchTrials2);
 
 %% 
-% remove fields which are all nans, irrelevent for chosen paradigm
-% (presumably)
-fnames = fieldnames(nsEvents.Events);
-for f = 1:length(fnames)
-    if ~iscell(nsEvents.Events.(fnames{f})) && all(isnan(nsEvents.Events.(fnames{f})))
-        try nsEvents.Events = rmfield(nsEvents.Events,fnames{f}); catch; end
-    end
-end
+
 
 
 % refactor trial data from individual cells into matrix for easier insertion into nsEvents
@@ -113,19 +129,19 @@ for t = 1:length(PDSconditions)
     if strcmp(nsEvents.pldaps.parName{t},'dots3DMP')
         nsEvents.Events.oneTargChoice(t) = PDSdata{t}.behavior.oneTargChoice;
         nsEvents.Events.oneTargConf(t)   = PDSdata{t}.behavior.oneTargConf;
+    else
+        nsEvents.Events.oneTargChoice(t) = NaN;
+        nsEvents.Events.oneTargConf(t) = NaN;
     end
 end
 
 
-% why is this not stopping???
-if contains(par,'dots3DMP') && all(unique(nsEvents.Events.coherenceInd)==1)
-    keyboard
-end
-
-
-
 % just add in the fields from PDS to nsEvents, without any further checks (except
 % for the ones done above)
+% TO DO
+% maybe just do a sanity check on some, e.g. modality (since this is the
+% same for both, or hdgOrder/dotOrder for RFmapping)
+
 fnamesC = fieldnames(PDSconditions{1}.stimulus);
 for f=1:length(fnamesC)
     if any(strcmp(fnamesC{f},{'headingTheta','hdgOrder','headingPhi'}))

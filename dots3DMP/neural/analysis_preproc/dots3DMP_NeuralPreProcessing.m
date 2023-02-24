@@ -1,7 +1,7 @@
 % Fetsch Lab
 % S. J. Jerjian
 % Created May 2022
-% Last updated Oct 2022
+% Last updated Feb 2023
 %
 % generate a struct containing spike sorted units and task data from rigB (dots3DMP recordings)
 % user should specify the subject, dateRange, and paradigms
@@ -37,6 +37,7 @@
 % multiple Trellis files or a single one - the "rec_group" group field in info struct is therefore critical!
 % 
 % 
+% SJ 02-2023 select area for specific sessions
 % SJ 01-2023 all recordings use phy format clusters
 % SJ 08-2022 added in metadata (getUnitInfo.m)
 % SJ 08-2022 cleanUp option - to sub-select desirable units
@@ -58,10 +59,6 @@
 % is always '2' in the index? and ves is always low coh, or lowest within
 % the set
 
-% clear all
-close all
-addpath(genpath('/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/'))
-
 %% decide which files to load
 
 % which paradigms do we care about?
@@ -71,12 +68,13 @@ paradigms = {'dots3DMPtuning','dots3DMP','RFMapping','VesMapping'};
 % per second, or the number of trials of any of the unique stimulus
 
 subject = 'lucio';
-area    = 'MST';
+area    = 'PIVC';
 
+dateRange = [20220727:20220804 20220913:20220923 20221003 20230220 20230221 20230223]; % PIVC
 
-dateRange = 20220512:20230131;
-
-dateRange = dots3DMP_getSessionDates(subject, area);
+% this is not sustatinable in the case of dual recordings...i just need a
+% way to mark units as coming from an area
+% dateRange = dots3DMP_getSessionDates(subject, area);
 
 dateStr = num2str(dateRange(1));
 for d = 2:length(dateRange)
@@ -85,10 +83,11 @@ end
 
 %%
 
-keepMU = 1;           % include all SU and MU
+keepMU = 1;           % include all SU and MU, by default, do it, can always remove them later
 useSCP = 1;
 useVPN = 0;
 overwriteLocalFiles = 0; % set to 1 to always use the server copy
+overwriteEventSets = 0;
 
 % SJ 04-2022
 % download associated PDS data files (we'll need this for some cleanup)
@@ -114,15 +113,24 @@ getNeuralEventsInfo;
 
 createSessionData;   
 
+%% create one .mat file for events from all paradigms for a given set
+% this will be useful for pure behavior analyses (if desired)
+% and importing into python
+
+% paradigms = {'dots3DMPtuning','dots3DMP','RFMapping','VesMapping'};
+% createSetEvents;
+
+
 %% exclude cells which were not adequately recorded in ALL fundamental experiments
 
 runCleanUp = 0; % don't do this here, do it later before analysis
 
-% inputs to dots3DMP_NeuralStruct_runCleanUp
-parSelect  = {'dots3DMPtuning','dots3DMP','RFmapping','VesMapping'}; 
-minRate    = 5;
-minTrs     = 5;
 
 if runCleanUp
+    % inputs to dots3DMP_NeuralStruct_runCleanUp
+    parSelect  = {'dots3DMPtuning','dots3DMP','RFmapping','VesMapping'};
+    minRate    = 5;
+    minTrs     = 5;
+
     dots3DMP_NeuralStruct_runCleanUp(dataStruct,parSelect,minRate,minTrs);
 end

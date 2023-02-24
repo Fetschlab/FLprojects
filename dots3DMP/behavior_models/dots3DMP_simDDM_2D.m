@@ -12,20 +12,20 @@
 
 clear; close all
 
+% all these folder settings are user specific and shouldn't be in the script
+
 % datafolder = '/Users/chris/Documents/MATLAB';
 % codefolder = '/Users/chris/Documents/MATLAB/Projects/offlineTools/dots3DMP/behav_models';
-
-
-addpath(genpath('/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/FLprojects/'))
-addpath(genpath('/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/FLutils/'))
-
-% addpath(genpath('/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/third-party-codes/WolpertMOI_collapse'))
-addpath(genpath('/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/third-party-codes/WolpertMOI'))
 
 datafolder = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/data/dots3DMP_DDM';
 codefolder = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/FLprojects/dots3DMP/behav_models';
 
-savefilename = 'tempsim_sepConfMaps_accvel';
+cohs = [0.4 0.8]; % visual coherence levels (these are really just labels, since k's are set manually)
+% hdgs = [-12 -6 -3 -1.5 -eps eps 1.5 3 6 12]; % don't know if we realy need two zeroes
+hdgs = [-12 -6 -3 -1.5 0 1.5 3 6 12];
+% deltas = [-3 0 3]; % conflict angle; positive means vis to the right
+deltas = 0; % conflict angle; positive means vis to the right
+mods = [1 2 3]; % stimulus modalities: ves, vis, comb
 
 %% MODEL SPECIFICATIONS and CONDITIONS
 
@@ -37,7 +37,7 @@ modelID = 1; % 1 will be 2Dacc model ('Candidate model' against which others are
 RTtask   = 1;
 conftask = 2; % 1 - sacc endpoint, 2 - PDW
 
-nreps = 100; % number of repetitions of each unique trial type % (ntrials depends on num unique trial types)
+nreps = 50; % number of repetitions of each unique trial type % (ntrials depends on num unique trial types)
 
 % stimulus conditions
 mods  = [1 2 3];        % stimulus modalities: ves, vis, comb
@@ -52,13 +52,13 @@ max_dur = 2100; % stimulus duration (ms)
 
 % maybe these become supplanted by modelVar eventually
 confModel  = 'evidence+time'; % 'evidence+time','evidence_only','time_only'
-useVelAcc  = 1; 
+useVelAcc  = 0; 
 allowNonHB = 0; % allow non-hit-bound trials? if set to 0 and a trial lasts
 % longer than max_dur, it is discarded. If set to 1, those trials are
 % assigned RT = max_dur (affects comparison with mean RT in images_dtb, 
 % which is calculated only for bound crossings)
 
-urgency = 0;
+urgency = 1;
 plotSimulatedData = 1; % plot average psychometric curves etc.
 
 
@@ -169,6 +169,18 @@ if urgency
     R.grid   = linspace(-4*R.Bup,0,500); % this is now an argument in MOIcollapse
     R.k_urg  = 1;
     R.low_th = -R.Bup-R.Bup/4;
+    
+%     if useVelAcc
+        images_func = @images_dtb_2d_urg_varDrift;
+%     else
+%         images_func = @images_dtb_2d_urg;
+%     end
+else
+%     if useVelAcc
+        images_func = @images_dtb_2d_varDrift;
+%     else
+%         images_func = @images_dtb_2d;
+%     end
 end
 
 % R.drift = k * sind(hdgs(hdgs>=0)); % takes only unsigned drift rates
@@ -178,13 +190,13 @@ end
 % SJ 02-2023 separate logOdds map for each modality, variable drift rates
 
 R.drift = sves .* kves .* sind(hdgs(hdgs>=0))';
-P(1) = images_dtb_2d_varDrift(R); % ves
+P(1) = images_func(R); % ves
 
 R.drift = svis .* mean(kvis) .* sind(hdgs(hdgs>=0))';
-P(2)    = images_dtb_2d_varDrift(R); % vis
+P(2)    = images_func(R); % vis
 
 R.drift = sqrt(sves.*kves.^2 + svis.*mean(kvis).^2) .* sind(hdgs(hdgs>=0))';
-P(3)    = images_dtb_2d_varDrift(R); % comb
+P(3)    = images_func(R); % comb
 
 
 %% simulate bounded evidence accumulation
@@ -361,7 +373,7 @@ correct(remove)=[];
 ntrials = length(choice);
 
 % adjust wager probability for base rate of low bets, as seen in data
-% ('compresses' the curve, not an offset, because P(high) varies with coh)
+% ('compresses' the curve, not an offset, because P(high) varies with hdg)
 
 % first, save original PDW for plotting choice/RT splits (bc relationship
 % between conf and choice/RT is, by construction, independent of alpha)
@@ -411,7 +423,12 @@ subject         = 'simul';
 
 data.oneTargConf = false(size(data.heading));
 
-%% plots
+
+%% save it
+save(fullfile(datafolder,[savefilename '.mat']), 'data', 'origParams', 'allowNonHB', 'sves', 'svis');
+
+%% plots, optional
+
 if plotSimulatedData
     mods   = unique(data.modality);
     cohs   = unique(data.coherence);
@@ -428,8 +445,4 @@ if plotSimulatedData
 %     gfit = dots3DMP_fit_cgauss(data,mods,cohs,deltas,conftask,RTtask);
 %     dots3DMP_plots_cgauss_byCoh(gfit,parsedData,mods,cohs,deltas,hdgs,conftask,RTtask)
 end
-
-
-%% save it
-save(fullfile(datafolder,[savefilename '.mat']), 'data', 'origParams', 'allowNonHB', 'sves', 'svis');
 

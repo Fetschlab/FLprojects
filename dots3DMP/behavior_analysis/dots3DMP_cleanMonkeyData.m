@@ -8,8 +8,9 @@ RTtask = 1;
 subject = 'lucio';
 paradigm = 'dots3DMP';
 % dateRange = 20210315:20210805; % RT
-% dateRange = 20211101:20220809; % RT
-dateRange = 20220301:20221006;
+dateRange = 20220301:20221006;   % for SfN2022
+
+dateRange = 20220512:20230222;
 
 %%
 % folder = '/Users/chris/Documents/MATLAB/PLDAPS_data/';
@@ -100,7 +101,7 @@ data.delta(data.delta==2) = 3;
 deltas = unique(data.delta); % aka conflict angle
 
 % simplify cohs (collapse similar ones)
-data.coherence(data.coherence<=0.5) = 0.3;
+data.coherence(data.coherence<=0.5) = 0.2;
 data.coherence(data.coherence>0.5) = 0.7;
 cohs = unique(data.coherence);
 

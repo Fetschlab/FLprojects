@@ -5,22 +5,27 @@ addpath(genpath('/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/'))
 % Load in the data
 
 subject   = 'lucio';
-% dateRange = 20220615:20221003;
-dateRange = 20220805:20221003;
+area      = 'PIVC';
+dateRange = 20220727:20230223;
+
+% area = 'MST';
+% dateRange = 20220512:20230131;
+
 
 dataPath = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/data/';
-% dataFileName = sprintf('%s_%d-%d_neuralData.mat',subject,dateRange(1),dateRange(end));
-dataFileName = sprintf('%s_%d-%d_neuralData_ks25.mat',subject,dateRange(1),dateRange(end));
-
-% dataFileName = 'lucio_20220923_tempneuralData.mat'; 
-
+dataFileName = sprintf('%s_%d-%d_neuralData_%s.mat',subject,dateRange(1),dateRange(end),area);
 load(fullfile(dataPath,dataFileName));
 
+% 20220512-20230131, remove 20220520
+% dataStruct(4) = [];
+
+dataStruct(13)=[];
+
 % inputs to dots3DMP_NeuralStruct_runCleanUp
-parSelect  = {'dots3DMPtuning','dots3DMP'}; 
-minRate    = 5;
-minTrs     = [5 10];
-dataStruct = dots3DMP_NeuralStruct_runCleanUp(dataStruct,parSelect,minRate,minTrs);
+% parSelect  = {'dots3DMPtuning','dots3DMP'}; 
+% minRate    = 5;
+% minTrs     = [5 10];
+% dataStruct = dots3DMP_NeuralStruct_runCleanUp(dataStruct,parSelect,minRate,minTrs);
 
 %% pre-set some things
 
@@ -46,9 +51,10 @@ deltas = 0;
 % otherwise, middle 1s of stimulus
 
 par     = 'dots3DMPtuning';
-% hdgsTuning = [-90 -45 -22.5 -12 0 12 22.5 45 90]; % some sessions had
-% +/-12 instead of +/-90
-hdgsTuning = [-90 -45 -22.5 0 22.5 45 90];
+% hdgsTuning = [-90 -45 -22.5 -12 0 12 22.5 45 90]; 
+% hdgsTuning = [-90 -45 -22.5 0 22.5 45 90];
+hdgsTuning = [-60 -45 -25 -22.5 -12 0 12 22.5 25 45 60];
+
 
 % generate the whole list of conditions we want to include
 [hdg,modality,coh,~,~] = dots3DMP_create_trial_list(hdgsTuning,mods,cohs,deltas,1,0); 
@@ -57,11 +63,9 @@ condlabels  = {'modality','coherenceInd','heading'}; % must be consistent order 
 
 useFullDur = 0;
 
-optsTR.calcTuning  = 0;
 optsTR.smoothFR    = 1;
 optsTR.convKernel  = fspecial('average', [1 20]); 
 
-optsMS.calcTuning  = 1;
 optsMS.smoothFR    = 0;
 
 if useFullDur
@@ -70,9 +74,9 @@ if useFullDur
     eventInfo.tStart = 0; % start at stimOn  ...+100ms for sensory delay?
     eventInfo.tEnd   = 0; % end at stimOff
 else
-    % use the middle 1.5s of the stimulus
+    % use the middle of the stimulus
     eventInfo.alignEvent  = {{'stimOn','stimOff',0.5}}; % align to middle of stimOn and stimOff
-    eventInfo.tStart = -0.5; % 0.75s forward and back
+    eventInfo.tStart = -0.5; % forward and back
     eventInfo.tEnd   = 0.5;
 end
 
@@ -146,13 +150,13 @@ switch par
 end
 
 iae = 1;
-auFR_formatted  = reshape(auMat.data.muFRs{iae},length(hdgVec),[],size(auMat.data.muFRs{iae},2));
+auFR_formatted  = reshape(auMat.data.FRmean{iae},length(hdgVec),[],size(auMat.data.FRmean{iae},2));
 conds_formatted = reshape(condMat,length(hdgVec),[],size(condMat,2));
 
 condcols = 'kmcrb';
 numUnits = size(auFR_formatted,3);
 
-upp = 40; % units per 'page'
+upp = 50; % units per 'page'
 [p,q] = numSubplots(upp);   
 
 
@@ -160,7 +164,7 @@ for u=1:numUnits
    
     iu=u;
 
-    if upp > 16
+    if numUnits > 16
         if mod(u,upp==1)
             fignum = ceil(u/upp); h_fig=figure(fignum+3);
             set(h_fig,'color','w','position',[100 100 1600 1000]);
@@ -171,7 +175,7 @@ for u=1:numUnits
         
 
     else
-        fignum = 1;
+        fignum = 2;
         figure(fignum); set(gcf,'color','w','position',[100 100 1400 800]);
         snum = u;
     end
@@ -180,11 +184,12 @@ for u=1:numUnits
 %    ax(snum)=nexttile(snum); 
    hold(ax,'on');
    for c = 1:size(conds_formatted,2)
-       plot(ax,hdgVec,auFR_formatted(:,c,iu),'color',condcols(conds_formatted(1,c,1)+2*(find(conds_formatted(1,c,2)==cohs)-1)),'linew',1.5,'marker','o')
+       notNaNs = ~isnan(auFR_formatted(:,c,iu));
+       plot(ax,hdgVec(notNaNs),auFR_formatted(notNaNs,c,iu),'color',condcols(conds_formatted(1,c,1)+2*(find(conds_formatted(1,c,2)==cohs)-1)),'linew',1.5,'marker','o')
    end
-   set(ax,'XTick',hdgVec);
+   set(ax,'XTick',hdgVec(notNaNs));
 %    set(gca,'XTickLabel',[]);
-   ylim(ax,[0 max(10,max(max(auFR_formatted(:,:,iu))))])
+%    ylim(ax,[0 max(10,max(max(auFR_formatted(notNaNs,:,iu))))])
    title(ax,sprintf('%d, %d-%d\nunit %d (%s)',iu,auMat.hdr.unitDate(iu),auMat.hdr.unitSet(iu),...
        auMat.hdr.unitID(iu),dataStruct(1).data.(par).units.cluster_labels{auMat.hdr.unitType(iu)}))
 
@@ -208,7 +213,7 @@ switch par
 end
 
 
-iu = 44; % which unit
+iu = 1; % which unit
 
 iae = 1;
 auFR_formatted  = reshape(auMat.data.muFRs{iae},length(hdgVec),[],size(auMat.data.muFRs{iae},2));
@@ -242,18 +247,9 @@ xlabel(sprintf('Heading angle [%s]',char(176)))
 %% ====== plot time resolved PSTH
 
 par = 'dots3DMPtuning';
-par = 'dots3DMP';
+% par = 'dots3DMP';
 
-% 2022-10-18 units of interest
-% tuning
-% 310, 311
-
-% in dots3DMP task (old)
-% 14, 15, 20, 28, 36, 42, 44, 46, 47, 58, 60, 61, 75, 90, 92, 105, 106, 125, 151, 153, 157, 158, 159, 161,
-% 163, 166,184, 187, 207, 217, 226, 233, 236, 242, 247, 257, 260, 262, 263, 264, 265, 272, 275, 278, 282, 284
-% 157 could be MU, two different units, did I do visual first?
-
-u = 21;
+u = 81;
 
 fsz = 20;
 
@@ -280,6 +276,8 @@ N = length(hdgVec);
 hdgcols = cbrewer('div','RdBu',N*2);
 hdgcols = hdgcols([1:floor(N/2) end-floor(N/2):end],:);
 hdgcols(hdgVec==0,:) = [0 0 0];
+% hdgcols(hdgVec==4,:) = [0 0 0];
+
 
 % N = 9;
 % hdgcols = cbrewer('div','RdBu',N*2);
@@ -292,7 +290,7 @@ hdgcols(hdgVec==0,:) = [0 0 0];
 N = length(hdgVec);
 
 % figure('position',[100 100 1000 800],'color','w')
-figure('position',[100 100 900 500],'color','w')
+figure('position',[100 100 1200 1000],'color','w')
 
 if length(cohs)==2
     ucond = [1 cohs(1); 2 cohs(1); 2 cohs(2); 3 cohs(1); 3 cohs(2)];
@@ -307,7 +305,7 @@ end
 % ucond = [1 cohs(1); 2 cohs(1); 2 cohs(2)];
 % titles = {'Ves';'Vis (Low Coh)';'Vis (High Coh)'};
 % subplotInd = [1 2 3];
-subplotInd = [1 2 4 3 5];
+subplotInd = [1 3 4 5 6];
 
 % mcols = {'Greys','Reds','Reds','Blues','Blues','Purples'};
 
@@ -328,11 +326,11 @@ if my==0, my = 10; end
 xlens = cellfun(@range,auMat.times.xvec);
 sprc  = xlens./sum(xlens);
 
-for c=[1 2 4]%1:size(ucond,1)
+for c=1:size(ucond,1)
 
 %     axMain = gca;
-%     axMain = subplot(3,2,subplotInd(c));
-    axMain = subplot(3,1,subplotInd(c));
+    axMain = subplot(3,2,subplotInd(c));
+%     axMain = subplot(3,1,subplotInd(c));
 
 
     pos=get(axMain,'Position');
@@ -343,7 +341,7 @@ for c=[1 2 4]%1:size(ucond,1)
 
         auFR_formatted  = reshape(muFRs{iae},length(hdgVec),[],size(muFRs{iae},2),size(muFRs{iae},3));
         conds_formatted = reshape(condMat,length(hdgVec),[],size(condMat,2));
-        evTimes_formatted = reshape(auMat.times.evTimes{iae},N,[],size(auMat.times.evTimes{iae},2),size(auMat.times.evTimes{iae},3));
+        evTimes_formatted = reshape(auMat.times.evTimes_byUnit{iae},N,[],size(auMat.times.evTimes_byUnit{iae},2),size(auMat.times.evTimes_byUnit{iae},3));
 
         if iae==1, p1 = pos(1);
         else p1 = p1 + pos(3)*sprc(1:iae-1);
@@ -360,7 +358,7 @@ for c=[1 2 4]%1:size(ucond,1)
         hh.XTickLabelRotation = 0;
         plot([0 0],[0 my],'k','linestyle','-','linewidth',2);
 
-        for ioe = 1:size(auMat.times.evTimes{iae},2)
+        for ioe = 1:size(auMat.times.evTimes_byUnit{iae},2)
             evMu = mean(evTimes_formatted(:,c,ioe,u)); % what are we averaging over here??
 
             if evMu<thisTmax && evMu > thisTmin

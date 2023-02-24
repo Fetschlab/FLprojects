@@ -57,7 +57,7 @@ options.useVelAcc = 0; % use stimulus physical profiles in drift rates
 
 % ==== diagnostics and output ====
 options.plot      = 0;      % plot confidence maps
-options.feedback  = 2;      % 0 - none, 1 - text feedback on LLs/err, 2 - plot errors vs. iteration #
+options.feedback  = 1;      % 0 - none, 1 - text feedback on LLs/err
 options.runInterpFit = 0;   % model predictions for interpolated headings? for nice plotting
 
 
@@ -65,7 +65,7 @@ options.runInterpFit = 0;   % model predictions for interpolated headings? for n
 
 guess = [origParams.kmult, origParams.B, origParams.theta, origParams.alpha, origParams.TndMean/1000];
 
-guess = [35, 0.5, origParams.theta, origParams.alpha, origParams.TndMean/1000];
+% guess = [50, 1.2, origParams.theta, origParams.alpha, 0.2, 0.2, 0.2];
 
 fixed = zeros(1,length(guess));
 
@@ -75,7 +75,7 @@ fixed(:)=1;
 % ************************************
 
 % or select some parameters to hold fixed
-fixed = [0 0 1 1 1 1 1 1 1];
+% fixed = [0 0 1 1 1 1 0 0 0];
 
 
 %% fit the model to data

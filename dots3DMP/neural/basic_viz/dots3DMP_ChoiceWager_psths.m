@@ -6,18 +6,17 @@ addpath(genpath('/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/'))
 % Load in the data
 
 subject   = 'lucio';
-% dateRange = 20220615:20221003;
-dateRange = 20220805:20221003;
+dateRange = 20220512:20230131;
 
 dataPath = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/data/';
-% dataFileName = sprintf('%s_%d-%d_neuralData.mat',subject,dateRange(1),dateRange(end));
-dataFileName = sprintf('%s_%d-%d_neuralData_ks25.mat',subject,dateRange(1),dateRange(end));
-
-% dataFileName = 'lucio_20220923_tempneuralData.mat'; 
-
+dataFileName = sprintf('%s_%d-%d_neuralData.mat',subject,dateRange(1),dateRange(end));
 load(fullfile(dataPath,dataFileName));
 
-% dataStruct = dataStruct([2 3 4 7 9 10 11 12 16 17]);
+% 20220512-20230131, remove 20220520
+dataStruct(4) = [];
+
+
+load(fullfile(dataPath,dataFileName));
 
 % inputs to dots3DMP_NeuralStruct_runCleanUp
 parSelect  = {'dots3DMPtuning','dots3DMP'}; 
@@ -33,8 +32,6 @@ dataStruct = dots3DMP_NeuralStruct_runCleanUp(dataStruct,parSelect,minRate,minTr
 % ALSO NEED simple way to plot only selected mods/cohs without having to
 % rerun this part
 
-
-optsTR.calcTuning  = 0;
 optsTR.smoothFR    = 1;
 optsTR.convKernel  = fspecial('average', [1 20]); 
 
@@ -93,7 +90,7 @@ allUnitsChoiceWager = dots3DMP_FRmatrix_fromDataStruct(dataStruct,par,TaskeventI
 % 263
 fsz = 20;
 
-u = 44;
+u = 197;
 auMat = allUnitsChoiceWager;
 muFRs = auMat.data.PSTHs;
 
@@ -140,9 +137,9 @@ my   = max(mxFR)*1.2;
 xlens = cellfun(@range,auMat.times.xvec);
 sprc  = xlens./sum(xlens);
 
-for c=5%1:size(ucond,1)
-    axMain = gca;
-%     axMain = subplot(3,2,subplotInd(c));
+for c=1:size(ucond,1)
+%     axMain = gca;
+    axMain = subplot(3,2,subplotInd(c));
     pos=get(axMain,'Position');
 
     for iae=1:length(muFRs)
@@ -151,7 +148,7 @@ for c=5%1:size(ucond,1)
 
         auFR_formatted  = reshape(muFRs{iae},nconds,[],size(muFRs{iae},2),size(muFRs{iae},3));
         conds_formatted = reshape(condsTask,nconds,[],size(condsTask,2));
-        evTimes_formatted = reshape(auMat.times.evTimes{iae},nconds,[],size(auMat.times.evTimes{iae},2),size(auMat.times.evTimes{iae},3));
+        evTimes_formatted = reshape(auMat.times.evTimes_byUnit{iae},nconds,[],size(auMat.times.evTimes_byUnit{iae},2),size(auMat.times.evTimes_byUnit{iae},3));
 
         if iae==1, p1 = pos(1);
         else p1 = p1 + pos(3)*sprc(1:iae-1);
@@ -168,7 +165,7 @@ for c=5%1:size(ucond,1)
         hh.XTickLabelRotation = 0;
         plot([0 0],[0 my],'k','linestyle','-','linewidth',2);
 
-        for ioe = 1:size(auMat.times.evTimes{iae},2)
+        for ioe = 1:size(auMat.times.evTimes_byUnit{iae},2)
             evMu = mean(evTimes_formatted(c,:,ioe,u)); % average over conditions
 
             if evMu<thisTmax && evMu > thisTmin

@@ -28,9 +28,11 @@ else
     %         fprintf('fval: %f\n', fval);
 
         case 'fmsbnd'
-            fitOptions = optimset('Display', 'iter', 'MaxFunEvals', 100*sum(fixed==0), 'MaxIter', ... 
-                100*sum(fixed==0), 'TolX',1e-3,'TolFun',1e-3,'UseParallel','Always');
-            [X, fval, ~] = fminsearchbnd(@(x) feval(options.errfcn,x,guess,fixed,data,options), guess(fixed==0), LB(fixed==0), UB(fixed==0), fitOptions);
+            % in-built fmsbnd only accepts scalar input...
+            % i think there was a toolbox somewhere
+%             fitOptions = optimset('Display', 'iter', 'MaxFunEvals', 100*sum(fixed==0), 'MaxIter', ... 
+%                 100*sum(fixed==0), 'TolX',1e-3,'TolFun',1e-3,'UseParallel','Always');
+%             [X, fval, ~] = fminsearchbnd(@(x) feval(options.errfcn,x,guess,fixed,data,options), guess(fixed==0), LB(fixed==0), UB(fixed==0), fitOptions);
 
         case 'global'
             % GlobalSearch from Global Optimization Toolbox
