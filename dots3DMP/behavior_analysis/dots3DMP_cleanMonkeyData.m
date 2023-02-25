@@ -15,6 +15,9 @@ dateRange = 20220512:20230222;
 dateRange = 20221207:20221222;
 
 
+dateRange = 20221207:20221222;
+
+
 %%
 % folder = '/Users/chris/Documents/MATLAB/PLDAPS_data/';
 folder = '/Users/stevenjerjian/Desktop/FetschLab/PLDAPS_data/dataStructs/';
