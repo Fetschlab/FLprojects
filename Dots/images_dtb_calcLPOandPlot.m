@@ -1,4 +1,4 @@
-function P = images_dtb_calcLPOandPlot(R,P)
+function logOddsCorrMap = images_dtb_calcLPOandPlot(R,P)
 
 % Calculate log posterior odds of a correct response (Eq. 3 in Kiani et al.
 % 2014), and plots it (plus a few things) depending on plotflag
@@ -7,16 +7,16 @@ function P = images_dtb_calcLPOandPlot(R,P)
 % that function.
 
 % CF started it circa 2018
+% SJ modified 02-2023 to remove reassigning logOdds map to P inside function
 
-I = R.drift>=0; % In case drift is signed, calculate only for positives,
+I = mean(R.drift,2)>=0; % In case drift is signed, calculate only for positives,
                 % then the kluge with separate marginals (Pxt's) can be done elsewhere
 % unlike 1D code, here we'll marginalize over drift in one step               
 odds = (squeeze(sum(P.up.distr_loser(I,:,:),1)) / length(R.drift(I))) ./ ...
        (squeeze(sum(P.lo.distr_loser(I,:,:),1)) / length(R.drift(I)));
 odds(odds<1) = 1; % fix some stray negatives/zeros (what about infs?)
 odds(isinf(odds)) = nan;
-P.logOddsCorrMap = log(odds);
-P.logOddsCorrMap = P.logOddsCorrMap';
+logOddsCorrMap = log(odds)';
 
 if R.plotflag
 
@@ -60,7 +60,7 @@ if R.plotflag
     else
         figure(c*1000); set(gcf, 'Color', [1 1 1], 'Position', [700 400 450 700/R.plotflag], 'PaperPositionMode', 'auto');
     end
-    [~,h] = contourf(R.t,P.y,P.logOddsCorrMap,n); % colormap(parula);
+    [~,h] = contourf(R.t,P.y,logOddsCorrMap,n); % colormap(parula);
     caxis([0 3]);
     colorbar('YTick',0:0.5:3); 
     set(gca,'XLim',[0 R.t(end)],'XTick',0:0.5:floor(R.t(end)*2)/2,'TickDir','out');

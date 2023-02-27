@@ -240,7 +240,7 @@ for m = 1:length(mods)
             P = images_dtb_2d_varDrift(R);
 
             if R.lose_flag
-                P = images_dtb_calcLPOandPlot(R,P);
+                P.logOddsCorrMap = images_dtb_calcLPOandPlot(R,P);
             end
 
             %if options.dummyRun we want to somehow use a stored logOddsMap
@@ -887,12 +887,19 @@ end
 
 % retrieve the full parameter set, given the adjustable and fixed parameters
 function param2 = getParam ( param1 , guess , fixed )
-    param2(fixed==0) = param1(fixed==0);  %get adjustable parameters from param1
-    param2(fixed==1) = guess(fixed==1);   %get fixed parameters from guess
+    % param1 is already the adjustable ones only!
+    if ~all(fixed)
+        param2(fixed==0) = param1;            %get adjustable parameters from param1 
+        param2(fixed==1) = guess(fixed==1);   %get fixed parameters from guess
+    else
+        param2 = param1;
+    end
 end
 
 
-% go from choice-wager intersections to conditionals, and marginal on wager
+% ===== helper functions ====
+
+% 1. go from choice-wager intersections to conditionals, and marginal on wager
 function [pB_A, pA_B, pB, pAB] = int_to_margconds(pAB,pA)
 
 % pAB:  NxM matrix with intersections for all possibilities of A and B
@@ -919,7 +926,6 @@ pAB  = pAB ./ Ptot;
 pB_A = pAB ./ pA;
 
 % by law of total probability
-
 % pB(1) = pB_A(1,1)*pA(1) + pB_A(2,1)*pA(2) etc.
 pB = pA' * pB_A; % do it with matrix multiplication
 
@@ -928,8 +934,9 @@ pA_B = pB_A .* pA ./ pB;
 
 end
 
-% inverse of int_to_margconds
+% 2. the inverse of int_to_margconds
 % go from conditional and marginals to intersection
+% this is useful if we adjust pA_B e.g. for base rate of low bets
 function [pB_A, pAB] = margconds_to_int(pA_B,pA,pB)
 
 % pA_B:  NxM matrix with probabilities of A given B i.e. P(A|B)
