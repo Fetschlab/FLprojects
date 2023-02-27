@@ -13,7 +13,7 @@ data.choice = []; % initialize this one field, you'll see why
 
 fieldExcludes = {'leftEarly','tooSlow','fixFP','FPHeld','eyeXYs','corrLoopActive','goodtrial', ...
                  'timeTargDisappears','probOfMemorySaccade','leftTargR','leftTargTheta', ...
-                 'rightTargR','rightTargTheta','audioFeedback','textFeedback','rewardDelay','fixRewarded'};
+                 'rightTargR','rightTargTheta','audioFeedback','textFeedback','rewardDelay','fixRewarded','amountRewardHighConf'};
 
 % now search localDir again for matching files and extract the desired variables from PDS
 allFiles = dir(localDir);
@@ -115,23 +115,25 @@ for d = 1:length(dateRange)
                     end
                     
                     % SJ 08-2021, adding Nexonar data in at this point
-                    try
                     if addNexonarDataToStruct
-                        matchingNexFile = cellfun(@(x) strcmp(x(1:25), allFiles(f).name(1:25)), {allNexFiles.name});
-                        if sum(matchingNexFile)==1
-                            load([localDirNex allNexFiles(matchingNexFile).name],'-mat'); % load the nexonar data
-                            
-                            nexPDS = dots3DMP_nexonarCleanUp(nex,PDS);
-                            data.nexonar = nexPDS';
+                        try
+                            matchingNexFile = cellfun(@(x) strcmp(x(1:25), allFiles(f).name(1:25)), {allNexFiles.name});
+                            if sum(matchingNexFile)==1
+                                load([localDirNex allNexFiles(matchingNexFile).name],'-mat'); % load the nexonar data
 
-                        else
-                            % no matching nexonar data (not recorded?)
-                            % or more than one matching file (but this should be impossible)
-                            disp(['could not find matching nexonar data for ' allFiles(f).name '...skipping'])
+                                nexPDS = dots3DMP_nexonarCleanUp(nex,PDS);
+                                data.nexonar = nexPDS';
+
+                            else
+                                % no matching nexonar data (either not
+                                % recorded for this file, or more than one match - which should be impossible)
+                                fprintf('could not find matching nexonar data for %s...skipping\n', allFiles(f).name)
+                            end
+                        catch
+                            fprintf('tried added nexonar data for %s, but something went wrong\n', allFiles(f).name)
                         end
                     end
-                    catch
-                    end
+                   
                     
                     clear PDS
                 end
@@ -206,7 +208,9 @@ if isfield(data,'oneConfTargTrial')
 end
 
 
-% fix correct trials issue
+% fix a bug with correct trials at zero heading
+% see function documentation for explanation
+% ignored for now
 % data.correct = dots3DMPCorrectTrials(data.choice,data.heading,data.delta);
 
 

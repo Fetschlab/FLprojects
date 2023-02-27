@@ -6,7 +6,7 @@
 %% try fitting simulated data to recover the generative parameters
 
 cd /Users/stevenjerjian/Desktop/FetschLab/Analysis/data/dots3DMP_DDM
-load tempsim_sepConfMaps.mat
+load tempsim_sepConfMaps_1000reps.mat
 
 %% or real data
 
@@ -31,7 +31,7 @@ options.conftask = 2; % 1=continuous/rating, 2=PDW
 % ==== method ====
 modelID=1; % unused for now
 options.errfcn    = @dots3DMP_errfcn_DDM_2D_wConf_noMC; % 2D DDM aka anticorrelated race, for RT+conf [Kiani 14 / van den Berg 16 (uses Wolpert's images_dtb_2d (method of images, from Moreno-Bote 2010))]
-options.fitMethod = 'fms'; %'fms','global','multi','pattern','bads'
+options.fitMethod = 'global'; %'fms','global','multi','pattern','bads'
 options.whichFit  = {'choice','RT'}; % choice, conf, RT, multinom (choice+conf)
 
 % ==== implementation ====
@@ -50,7 +50,7 @@ options.runInterpFit = 0;   % model predictions for interpolated headings? for n
 
 guess = [origParams.kmult, origParams.B, origParams.theta, origParams.alpha, origParams.TndMean/1000];
 
-% guess = [50, 1.2, origParams.theta, origParams.alpha, 0.2, 0.2, 0.2];
+guess = [50, 1.0, origParams.theta, origParams.alpha, 0.3, 0.5, 0.4];
 
 fixed = zeros(1,length(guess));
 
@@ -60,7 +60,7 @@ fixed(:)=1;
 % ************************************
 
 % or select some parameters to hold fixed
-% fixed = [0 0 1 1 1 1 0 0 0];
+fixed = [0 0 1 1 1 1 1 1 1];
 
 
 %% fit the model to data

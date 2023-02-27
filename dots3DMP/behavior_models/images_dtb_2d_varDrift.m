@@ -39,16 +39,16 @@ function P =  images_dtb_2d_varDrift(R)
 if ~isfield(R,'lose_flag')
     R.lose_flag=0;
 end
-if ~isfield(R,'plotflag')
-    R.plotflag=0;
-end
-if ~isfield(R,'vardrift')
+
+if ~isfield(R,'vardrift') && any(size(R.drift)==1)
     R.vardrift = repmat(R.drift(:),1,length(R.t));
+else
+    R.vardrift = R.drift;
 end
 P=R; % copy inputs to outputs
 
 
-ndrift=length(R.drift); %number of drifts
+ndrift=size(R.drift,1); %number of drifts
 nt=length(R.t); %number of time points to simulate
 ngrid=500; %grid size can change
 

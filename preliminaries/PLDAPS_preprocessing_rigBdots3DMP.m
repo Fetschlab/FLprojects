@@ -1,17 +1,14 @@
 % grabs PLDAPS data from NAS as specified, then loads desired variables
 % from .PDS files into a simpler data structure
 
-% CF, adapted from offline analysis wrapper born 10-3-18
-
-% VERSION 2.0: 08-30-19
+% SJ 02-2023 
+% this is a spin-off of the original versoin for dots3DMP task, given
+% sufficient differences and additional parameters
+% e.g.flags to addNexonarData and addDotPosition
 
 % requires password(s) to be entered if a auth key not available 
 % see e.g.:
 % https://www.howtogeek.com/66776/how-to-remotely-copy-files-over-ssh-without-entering-your-password/
-
-clear all
-close all
-addpath(genpath('/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/'))
 
 
 %% decide which files to load
@@ -20,7 +17,7 @@ paradigm = 'dots3DMP';
 today    = str2double(datestr(now,'yyyymmdd'));
 
 subject = 'lucio';
-dateRange = 20210315:today; % RT
+dateRange = 20220512:today; % RT
 
 % subject = 'human';
 % dateRange = 20190625:20191231; % non-RT
@@ -31,12 +28,11 @@ for d = 2:length(dateRange)
     dateStr = [dateStr newline num2str(dateRange(d))];
 end
 
-localDir = ['/Users/stevenjerjian/Desktop/FetschLab/PLDAPS_data/' subject '/'];
+localDir = ['/Users/stevenjerjian/Desktop/FetschLab/PLDAPS_data/' subject '/']; % this should be set outside of version-controlled script
 % localDir = ['/Users/chris/Documents/MATLAB/PLDAPS_data/' subject '/'];
 remoteDir = ['/var/services/homes/fetschlab/data/' subject '/'];
 
-% to load files directly from mounted homes Volume (be careful not to save
-% over to the original file!)
+% to load files directly from mounted homes Volume (be careful not to save over to the original file!)
 mountDir  = ['/Volumes/homes/fetschlab/data/' subject '/'];
 
 addNexonarDataToStruct = 0; % SJ 08-2021
@@ -93,4 +89,11 @@ save([localDir(1:length(localDir)-length(subject)-1) file], 'data');
 % save([localDir(1:length(localDir)-length(subject)-1) file], 'data','-v7.3');
 
 disp('done.');
+
+
+
+
+%%
+
+% create csv file from struct
 

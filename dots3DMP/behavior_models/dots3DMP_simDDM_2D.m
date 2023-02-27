@@ -20,6 +20,8 @@ clear; close all
 datafolder = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/data/dots3DMP_DDM';
 codefolder = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/FLprojects/dots3DMP/behav_models';
 
+savefilename = 'tempsim_sepConfMaps_1000reps';
+
 cohs = [0.4 0.8]; % visual coherence levels (these are really just labels, since k's are set manually)
 % hdgs = [-12 -6 -3 -1.5 -eps eps 1.5 3 6 12]; % don't know if we realy need two zeroes
 hdgs = [-12 -6 -3 -1.5 0 1.5 3 6 12];
@@ -37,7 +39,7 @@ modelID = 1; % 1 will be 2Dacc model ('Candidate model' against which others are
 RTtask   = 1;
 conftask = 2; % 1 - sacc endpoint, 2 - PDW
 
-nreps = 50; % number of repetitions of each unique trial type % (ntrials depends on num unique trial types)
+nreps = 1000; % number of repetitions of each unique trial type % (ntrials depends on num unique trial types)
 
 % stimulus conditions
 mods  = [1 2 3];        % stimulus modalities: ves, vis, comb
@@ -58,18 +60,18 @@ allowNonHB = 0; % allow non-hit-bound trials? if set to 0 and a trial lasts
 % assigned RT = max_dur (affects comparison with mean RT in images_dtb, 
 % which is calculated only for bound crossings)
 
-urgency = 1;
+urgency = 0;
 plotSimulatedData = 1; % plot average psychometric curves etc.
 
 
 %% generative model parameters
 
 % drift rate and bound
-kmult       = 25;               % drift rate multiplier
+kmult       = 30;               % drift rate multiplier
 kvis        = kmult*cohs;       % assume drift proportional to coh, reduces nParams
 kves        = mean(kvis);       % for now, assume 'straddling'
 % knoise      = [0.07 0.07];    % additional variability added to drift rate, unused for now
-B           = 2;              % assume a single bound, but different Tnds for each modality
+B           = 0.8;              % assume a single bound, but different Tnds for each modality
 
 % diffusion
 sigma       = 1;                % unit variance (Moreno-Bote 2010), not a free param!         
@@ -190,14 +192,20 @@ end
 % SJ 02-2023 separate logOdds map for each modality, variable drift rates
 
 R.drift = sves .* kves .* sind(hdgs(hdgs>=0))';
-P(1) = images_func(R); % ves
+PVes = images_func(R); % ves
+PVes.logOddsCorrMap = images_dtb_calcLPOandPlot(R,PVes);
 
 R.drift = svis .* mean(kvis) .* sind(hdgs(hdgs>=0))';
-P(2)    = images_func(R); % vis
+PVis = images_func(R); % vis
+PVis.logOddsCorrMap = images_dtb_calcLPOandPlot(R,PVis);
 
 R.drift = sqrt(sves.*kves.^2 + svis.*mean(kvis).^2) .* sind(hdgs(hdgs>=0))';
-P(3)    = images_func(R); % comb
+PComb = images_func(R); % comb
+PComb.logOddsCorrMap = images_dtb_calcLPOandPlot(R,PComb);
 
+P(1) = PVes;
+P(2) = PVis;
+P(3) = PComb;
 
 %% simulate bounded evidence accumulation
 
