@@ -1,6 +1,4 @@
 import numpy as np
-import pandas as pd
-
 
 def prop_se(x):
     return np.sqrt((np.mean(x)*(1-np.mean(x))) / len(x))
@@ -9,8 +7,11 @@ def prop_se(x):
 def cont_se(x):
     return np.std(x) / np.sqrt(len(x))
 
+# define gaussian and flipped gaussian for RT and confidence fits
 
-def behavior_means(df, conftask=2, RTtask=True, by_delta=False, splitPDW=False):
+
+def behavior_means(df, conftask=2, RTtask=True,
+                   by_delta=False, splitPDW=False):
 
     grp_list = ['modality', 'coherence', 'heading']
 
@@ -40,14 +41,14 @@ def behavior_means(df, conftask=2, RTtask=True, by_delta=False, splitPDW=False):
         df['choice'] -= 1
 
     # remove one-target choice
-    df = df.loc[df['oneTargChoice'] == False]
+    df = df.loc[df['oneTargChoice'] is False]
 
     # remove cue conflict trials if by_delta is False
     if by_delta is False:
         df = df.loc[df['delta'] == 0]
 
     # for pHigh calculations, remove one-target confidence trials
-    df_noOneTarg = df.loc[df['oneTargConf'] == False]
+    df_noOneTarg = df.loc[df['oneTargConf'] is False]
 
     if conftask == 1:
         pHigh = df_noOneTarg.groupby(by=grp_list)['conf'].agg(
@@ -62,8 +63,9 @@ def behavior_means(df, conftask=2, RTtask=True, by_delta=False, splitPDW=False):
         [np.mean, prop_se]).dropna(axis=0).reset_index()
 
     # this effectively achieves the same thing
-    # pRight = pd.pivot_table(df, values='choice', index=['modality','coherence'], columns='heading',
-    #     aggfunc=(np.mean,prop_se)).stack().reset_index()
+    # pRight = pd.pivot_table(df, values='choice',
+    #       index=['modality','coherence'], columns='heading',
+    #       aggfunc=(np.mean,prop_se)).stack().reset_index()
 
     if RTtask is True:
         meanRT = df.groupby(by=grp_list)['RT'].agg(
@@ -78,7 +80,7 @@ def behavior_means(df, conftask=2, RTtask=True, by_delta=False, splitPDW=False):
 def behavior_fit(df, fitType='logistic', numhdgs=200):
 
     import statsmodels.api as sm
-    #from sklearn.linear_model import LogisticRegression
+    # from sklearn.linear_model import LogisticRegression
 
     if np.max(df['choice']) == 2:
         df['choice'] -= 1
@@ -86,68 +88,56 @@ def behavior_fit(df, fitType='logistic', numhdgs=200):
     hdgs = np.unique(df['heading']).reshape(-1, 1)
     xhdgs = np.linspace(np.min(hdgs), np.max(hdgs), numhdgs).reshape(-1, 1)
 
-    outlist  = ['pRight','pHigh','meanRT']
+    outlist = ['pRight', 'pHigh', 'meanRT']
     modnames = ['ves', 'vis', 'comb']
-    attr_dict = {'intercept_': [], 'coef_': []}
-    fit_results = dict(zip(outlist, [dict(zip(modnames, [attr_dict for m in modnames])) for outcome in outlist]))
+    attr_dict = {'intercept_': [], 'coef_': [], 'prediction': []}
+    fit_results = dict(zip(outlist, [dict(zip(modnames,
+                                              [attr_dict for m in modnames]))
+                                     for outcome in outlist]))
 
     for modality in pRight['modality'].unique():
         for c, coh in enumerate(df['coherence'].unique()):
-            
+
             if modality == 1:
                 X = df.loc[df['modality'] == modality,
-                                   ['heading', 'choice','PDW','RT']]
+                           ['heading', 'choice', 'PDW', 'RT']]
             else:
-                X = df.loc[(df['modality'] == modality) & (df['coherence'] == coh),
-                                    ['heading', 'choice','PDW','RT']]
-
+                X = df.loc[(df['modality'] == modality) &
+                           (df['coherence'] == coh),
+                           ['heading', 'choice', 'PDW', 'RT']]
 
             if fitType == 'logistic':
 
-                pHigh_fit, meanRT_fit = None, None
-
                 # using scikit-learn package
-                #logreg = LogisticRegression().fit(
-                #               choice_mc['heading'].to_numpy().reshape(-1, 1),
-                #               choice_mc['choice'].to_numpy())
-                #pRight_fit = logreg2.predict_proba(xhdgs)[:, 1]
-                #coef_, intercept_ = logreg.coef_, logreg.intercept_
+                # logreg = LogisticRegression().fit(
+                #               X['heading'].to_numpy().reshape(-1, 1),
+                #               X['choice'].to_numpy())
+                # yhat = logreg.predict_proba(xhdgs)[:, 1]
+                # coef_, intercept_ = logreg.coef_, logreg.intercept_
 
                 logreg = sm.Logit(X['choice'], sm.add_constant(X['heading'])).fit()
-                pRight_fit = logreg.predict(sm.add_constant(xhdgs))
+                yhat = logreg.predict(sm.add_constant(xhdgs))
                 coef_, intercept_ = logreg.params['heading'], logreg.params['const']
 
-                # store logreg attributes
-                fit_results['pRight'][modnames[modality-1]
-                                   ]['intercept_'].append(intercept_)
-                fit_results['pRight'][modnames[modality-1]
-                                   ]['coef_'].append(coef_)
+                # store results
+                fit_results['pRight'][modnames[modality-1]]['predictions'].append(yhat)
+
+                fit_results['pRight'][modnames[modality-1]]['intercept_'].append(intercept_)
+                fit_results['pRight'][modnames[modality-1]]['coef_'].append(coef_)
 
             elif fitType == 'gaussian':
-                
+
                 probreg = sm.Probit(X['choice'], sm.add_constant(X['heading'])).fit()
-                pRight_fit = probreg.predict(sm.add_constant(xhdgs))
+                yhat = probreg.predict(sm.add_constant(xhdgs))
                 coef_, intercept_ = probreg.params['heading'], probreg.params['const']
 
-                # store logreg attributes
-                fit_results['pRight'][modnames[modality-1]
-                                   ]['intercept_'].append(intercept_)
-                fit_results['pRight'][modnames[modality-1]
-                                   ]['coef_'].append(coef_)
-                
-                probreg = sm.Probit(1-X['PDW'], sm.add_constant(X['heading'])).fit()
-                pRight_fit = probreg.predict(sm.add_constant(xhdgs))
-                
-                # store logreg attributes
-                fit_results['pRight'][modnames[modality-1]
-                                   ]['intercept_'].append(intercept_)
-                fit_results['pRight'][modnames[modality-1]
-                                   ]['coef_'].append(coef_)
-                
-                
+                # store results
+                fit_results['pRight'][modnames[modality-1]]['predictions'].append(yhat)
+                fit_results['pRight'][modnames[modality-1]]['intercept_'].append(intercept_)
+                fit_results['pRight'][modnames[modality-1]]['coef_'].append(coef_)
 
-
-    return xhdgs, pRight_fit, pHigh_fit, meanRT_fit
+                # fits for PDW and RT
+    return xhdgs, fit_results
 
 
 def plot_behavior_means(pRight, pHigh, meanRT):
@@ -157,7 +147,7 @@ def plot_behavior_means(pRight, pHigh, meanRT):
     condcols = ['k', 'r', 'b']
     fig, ax = plt.subplots(3, 2, figsize=(8, 12))
 
-    def plot_fcn(data, mods, cohs): # to apply a function instead of loop
+    def plot_fcn(data, mods, cohs):  # to apply a function instead of loop
         pass
 
     for modality in pRight['modality'].unique():
