@@ -3,12 +3,17 @@ import numpy as np
 def prop_se(x):
     return np.sqrt((np.mean(x)*(1-np.mean(x))) / len(x))
 
-
 def cont_se(x):
     return np.std(x) / np.sqrt(len(x))
 
-# define gaussian and flipped gaussian for RT and confidence fits
-
+def gaus(params,x):
+    """
+    params of gaussian are [baseline mu sigma amplitude]
+    x is the independent variable i.e. heading
+    to generate flipped gaussian e.g. for PDW, simply do 1-gaus(...)
+    """
+    return params[0] * np.exp(-(x-params[1])**2 / (2*params[2]**2)) + params[3]
+    
 
 def behavior_means(df, conftask=2, RTtask=True,
                    by_delta=False, splitPDW=False):
@@ -80,6 +85,7 @@ def behavior_means(df, conftask=2, RTtask=True,
 def behavior_fit(df, fitType='logistic', numhdgs=200):
 
     import statsmodels.api as sm
+    import scipy 
     # from sklearn.linear_model import LogisticRegression
 
     if np.max(df['choice']) == 2:
@@ -121,7 +127,6 @@ def behavior_fit(df, fitType='logistic', numhdgs=200):
 
                 # store results
                 fit_results['pRight'][modnames[modality-1]]['predictions'].append(yhat)
-
                 fit_results['pRight'][modnames[modality-1]]['intercept_'].append(intercept_)
                 fit_results['pRight'][modnames[modality-1]]['coef_'].append(coef_)
 
@@ -137,6 +142,8 @@ def behavior_fit(df, fitType='logistic', numhdgs=200):
                 fit_results['pRight'][modnames[modality-1]]['coef_'].append(coef_)
 
                 # fits for PDW and RT
+                popt, _ = scipy.optimize.curve_fit(gaus, X['heading'], p0=[0.5, 0, 3, 0.1])
+
     return xhdgs, fit_results
 
 
