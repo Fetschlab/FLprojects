@@ -50,7 +50,7 @@ options.runInterpFit = 0;   % model predictions for interpolated headings? for n
 
 guess = [origParams.kmult, origParams.B, origParams.theta, origParams.alpha, origParams.TndMean/1000];
 
-guess = [50, 1.0, origParams.theta, origParams.alpha, 0.3, 0.5, 0.4];
+guess = [50, 1.0, origParams.theta, origParams.alpha, 0.3, 0.3, 0.3];
 
 fixed = zeros(1,length(guess));
 
@@ -60,12 +60,14 @@ fixed(:)=1;
 % ************************************
 
 % or select some parameters to hold fixed
-fixed = [0 0 1 1 1 1 1 1 1];
+fixed = [0 0 1 1 1 1 0 0 0];
 
 
 %% fit the model to data
 
-X = dots3DMP_fitDDM(data,options,guess,fixed);
+f = parfeval(@dots3DMP_fitDDM,1,data,options,guess,fixed);
+
+% X = dots3DMP_fitDDM(data,options,guess,fixed);
 
 %% evaluate fitted parameters at actual headings (get overall fit error)
 

@@ -245,9 +245,12 @@ for m = 1:length(mods)
 
                 if R.lose_flag
                     P.logOddsCorrMap = images_dtb_calcLPOandPlot(R,P);
+                    logOddsCorrMap_tosave(:,:,m,c) = P.logOddsCorrMap;
+                else
+                    logOddsCorrMap_tosave = nan;
                 end
 
-                logOddsCorrMap_tosave(:,:,m,c) = P.logOddsCorrMap;
+                
             else
                 P.logOddsCorrMap = options.logOddsCorrMap(:,:,m,c);
             end
@@ -774,9 +777,9 @@ if options.RTtask
 end
 
 % CONF
+LL_conf = 0;
 if R.lose_flag
 
-    LL_conf = 0;
     if options.conftask==1 % SEP
 
         keyboard % this is unfinished
