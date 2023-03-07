@@ -22,9 +22,8 @@ else
     switch options.fitMethod
         case 'fms'
             fitOptions = optimset('Display', 'iter', 'PlotFcns', @optimplotfval, 'MaxFunEvals', 100*sum(fixed==0), 'MaxIter', ... 
-                100*sum(fixed==0), 'TolX',1e-3,'TolFun',1e-3,'UseParallel','Always');
+                100*sum(fixed==0), 'TolX',1e-2,'TolFun',1e-2,'UseParallel','Always');
             [X, fval, ~] = fminsearch(@(x) feval(options.errfcn,x,guess,fixed,data,options), guess(fixed==0), fitOptions);
-    %         [X, fval, exitflag] = fminunc(@(x) feval(options.errfcn,x,guess,fixed,data,options), guess(fixed==0), fitOptions);
     %         fprintf('fval: %f\n', fval);
 
         case 'fmsbnd'

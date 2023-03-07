@@ -460,27 +460,16 @@ for m = 1:length(mods)
                 %     nCor(c) = sum(Jdata & (data.correct | abs(data.heading)<1e-6));
                 if options.RTtask
 
-                    % different Tnds for different choices, NOT for different cohs,
-                    % so we simply take a weighted average based on P(right)
-                    %         Tnd = TndR*pRight + TndL*(1-pRight);
-
-                    % for param-recov, model RT needs adjusted to account for unabsorbed
-                    % probability (trials that don't hit the bound, usually only at low
-                    % cohs, when bound is high, etc). Turns out the calculation of
-                    % P.up.mean_t only applies to absorbed prob (bound-crossings), so
-                    % we simply adjust it by averaging mean_t with maxdur, weighted by
-                    % one minus the probability of bound crossing
-                    % (this was a cool exercise when it worked, but seems easier to
-                    % exclude those trials and pretend there is no unabsorbed prob;
-                    % also more consistent with real behavior where there's always a
-                    % choice before max_dur is reached  --thanks to MVL for this)
+                    % weighted adjustment to account for unabsorbed probability 
+                    % probability (trials that don't hit the bound), if
+                    % those trials are not already being excluded
                     if options.ignoreUnabs
                         pHB = 1;
                     else
                         pHB = P.up.p(uh)+P.lo.p(uh); % prob of crossing either bound
                     end
 
-
+                    % not much difference
                     %         meanRT_model(m,c,d,h) = P.up.p(uh)*P.up.mean_t(uh) + P.lo.p(uh)*P.lo.mean_t(uh) + (1-pHB)*max_dur + Tnd; % weighted average
                     meanRT_model(m,c,d,h) = pHB*P.up.mean_t(uh) + (1-pHB)*max_dur + Tnd; % weighted average
                     %         varRT_model(m,c,d,h)  = pHB*P.up.var_t(uh)  + (1-pHB)*0 + TndSD.^2; % TndSD?
@@ -494,8 +483,8 @@ for m = 1:length(mods)
                         PxtAboveTheta = sum(Pxt1.*(P.logOddsCorrMap>=theta(m))); % shouldn't matter if Pxt1 or 2, it's symmetric
                         PxtBelowTheta = sum(Pxt1.*(P.logOddsCorrMap<theta(m)));
 
-%                         PxtAboveTheta2 = sum(Pxt2.*(logOddsMap>=theta(m))); % shouldn't matter if Pxt1 or 2, it's symmetric
-%                         PxtBelowTheta2 = sum(Pxt2.*(logOddsMap<theta(m)));
+%                         PxtAboveTheta2 = sum(Pxt2.*(P.logOddsCorrMap>=theta(m))); % shouldn't matter if Pxt1 or 2, it's symmetric
+%                         PxtBelowTheta2 = sum(Pxt2.*(P.logOddsCorrMap<theta(m)));
 
                         meanRThigh = PxtAboveTheta * R.t' / sum(PxtAboveTheta);
                         meanRTlow  = PxtBelowTheta * R.t' / sum(PxtBelowTheta);
@@ -562,7 +551,7 @@ for m = 1:length(mods)
                     % (should this be Jdata or I?)
 
                     % but we can just get the likelihood directly from the PDF!
-                    PDF = P.up.pdf_t(uh,:)/sum(P.up.pdf_t(uh,:)); % renormalize % WHY ONLY P.UP HERE??
+                    PDF = P.up.pdf_t(uh,:)/sum(P.up.pdf_t(uh,:)); % renormalize fine, P.up.pdf and P.lo.pdf do look similar?
 %                     PDF2 = P.lo.pdf_t(uh,:)/sum(P.lo.pdf_t(uh,:)); % renormalize
 
 
@@ -885,13 +874,8 @@ end
 
 % retrieve the full parameter set, given the adjustable and fixed parameters
 function param2 = getParam ( param1 , guess , fixed )
-    % param1 is already the adjustable ones only!
-    if ~all(fixed)
-        param2(fixed==0) = param1;            %get adjustable parameters from param1 
-        param2(fixed==1) = guess(fixed==1);   %get fixed parameters from guess
-    else
-        param2 = param1;
-    end
+    param2(fixed==0) = param1;  %get adjustable parameters from param1 (these are the fittable params)
+    param2(fixed==1) = guess(fixed==1);   %get fixed parameters from guess
 end
 
 

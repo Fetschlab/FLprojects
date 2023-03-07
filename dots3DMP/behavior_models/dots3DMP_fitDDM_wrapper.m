@@ -50,7 +50,7 @@ options.runInterpFit = 0;   % model predictions for interpolated headings? for n
 
 guess = [origParams.kmult, origParams.B, origParams.theta, origParams.alpha, origParams.TndMean/1000];
 
-guess = [50, 1.0, origParams.theta, origParams.alpha, 0.3, 0.3, 0.3];
+guess = [50, 1.0, origParams.theta, origParams.alpha, 0.8, 0.8, 0.8];
 
 fixed = zeros(1,length(guess));
 
@@ -65,9 +65,11 @@ fixed = [0 0 1 1 1 1 0 0 0];
 
 %% fit the model to data
 
-fitDDMfeval = parfeval(@dots3DMP_fitDDM,1,data,options,guess,fixed);
+% to run fit in background...
+% fitDDMfeval = parfeval(@dots3DMP_fitDDM,1,data,options,guess,fixed);
+% X = fetchOutputs(fitDDMfeval); % run when done!
 
-% X = dots3DMP_fitDDM(data,options,guess,fixed);
+X = dots3DMP_fitDDM(data,options,guess,fixed);
 
 %% evaluate fitted parameters at actual headings (get overall fit error)
 
@@ -78,7 +80,7 @@ options.dummyRun = 0;
 options.whichFit = {'choice','conf','RT'}; % choice, conf, RT, multinom (choice+conf)
 
 options.feedback = 1;
-[err_final, fit, parsedFit] = feval(options.errfcn,X,X,fixed,data,options);
+[err_final, fit, parsedFit, ~, LLs] = feval(options.errfcn,X(fixed==0),X,fixed,data,options);
 
 %% plot the model predicted data points at this stage
 
@@ -91,9 +93,13 @@ dots3DMP_plots_fit_byCoh(data,fit,options.conftask,options.RTtask);
 fixed = [1 1 0 0 0 0 1 1 1]; % thetas and alpha are free params
 options.whichFit = {'conf'}; % choice, conf, RT, multinom (choice+conf)
 
-options.feedback = 2;
-[err_final, fit, parsedFit] = feval(options.errfcn,X,X,fixed,data,options);
+X = dots3DMP_fitDDM(data,options,X,fixed);
 
+fixed = true(size(X));
+[err_final, fit, parsedFit, options.logOddsCorrMap] = feval(options.errfcn,X,X,fixed,data,options);
+
+%%
+options.runInterpFit = 0;   % model predictions for interpolated headings
 if options.runInterpFit
 
     fixed = true(size(X)); % again, no actual fitting
