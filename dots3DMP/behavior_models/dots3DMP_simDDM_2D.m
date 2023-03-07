@@ -22,13 +22,6 @@ codefolder = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/FLprojects/d
 
 savefilename = 'tempsim_sepConfMaps_1000reps';
 
-cohs = [0.4 0.8]; % visual coherence levels (these are really just labels, since k's are set manually)
-% hdgs = [-12 -6 -3 -1.5 -eps eps 1.5 3 6 12]; % don't know if we realy need two zeroes
-hdgs = [-12 -6 -3 -1.5 0 1.5 3 6 12];
-% deltas = [-3 0 3]; % conflict angle; positive means vis to the right
-deltas = 0; % conflict angle; positive means vis to the right
-mods = [1 2 3]; % stimulus modalities: ves, vis, comb
-
 %% MODEL SPECIFICATIONS and CONDITIONS
 
 % === model type ==== unused for now

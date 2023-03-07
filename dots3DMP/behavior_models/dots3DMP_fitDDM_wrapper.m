@@ -31,7 +31,7 @@ options.conftask = 2; % 1=continuous/rating, 2=PDW
 % ==== method ====
 modelID=1; % unused for now
 options.errfcn    = @dots3DMP_errfcn_DDM_2D_wConf_noMC; % 2D DDM aka anticorrelated race, for RT+conf [Kiani 14 / van den Berg 16 (uses Wolpert's images_dtb_2d (method of images, from Moreno-Bote 2010))]
-options.fitMethod = 'global'; %'fms','global','multi','pattern','bads'
+options.fitMethod = 'fms'; %'fms','global','multi','pattern','bads'
 options.whichFit  = {'choice','RT'}; % choice, conf, RT, multinom (choice+conf)
 
 % ==== implementation ====
@@ -65,7 +65,7 @@ fixed = [0 0 1 1 1 1 0 0 0];
 
 %% fit the model to data
 
-f = parfeval(@dots3DMP_fitDDM,1,data,options,guess,fixed);
+fitDDMfeval = parfeval(@dots3DMP_fitDDM,1,data,options,guess,fixed);
 
 % X = dots3DMP_fitDDM(data,options,guess,fixed);
 
