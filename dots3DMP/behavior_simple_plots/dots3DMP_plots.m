@@ -1,9 +1,11 @@
-function fh = dots3DMP_plots(parsedData,mods,cohs,deltas,hdgs,conftask,RTtask)
+function fh = dots3DMP_plots(parsedData,mods,cohs,deltas,hdgs,conftask,RTtask,D)
 
-% first, for all trials irrespective of delta
-D = length(deltas)+1; % (the extra column we made for pooling across deltas)
-% OR select just delta=0:
-D = find(deltas==0);
+if nargin < 8 || isempty(D)
+    % first, for all trials irrespective of delta
+    D = length(deltas)+1; % (the extra column we made for pooling across deltas)
+    % OR select just delta=0:
+%     D = find(deltas==0);
+end
 
          %ves %vis %comb
 % clr{1} = {'ko','mo','co'};
@@ -37,11 +39,11 @@ for c = 1:length(cohs)
         subplot(1+double(conftask>0)+double(RTtask),length(cohs),c+length(cohs)); box off; hold on;
         for m = 1:length(mods)
             h(m) = errorbar(hdgs, squeeze(parsedData.confMean(m,c,D,:)), squeeze(parsedData.confSE(m,c,D,:)), [clr{c}{mods(m)} '-'],'linewidth',1.5);
-            ylim([0.4 1]); hold on;
+            ylim([0.4 0.8]); hold on;
         end
         xlabel('heading angle (deg)');
-         if conftask==1, ylim([0 1.25]); ylabel('SEP (''confidence'', %)');
-        elseif conftask==2, ylim([0.4 1]); ylabel('P(high bet)');
+         if conftask==1, ylim([0.4 0.8]); ylabel('SEP (''confidence'', %)');
+        elseif conftask==2, ylim([0.4 0.1]); ylabel('P(high bet)');
         end
         try changeAxesFontSize(gca,20,20); catch; end
     end
@@ -97,8 +99,8 @@ for c = 1:length(cohs)
         end
         
         xlabel('heading angle (deg)'); 
-        if conftask==1, ylim([0 1.25]); ylabel('SEP (''confidence'', %)');
-        elseif conftask==2, ylim([0.4 1]); ylabel('P(high bet)');
+        if conftask==1, ylim([0.5 0.8]); ylabel('SEP (''confidence'', %)');
+        elseif conftask==2, ylim([0.4 0.1]); ylabel('P(high bet)');
         end
         try changeAxesFontSize(gca,20,20); catch; end
     end 

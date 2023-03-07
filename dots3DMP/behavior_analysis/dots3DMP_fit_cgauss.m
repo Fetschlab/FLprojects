@@ -1,4 +1,4 @@
-function gfit = dots3DMP_fit_cgauss(data,mods,cohs,deltas,conftask,RTtask)
+function gfit = dots3DMP_fit_cgauss(data,mods,cohs,deltas,conftask,RTtask,D)
 % SJ 07-2021 converted to function for cleaner workspace
 
 % define anonymous functions for fitting:
@@ -46,9 +46,12 @@ guess_gauss  = [0.5 0 6 1];
 fitOptions = optimset('display','final','MaxFunEvals',1e6,'MaxIter',1e6,'TolFun',1e-20);
 
 %% first, for all trials irrespective of delta
-D = length(deltas)+1; % (the extra column we made for pooling across deltas)
-% OR select just delta=0:
-% D = find(deltas==0);
+
+if nargin<7 || isempty(D)
+    D = length(deltas)+1; % (the extra column we made for pooling across deltas)
+    % OR select just delta=0:
+    % D = find(deltas==0);
+end
 
 % initialize vars for storing param fits
 % deal func looks nicer, but is slow for some reason...

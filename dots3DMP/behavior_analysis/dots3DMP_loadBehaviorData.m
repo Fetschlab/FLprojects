@@ -1,4 +1,4 @@
-function data = dots3DMP_loadBehaviorData(subject,conftask,RTtask)
+function data = dots3DMP_loadBehaviorData(subject,datapath,conftask,RTtask)
 
 % clean means no breakfix trials, only 'good' subjects, coherence and headings standardized, normalized conf
 % see dots3DMP_cleanHumanData, dots3DMP_cleanMonkeyData
@@ -21,23 +21,30 @@ end
 switch subject
 
     case 'lucio'
-%         d = load('lucio_20220301-20221006_clean.mat'); % recent lucio data, PDW + RT (SfN 2022)
-        d = load('lucio_20220301-20220303_clean.mat'); 
+%         filename = 'lucio_20220301-20221006_clean.mat'; % recent lucio data, PDW + RT (SfN 2022)
+        filename = 'lucio_20220301-20230303_clean.mat'; 
 
 
     case 'zarya'
-        d = load('zarya_20220301-20220920_clean.mat');
+        filename = 'zarya_20220301-20220920_clean.mat';
 
     case 'human'
 
         if RTtask
-            d = load('human_20200213-20220317_RT_clean_Apr2022.mat');    % human RT
+            filename = 'human_20200213-20220317_RT_clean_Apr2022.mat';    % human RT
         else
-            d = load('human_20190625-20191231_nonRT_clean_Apr2022.mat');% human non-RT
+            filename = 'human_20190625-20191231_nonRT_clean_Apr2022.mat';% human non-RT
         end
 
     case 'simul'
         error('No simulation dataStruct chosen')
 end
 
+try
+    d = load(fullfile(datapath,filename));
+catch 
+    fprintf('could not find file %s\n', filename)
+end
 data = d.data;
+
+fprintf('loaded file %s, %d trials\n', filename, length(data.heading))

@@ -32,7 +32,7 @@ if conftask==1
 elseif conftask==2
     yLab = 'P(High Bet)'; confYlims = [0.4 1.0];
     if all(mods==1), RTylims = [0.5 0.72]; 
-    else,            RTylims = [0.5 0.9]; 
+    else,            RTylims = [0.5 1.0]; 
     end
     xtlab = {'-12','-6','-3','','0','','3','6','12'};
     yt = 0:0.1:1;  ytlab = {'0','','0.2','','0.4','','0.6','','0.8','','1.0'}; % for RT plots
@@ -62,7 +62,8 @@ for c = 1:length(cohs)
         h(m) = plot(parsedData.xVals, gfit.choice.func(beta,parsedData.xVals), [clr{c}{m}(1) '-'],'linewidth',2); hold on;
         errorbar(hdgs, squeeze(parsedData.pRight(m,c,D,:)), squeeze(parsedData.pRightSE(m,c,D,:)), clr{c}{m},'linewidth',2);
         text(hdgs(1)+1,1.0-m*0.16,modlabels{m},'color',clr{c}{m}(1),'fontsize',fsz,'fontweight','bold');
-%         text(hdgs(1)+0.5,1.0-m*0.07,sprintf('%s: mu = %.2f, s = %.2f',modlabels{m},beta(1),beta(2)),'color',clr{c}{m}(1))
+        text(hdgs(end),0.5-m*0.12,sprintf('%+2.2f, %2.2f',beta(1),beta(2)),'color',clr{c}{m}(1),...
+            'fontsize',fsz-6,'fontweight','bold','HorizontalAlignment','right');
     end
     if length(mods)>1; title(cohlabs{c}); end
     ylim([0 1]);
