@@ -5,17 +5,12 @@ clear all; close all
 conftask = 2;
 RTtask = 1;
 
-subject = 'zarya';
+subject = 'lucio';
 paradigm = 'dots3DMP';
 % dateRange = 20210315:20210805; % RT
 dateRange = 20220301:20221006;   % for SfN2022
 
-dateRange = 20220512:20230222;
-
-dateRange = 20221207:20221222;
-
-
-dateRange = 20221207:20221222;
+dateRange = 20220301:20230303;
 
 
 %%
@@ -27,6 +22,7 @@ load([folder file], 'data');
 
 try data = rmfield(data,'amountRewardLowConf'); catch, end
 try data = rmfield(data,'amountRewardHighConf'); catch, end
+try data = rmfield(data,'rewardGiven'); catch, end
 
 
 % load('/Users/chris/Downloads/lucio_20210315-20210707_clean.mat')

@@ -21,7 +21,8 @@ end
 switch subject
 
     case 'lucio'
-        d = load('lucio_20220301-20221006_clean.mat'); % recent lucio data, PDW + RT
+%         d = load('lucio_20220301-20221006_clean.mat'); % recent lucio data, PDW + RT (SfN 2022)
+        d = load('lucio_20220301-20220303_clean.mat'); 
 
 
     case 'zarya'

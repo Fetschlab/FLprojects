@@ -24,52 +24,15 @@ addpath(genpath('/Users/stevenjerjian/Desktop/FetschLab/Analysis/FLprojects/'))
 subject = 'zarya';
 export_figs = 0;
 
-switch subject
-    
-    case 'lucio'
-%         load('lucio_20210315-20210805_clean.mat') % recent lucio data, PDW + RT
-%         load('lucio_20211101-20220602_clean.mat') % recent lucio data, PDW + RT
-        load('lucio_20220301-20221006_clean.mat') % recent lucio data, PDW + RT
-
-        conftask = 2; % 1=colorbars, 2=PDW
-        RTtask   = 1;
-        
-        RTlims = [0.25 2.25];
-
-    case 'zarya'
-        load('zarya_20221207-20221222_clean.mat') % recent lucio data, PDW + RT
-
-        conftask = 2; % 1=colorbars, 2=PDW
-        RTtask   = 1;
-        RTlims = [0.25 2.25];
-
-    case 'human'
-
-        conftask = 1;
-        RTtask   = 1; % change this to select RT or non-RT dataset
-       
-        if ~RTtask
-            load('human_20190625-20191231_nonRT_clean.mat');% human non-RT, SfN 2021
-            
-        else
-%             load('human_20200213-20210922_RT_clean.mat') % human RT, SfN 2021
-%             load('human_20200213-20220113_RT_clean_Jan2022.mat') % human RT, Jan 2022
-            load('human_20200213-20220317_RT_clean_Mar2022.mat') % human RT, Jan 2022
-
-            RTlims = [0.25 2.5];
-        end
-        
-        
-    case 'simul' % load simulated data
-
-        load('2DAccSim_conftask2_8100trs.mat')
-        % conftask & RTtask should already be saved in file
-end
+data = dots3DMP_loadBehaviorData(subject,conftask,RTtask);
+RTlims = [0.25 2.25];
 
 fnames = fieldnames(data);
 
 if RTtask
     removethese = data.RT < RTlims(1) | data.RT > RTlims(2);
+
+    fprintf('%d trials outside of RT lims...removing\n',sum(removethese));
     
     for f=1:length(fnames)
         data.(fnames{f})(removethese) = [];
