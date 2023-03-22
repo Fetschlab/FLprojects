@@ -31,7 +31,8 @@ switch subject
     case 'human'
 
         if RTtask
-            filename = 'human_20200213-20220317_RT_clean_Apr2022.mat';    % human RT
+%             filename = 'human_20200213-20220317_RT_clean_Apr2022.mat';    % human RT
+            filename = 'human_20200213-20211020_RT_clean.mat';
         else
             filename = 'human_20190625-20191231_nonRT_clean_Apr2022.mat';% human non-RT
         end
