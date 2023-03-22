@@ -1,5 +1,7 @@
 function [fh]=dots3DMP_RTquantiles(data,conftask,plotOption)
 
+% SJ 03-2023 need to make a much nicer version of this...
+
 if conftask==0, error('Need a confidence task!'); end
 if nargin<3, plotOption = 2; end
 
@@ -19,12 +21,17 @@ ucoh = unique(data.coherence);
 ucond = [1 ucoh(1); 2 ucoh(1); 2 ucoh(2); 3 ucoh(1); 3 ucoh(2)];
 titles = {'Ves';'Vis (Low Coh)';'Vis (High Coh)';'Comb (Low Coh)';'Comb (High Coh)';'All'};
 
+ucond = [1;2;3];
+titles = {'Vestibular','Visual','Combined'};
+
+
+
 uhdg  = unique(abs(data.heading));
 
 if conftask==1
     confdata = data.conf >= median(data.conf);
     errfun   = @(x,n) std(x) / sqrt(n);
-    yLab = 'Sacc EP';
+    yLab = 'Confidence';
     yL = [0 1];
     nbins = 4; % number of RT quantiles
     xRange = [0.4 2.2];  % assume human for RT purposes
@@ -39,12 +46,11 @@ end
 
 for c = 1:size(ucond,1)+1 % the extra one is for all conditions pooled
     
- 
     for h = 1:length(uhdg)
         if c==size(ucond,1)+1
             I = abs(data.heading)==uhdg(h);
         else
-            I = abs(data.heading)==uhdg(h) & data.modality==ucond(c,1) & data.coherence==ucond(c,2);
+            I = abs(data.heading)==uhdg(h) & data.modality==ucond(c,1);% & data.coherence==ucond(c,2);
         end
         I = I & ~data.oneTargConf;
 
@@ -73,16 +79,16 @@ for c = 1:size(ucond,1)+1 % the extra one is for all conditions pooled
             corrRT   = data.RT(I & data.correct);
             errRT    = data.RT(I & ~data.correct);
 
-            % RTs for high and low bets under each condition
-            highRT   = data.RT(I & confdata==1);
-            lowRT    = data.RT(I & confdata==0);
-            
             % PDW for correct and error under each condition
             corrConf = confdata(I & (data.correct | data.heading==0));
             errConf  = confdata(I & (~data.correct | data.heading==0));
 
             corrConf = confdata(I & data.correct);
             errConf  = confdata(I & ~data.correct);
+
+            % RTs for high and low bets under each condition
+            highRT   = data.RT(I & confdata==1);
+            lowRT    = data.RT(I & confdata==0);
             
             % accuracy for high and low bets under each condition
             highCorr  = data.correct(I & confdata==1);
@@ -133,18 +139,26 @@ end
 %% plot conf vs RT, for correct / error trials
 
 
-subplotInd = [2 3 4 5 6 1];
-mcols = {'Greys','Reds','Reds','Blues','Blues','Purples'};
+% subplotInd = [2 3 4 5 6 1];
+% mcols = {'Greys','Reds','Reds','Blues','Blues','Purples'};
+
+% subplotInd = [2 3 4 1];
+
+subplotInd = [1 2 3];
+mcols = {'Greys','Reds','Blues','Purples'};
+
+sp = numSubplots(numel(subplotInd));
+
 fsz = 20;
 
 fh(1)=figure(16);
 set(gcf,'Color',[1 1 1],'Position',[200 200 950 950],'PaperPositionMode','auto');
 
-for c = 1:size(ucond,1)+1 % the extra one is for all conditions pooled
+for c = 1:size(ucond,1) % the extra one is for all conditions pooled
     
     cmap = cbrewer('seq',mcols{c},length(uhdg)*2);
     cmap = cmap(length(uhdg)+1:end,:);
-    subplot(3,2,subplotInd(c));
+    subplot(sp(1),sp(2),subplotInd(c));
     
     clear g L
     for h = 1:length(uhdg)  
@@ -188,14 +202,14 @@ for c = 1:size(ucond,1)+1 % the extra one is for all conditions pooled
 
     xlim(xRange);
     ylim([0 1])
-    
+    xlabel('RT (s)');
     if c<size(ucond,1)+1 
         if ucond(c,1)==3,xlabel('RT (s)');
         %else, set(gca,'xticklabel',[]);
         end
-        if ucond(c,1)==2 && ucond(c,2)==ucoh(1)
+        %if ucond(c,1)==2 && ucond(c,2)==ucoh(1)
             ylabel(yLab)
-        end
+        %end
     else
 %         set(gca,'xticklabel',[]);
     end
@@ -213,6 +227,7 @@ for c = 1:size(ucond,1)+1 % the extra one is for all conditions pooled
 end
 % sh=suptitle('Confidence-RT'); set(sh,'fontsize',fsz,'fontweight','bold');
 
+%{
 %% repeat for accuracy vs RT, for high / low bets
 
 fh(2)=figure(17);
@@ -260,9 +275,9 @@ for c = 1:size(ucond,1)+1 % the extra one is for all conditions pooled
         if ucond(c,1)==3,xlabel('RT (s)');
         else, set(gca,'xticklabel',[]);
         end
-        if ucond(c,1)==2 && ucond(c,2)==ucoh(1)
-            ylabel('Accuracy')
-        end
+%         if ucond(c,1)==2 && ucond(c,2)==ucoh(1)
+%             ylabel('Accuracy')
+%         end
     else
 %         set(gca,'xticklabel',[]);
     end
@@ -279,4 +294,4 @@ for c = 1:size(ucond,1)+1 % the extra one is for all conditions pooled
     title(titles{c});
 end
 % sh=suptitle('Accuracy-RT'); set(sh,'fontsize',fsz,'fontweight','bold');
- 
+%}
