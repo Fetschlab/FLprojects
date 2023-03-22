@@ -145,7 +145,7 @@ end
 
 % PDW, if splitPDW==0
 
-if conftask && splitPDW==0
+if conftask==2 && splitPDW==0
     
     cols = 'rbk';
     fh(3) = figure(201+D+3);

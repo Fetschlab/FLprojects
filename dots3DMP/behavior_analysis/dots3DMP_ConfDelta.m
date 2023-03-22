@@ -49,6 +49,12 @@ for n=1:length(choiceBias)
     set(hsym,'MarkerSize',7,'MarkerFaceColor',mkrf(n),'Color',cols(n));
     set(hxe,'linewidth',2,'color',cols(n));
     set(hye,'linewidth',2,'color',cols(n));
+
+%     [hsym] = errorbar(choiceBias(n), confBias(n), choiceBiasSE(n), 'o', 2); % plot conditions color-coded??
+%     set(hsym,'MarkerSize',7,'MarkerFaceColor',mkrf(n),'Color',cols(n));
+%     set(hxe,'linewidth',2,'color',cols(n));
+
+
 end
 plot([-2 2],[-2 2],'k--','LineWidth',2); axis square;
 xlim([-2 2]); ylim([-2 2]);
