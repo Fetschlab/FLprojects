@@ -2,17 +2,21 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 class Neuron:
-    def __init__(self, spiketimes, samplerate, amps=None, waveforms=None, template=None, temp_amp=np.nan,
-            sessionID='', type='', area='', channel=0, depth=np.nan, electrode=''):
+    def __init__(self, spiketimes, sr, amps=None, wfs=None, 
+                 template=None, temp_amp=np.nan, gridxy = np.nan*np.ones(2,),
+            sessionID='', clus_grp=0, area='', channel=0, depth=np.nan, electrode=''):
          # change some to kwargs?
         self.spiketimes = np.array(spiketimes)
+        self.sr = sr
         self.amps = amps
+        self.wfs = wfs
         self.template = template
         self.temp_amp = temp_amp
+        self.gridxy = gridxy
         self.sessionID = sessionID
-        self.type = type
+        self.clus_grp = clus_grp
         self.area = area
-        self.channel = self.channel
+        self.channel = channel
         self.depth = depth
         self.electrode = electrode
 
@@ -20,18 +24,18 @@ class Neuron:
         return f'{type} {self.area} unit, {len(self.spiketimes)} spikes, session {sessionID}, \
             ch{self.channel} at {self.depth} depth, using {self.electrode}'
 
-    #def compute_isi(self, binsize=0.01, max=0.2):
+    #def isi(self, binsize=0.01, max=0.2, plot=False):
 
-    # compute_corr(self, binsize=0.01, max=0.1):
+    #def corr(self, binsize=0.01, max=0.2, plot=False):
 
-    # plot_waveforms(self):
+    #def ifr(self, binsize=0.1, plot=False)
+
+    #def plot_waveforms(self):
         
-
-    # wf_widths(self):
+    #def wf_width(self):
     
-    # compute_psth(self, alignEvent, binsize=0.01, trange=[-1,1]):
-
-    # raster_psth(self, alignEvent, binsize=0.01, trange=[-1,1]):
+    #def summary(self, binsize=0.01, max=0.2, plot=False):
+    #  isi, corr, ifr, wf_width 2x2 subplots
 
 
 if __name__ == '__main__':
