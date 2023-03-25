@@ -3,7 +3,7 @@
 
 % for SfN2021 poster, using:
 % human_20190626-20191231: non-RT data, n=5 (_nonRT_clean)
-% human_20200203-20211020: RT data, n =  (RT_clean)
+% human_20200203-20211020: RT data, n=7 (RT_clean)
 
 % as of Jan 2022, human_20200203-20220113
 
@@ -28,8 +28,9 @@ paradigm = 'dots3DMP';
 RTtask = 1;
 
 if ~RTtask,  dateRange = 20190625:20191231; % non-RT
-else,        dateRange = 20200213:20220317; % RT
-% else,        dateRange = 20200213:20211020; % RT
+% else,        dateRange = 20200213:20220317; % RT 2
+else,        dateRange = 20200213:20211020; % RT 1
+% else,          dateRange = 20200213:20210526; % RT 0
 
 end
 
@@ -37,7 +38,7 @@ folder = '/Users/stevenjerjian/Desktop/FetschLab/PLDAPS_data/dataStructs/';
 file = [subject '_' num2str(dateRange(1)) '-' num2str(dateRange(end)) '.mat'];
 load([folder file], 'data');
 
-fields2remove = {'reward','confRT','insertTrial','PDW','oneTargChoice','oneTargConf'};
+fields2remove = {'reward','confRT','insertTrial','PDW','oneTargChoice','oneTargTrial','oneConfTargTrial'};
 for f = 1:length(fields2remove)
     try data = rmfield(data,fields2remove{f}); end
 end
@@ -139,7 +140,8 @@ for b=1:length(blocks)
 
 end
 
-
+%{
+% SJ 03-2023 this is only for a certain file
 % blocks 10 and 13 only have two low cohs ~0.05 and 0.15, block 11 has only
 % 0 coh?? discard these
 fnames = fieldnames(data);
@@ -147,7 +149,7 @@ removethese = ismember(blockInds,[10 11 13]);
 for F = 1:length(fnames)
     data.(fnames{F})(removethese) = [];
 end
-
+%}
 
 %% organize headings variable
 % reassign headings to indices -N...0...+N, or fixed headings, within subject block (i.e.
@@ -244,9 +246,9 @@ else
 %     subjs2keep = [1 3 8 9];
 
 end
-fnames = fieldnames(data);
-removethese = ~ismember(data.subj,subjs(subjs2keep));
-for f=1:length(fnames), data.(fnames{f})(removethese) = []; end
+% fnames = fieldnames(data);
+% removethese = ~ismember(data.subj,subjs(subjs2keep));
+% for f=1:length(fnames), data.(fnames{f})(removethese) = []; end
 
 %% normalize confidence ratings, *within subject*
 
@@ -323,9 +325,9 @@ end
 
 %%
 if ~RTtask
-    save([folder file(1:end-4) '_nonRT_clean_Apr2022.mat'],'data')
+    save([folder file(1:end-4) '_nonRT_clean.mat'],'data')
 else
-    save([folder file(1:end-4) '_RT_clean_Apr2022.mat'],'data')
+    save([folder file(1:end-4) '_RT_clean2.mat'],'data')
 end
 % save([file(1:end-4) '_clean.mat'],'data')
 fprintf('done.\n')

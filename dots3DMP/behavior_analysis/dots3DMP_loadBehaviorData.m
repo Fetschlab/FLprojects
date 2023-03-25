@@ -32,7 +32,10 @@ switch subject
 
         if RTtask
 %             filename = 'human_20200213-20220317_RT_clean_Apr2022.mat';    % human RT
-            filename = 'human_20200213-20211020_RT_clean.mat';
+%             filename = 'human_20200213-20211020_RT_clean2.mat';
+            filename = 'human_20200213-20210526_RT_clean.mat'; % old
+%             Chris data from presentation/Amir Kheredmand grant
+
         else
             filename = 'human_20190625-20191231_nonRT_clean_Apr2022.mat';% human non-RT
         end

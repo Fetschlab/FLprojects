@@ -63,7 +63,7 @@ gauss = @(b,hdg) b(1) .* exp(-(hdg-b(2)).^2 ./ (2*b(3).^2)) + b(4);
 gauss_err = @(param,RT,hdg) sum((gauss(param,hdg)-RT).^2);
 
 unc = 0; % saves biases from fminunc instead of fminsearch (SEs always are fminunc, and plots are always fminsearch)
-useCon = 'delta'; % 'all', 'none', 'delta'
+useCon = 'none'; % 'all', 'none', 'delta'
 
 %% set some fitting options + initial parameters
 

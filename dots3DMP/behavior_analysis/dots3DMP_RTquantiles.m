@@ -29,11 +29,11 @@ titles = {'Vestibular','Visual','Combined'};
 uhdg  = unique(abs(data.heading));
 
 if conftask==1
-    confdata = data.conf >= median(data.conf);
+    confdata = data.conf;
     errfun   = @(x,n) std(x) / sqrt(n);
-    yLab = 'Confidence';
+    yLab = 'confidence';
     yL = [0 1];
-    nbins = 4; % number of RT quantiles
+    nbins = 3; % number of RT quantiles
     xRange = [0.4 2.2];  % assume human for RT purposes
 elseif conftask==2 
     confdata = data.PDW;
@@ -66,8 +66,8 @@ for c = 1:size(ucond,1)+1 % the extra one is for all conditions pooled
                 Y(c,h,q) = mean(theseConf(J));
                 Yc(c,h,q) = mean(theseCorr(J));
                 
-                Ye(c,h,q) = errfun(Y(c,h,q),sum(J));
-                Yce(c,h,q) = errfun(Yc(c,h,q),sum(J));
+                Ye(c,h,q) = errfun(theseConf(J),sum(J));
+                Yce(c,h,q) = errfun(theseCorr(J),sum(J));
             end
 
         else
@@ -103,22 +103,22 @@ for c = 1:size(ucond,1)+1 % the extra one is for all conditions pooled
                 J = corrRT>=rtQ_corr(q) & corrRT<rtQ_corr(q+1);
                 X(c,h,q,1) = mean(corrRT(J));
                 Y(c,h,q,1) = mean(corrConf(J));
-                Ye(c,h,q,1) = errfun(Y(c,h,q,1),sum(J));
+                Ye(c,h,q,1) = errfun(corrConf(J),sum(J));
                 
                 J = errRT>=rtQ_err(q) & errRT<rtQ_err(q+1);
                 X(c,h,q,2) = mean(errRT(J));
                 Y(c,h,q,2) = mean(errConf(J));
-                Ye(c,h,q,2) = errfun(Y(c,h,q,2),sum(J));
+                Ye(c,h,q,2) = errfun(errConf(J),sum(J));
 
                 J = highRT>=rtQ_high(q) & highRT<rtQ_high(q+1);
                 Xc(c,h,q,1) = mean(highRT(J));
                 Yc(c,h,q,1) = mean(highCorr(J));
-                Yce(c,h,q,1) = errfun(Yc(c,h,q,1),sum(J));
+                Yce(c,h,q,1) = errfun(highCorr(J),sum(J));
 
                 J = lowRT>=rtQ_low(q) & lowRT<rtQ_low(q+1);
                 Xc(c,h,q,2) = mean(lowRT(J));
                 Yc(c,h,q,2) = mean(lowCorr(J));
-                Yce(c,h,q,2) = errfun(Yc(c,h,q,2),sum(J));
+                Yce(c,h,q,2) = errfun(lowCorr(J),sum(J));
 
             end
             
@@ -145,86 +145,87 @@ end
 % subplotInd = [2 3 4 1];
 
 subplotInd = [1 2 3];
-mcols = {'Greys','Reds','Blues','Purples'};
+% mcols = {'Greys','Reds','Blues','Purples'};
+mcols = {'Greys','Greys','Greys','Purples'};
 
 sp = numSubplots(numel(subplotInd));
 
-fsz = 20;
+fsz = 14;
+scaling = 8;
 
 fh(1)=figure(16);
-set(gcf,'Color',[1 1 1],'Position',[200 200 950 950],'PaperPositionMode','auto');
+set(gcf,'Color',[1 1 1],'Position',[200 200 650 200],'PaperPositionMode','auto');
 
 for c = 1:size(ucond,1) % the extra one is for all conditions pooled
     
     cmap = cbrewer('seq',mcols{c},length(uhdg)*2);
     cmap = cmap(length(uhdg)+1:end,:);
-    subplot(sp(1),sp(2),subplotInd(c));
+    subplot(sp(1),sp(2),subplotInd(c)); hold on;
     
     clear g L
     for h = 1:length(uhdg)  
         
-%         len = 0.2;
-%         hdgVec = len .* [sind(uhdg(h)) cosd(uhdg(h))];
-%         startPoint = [1.3 0.7];
+%         len = 0.1;
+%         hdgVec = len .* [sind(uhdg(h)*scaling) cosd(uhdg(h)*scaling)];
+%         startPoint = [0.75 0.35];
 %         xVec = startPoint(1)+[0 hdgVec(1)];
 %         yVec = startPoint(2)+[0 hdgVec(2)];
+% 
+%         plot(xVec,yVec,'color',cmap(h,:),'linew',2)
+%         text(xVec(2)+0.05,yVec(2)+0.05,sprintf('%.2g%s',uhdg(h),char(176)),'color',cmap(h,:),'fontweight','bold','fontsize',12,'horizo','center');
+
             
         if plotOption==-1 % plot all trials
             g(h) = errorbar(squeeze(X(c,h,:)),squeeze(Y(c,h,:)),squeeze(Ye(c,h,:)),'color',cmap(h,:),'LineWidth', 2,...
-                'LineStyle','-','Marker','o','MarkerSize',6,'MarkerFaceColor',cmap(h,:)); hold on;
+                'LineStyle','-','Marker','.','MarkerSize',3,'MarkerFaceColor',cmap(h,:)); hold on;
         elseif plotOption==0 % plot error trials only
             if h<=3
                 g(h) = errorbar(squeeze(X(c,h,:,2)),squeeze(Y(c,h,:,2)),squeeze(Ye(c,h,:,2)),'color',cmap(h,:),'LineWidth', 2,...
-                    'LineStyle','-','Marker','o','MarkerSize',6,'MarkerFaceColor',cmap(h,:)); hold on;
+                    'LineStyle','-','Marker','.','MarkerSize',3,'MarkerFaceColor',cmap(h,:)); hold on;
             end
         elseif plotOption==1 % plot correct trials only
             g(h) = errorbar(squeeze(X(c,h,:,1)),squeeze(Y(c,h,:,1)),squeeze(Ye(c,h,:,1)),'color',cmap(h,:),'LineWidth', 2,...
-                'LineStyle','-','Marker','o', 'MarkerSize',6,'MarkerFaceColor',cmap(h,:)); hold on;
+                'LineStyle','-','Marker','.', 'MarkerSize',3,'MarkerFaceColor',cmap(h,:)); hold on;
         else % plot correct and errors, separately
             if h<=3 % 
                 g(h) = errorbar(squeeze(X(c,h,:,2)),squeeze(Y(c,h,:,2)),squeeze(Ye(c,h,:,2)),'color',cmap(h,:),'LineWidth', 2,...
-                    'LineStyle',':','Marker','o','MarkerSize',6,'MarkerFaceColor','w'); hold on;
+                    'LineStyle',':','Marker','.','MarkerSize',3,'MarkerFaceColor','w'); hold on;
             end
             k(h) = errorbar(squeeze(X(c,h,:,1)),squeeze(Y(c,h,:,1)),squeeze(Ye(c,h,:,1)),'color',cmap(h,:),'LineWidth', 2,...
-                'LineStyle','-','Marker','o','MarkerSize',6,'MarkerFaceColor',cmap(h,:)); hold on;
+                'LineStyle','-','Marker','.','MarkerSize',3,'MarkerFaceColor',cmap(h,:)); hold on;
         end
         
-%         plot(xVec,yVec,'color',cmap(h,:))
-%         text(xVec(2),yVec(2),num2str(uhdg(h)),'color',cmap(h,:),'fontsize',12,'horizo','center');
-
-%         if c==size(ucond,1)+1
-%             plot(xRange(2)*0.8+[0.08 0.15],0.9-0.15*h*ones(1,2),'color',cmap(h,:),'linewidth',3);
-            text(xRange(2)*0.8+0.25,0.9-0.15*h,sprintf('%.2g%s',uhdg(h),char(176)),'color',cmap(h,:),'fontsize',fsz,'horizo','center');
-%         end
+        if c==1
+%             plot(xRange(1)*1.1+[0.08 0.15],0.55-0.08*h*ones(1,2),'color',cmap(h,:),'linewidth',3);
+            text(xRange(1)*1.1+0.4,0.55-0.08*h,sprintf('%.2g%s',uhdg(h),char(176)),'color',cmap(h,:),'fontsize',15,'fontweight','bold','horizo','center');
+        end
        
     end
     
 
     xlim(xRange);
-    ylim([0 1])
-    xlabel('RT (s)');
-    if c<size(ucond,1)+1 
-        if ucond(c,1)==3,xlabel('RT (s)');
-        %else, set(gca,'xticklabel',[]);
-        end
-        %if ucond(c,1)==2 && ucond(c,2)==ucoh(1)
-            ylabel(yLab)
-        %end
-    else
-%         set(gca,'xticklabel',[]);
-    end
-    text(xRange(2)*0.8+0.25,0.9,'|hdg|','color',cmap(end,:),'fontsize',14,'horizo','center','fontweight','bold');
+    ylim([0.25 0.85])
+    if c==2, xlabel('response time (s)'); end
+ 
+%     text(xRange(2)*0.8+0.25,0.75,'|hdg|','color',cmap(end,:),'fontsize',14,'horizo','center','fontweight','bold');
 
-    if mod(c,2)==1
+    if c>1
         set(gca,'yticklabel',[]);
+    else
+        ylabel(yLab);
     end
+
     changeAxesFontSize(gca,fsz,fsz); tidyaxes(gca,fsz); set(gca,'box','off');
-    set(gca,'ytick',0:0.25:1,'yticklabel',{'0','','.5','','1'});
+    set(gca,'ytick',0:0.2:1);
     set(gca,'xtick',0:0.25:2.25);
     if conftask==1,set(gca,'xticklabel',{'0','','.5','','1','','1.5','','2',''});
     end
     title(titles{c});
 end
+
+
+
+
 % sh=suptitle('Confidence-RT'); set(sh,'fontsize',fsz,'fontweight','bold');
 
 %{
