@@ -1,3 +1,5 @@
+# %%
+
 import numpy as np
 
 def prop_se(x):
@@ -6,15 +8,14 @@ def prop_se(x):
 def cont_se(x):
     return np.std(x) / np.sqrt(len(x))
 
-def gaus(params,x):
+def gaus(x,ampl,mu,sigma,bsln):
     """
-    params of gaussian are [baseline mu sigma amplitude]
+    params of flipped gaussian are [baseline mu sigma amplitude]
     x is the independent variable i.e. heading
-    to generate flipped gaussian e.g. for PDW, simply do 1-gaus(...)
     """
-    return params[0] * np.exp(-(x-params[1])**2 / (2*params[2]**2)) + params[3]
+    return ampl * np.exp(-(x-mu)**2 / (2*sigma**2)) + bsln
     
-
+# %%
 def behavior_means(df, conftask=2, RTtask=True,
                    by_delta=False, splitPDW=False):
 
@@ -36,8 +37,7 @@ def behavior_means(df, conftask=2, RTtask=True,
         df.loc[:, 'datetime'], infer_datetime_format=True)
 
     # leave choice, PDW and correct as int for convenience...
-    df[['oneTargChoice', 'oneTargConf']] = df.loc[:, [
-        'oneTargChoice', 'oneTargConf']].astype(bool)
+    df[['oneTargChoice', 'oneTargConf']] = df.loc[:,['oneTargChoice', 'oneTargConf']].astype(bool)
 
     df['modality'] = df.loc[:, 'modality'].astype('category')
 
@@ -46,14 +46,14 @@ def behavior_means(df, conftask=2, RTtask=True,
         df['choice'] -= 1
 
     # remove one-target choice
-    df = df.loc[df['oneTargChoice'] is False]
+    df = df.loc[df['oneTargChoice'] == False]
 
     # remove cue conflict trials if by_delta is False
     if by_delta is False:
         df = df.loc[df['delta'] == 0]
 
     # for pHigh calculations, remove one-target confidence trials
-    df_noOneTarg = df.loc[df['oneTargConf'] is False]
+    df_noOneTarg = df.loc[df['oneTargConf'] == False]
 
     if conftask == 1:
         pHigh = df_noOneTarg.groupby(by=grp_list)['conf'].agg(
@@ -80,7 +80,7 @@ def behavior_means(df, conftask=2, RTtask=True,
 
     return pRight, pHigh, meanRT
 
-
+# %%
 # descriptive fit (none, logistic, or gaussian)
 def behavior_fit(df, fitType='logistic', numhdgs=200):
 
@@ -91,10 +91,10 @@ def behavior_fit(df, fitType='logistic', numhdgs=200):
     if np.max(df['choice']) == 2:
         df['choice'] -= 1
 
-    hdgs = np.unique(df['heading']).reshape(-1, 1)
+    #hdgs = np.unique(df['heading']).reshape(-1, 1)
     xhdgs = np.linspace(np.min(hdgs), np.max(hdgs), numhdgs).reshape(-1, 1)
 
-    outlist = ['pRight', 'pHigh', 'meanRT']
+    outlist = ['pRight', 'PDW', 'RT']
     modnames = ['ves', 'vis', 'comb']
     attr_dict = {'intercept_': [], 'coef_': [], 'prediction': []}
     fit_results = dict(zip(outlist, [dict(zip(modnames,
@@ -125,29 +125,43 @@ def behavior_fit(df, fitType='logistic', numhdgs=200):
                 yhat = logreg.predict(sm.add_constant(xhdgs))
                 coef_, intercept_ = logreg.params['heading'], logreg.params['const']
 
-                # store results
-                fit_results['pRight'][modnames[modality-1]]['predictions'].append(yhat)
-                fit_results['pRight'][modnames[modality-1]]['intercept_'].append(intercept_)
-                fit_results['pRight'][modnames[modality-1]]['coef_'].append(coef_)
-
             elif fitType == 'gaussian':
 
                 probreg = sm.Probit(X['choice'], sm.add_constant(X['heading'])).fit()
                 yhat = probreg.predict(sm.add_constant(xhdgs))
                 coef_, intercept_ = probreg.params['heading'], probreg.params['const']
 
-                # store results
-                fit_results['pRight'][modnames[modality-1]]['predictions'].append(yhat)
-                fit_results['pRight'][modnames[modality-1]]['intercept_'].append(intercept_)
-                fit_results['pRight'][modnames[modality-1]]['coef_'].append(coef_)
-
+                
                 # fits for PDW and RT
-                popt, _ = scipy.optimize.curve_fit(gaus, X['heading'], p0=[0.5, 0, 3, 0.1])
+                popt_PDW, _ = scipy.optimize.curve_fit(gaus, xdata=X['heading'], ydata=1-X['PDW'], p0=[0.1, 0, 3, 0.5])
+                popt_RT, _ = scipy.optimize.curve_fit(gaus, xdata=X['heading'], ydata=X['RT'], p0=[0.1, 0, 3, 0.5])
+
+                fitPDW = 1-gaus(xhdgs,*popt_PDW)
+                fitRT = gaus(xhdgs,*popt_RT)
+
+                fit_results['PDW'][modnames[modality-1]]['prediction'].append(fitPDW)
+                fit_results['PDW'][modnames[modality-1]]['popt_'].append(popt_PDW)
+
+
+                fit_results['RT'][modnames[modality-1]]['prediction'].append(fitRT)
+                fit_results['RT'][modnames[modality-1]]['popt_'].append(popt_RT)
+
+            fit_results['pRight'][modnames[modality-1]]['prediction'].append(yhat)
+            fit_results['pRight'][modnames[modality-1]]['intercept_'].append(intercept_)
+            fit_results['pRight'][modnames[modality-1]]['coef_'].append(coef_)
 
     return xhdgs, fit_results
 
-
+# %%
 def plot_behavior_means(pRight, pHigh, meanRT):
+
+
+    # import seaborn.objects as so
+    # (
+    #     so.Plot(pRight, x='heading',y='mean', color='modality')
+    #     .facet('coherence')
+    #     .add(so.Line())
+    # )
 
     import matplotlib.pyplot as plt
 
@@ -202,4 +216,5 @@ if __name__ == "__main__":
 
     pRight, pHigh, meanRT = behavior_means(
         df, conftask=2, RTtask=True, by_delta=False, splitPDW=False)
-    plot_behavior_means(pRight, pHigh, meanRT)
+    #plot_behavior_means(pRight, pHigh, meanRT)
+    xhdgs, fit_results = behavior_fit(df, fitType='gaussian')
