@@ -5,21 +5,20 @@ addpath(genpath('/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/'))
 % Load in the data
 
 subject   = 'lucio';
-area      = 'PIVC';
-dateRange = 20220727:20230223;
+dateRange = 20220512:20230223;
 
 % area = 'MST';
 % dateRange = 20220512:20230131;
 
 
-dataPath = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/data/';
-dataFileName = sprintf('%s_%d-%d_neuralData_%s.mat',subject,dateRange(1),dateRange(end),area);
+dataPath = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/data/lucio_neuro_datasets';
+dataFileName = sprintf('%s_%d-%d_neuralData.mat',subject,dateRange(1),dateRange(end));
 load(fullfile(dataPath,dataFileName));
 
 % 20220512-20230131, remove 20220520
 % dataStruct(4) = [];
 
-dataStruct(13)=[];
+% dataStruct(13)=[];
 
 % inputs to dots3DMP_NeuralStruct_runCleanUp
 % parSelect  = {'dots3DMPtuning','dots3DMP'}; 
@@ -130,6 +129,9 @@ allUnitsTask_MeanStimResp = dots3DMP_FRmatrix_fromDataStruct(dataStruct,par,even
 allUnitsTask_timeResolved = dots3DMP_FRmatrix_fromDataStruct(dataStruct,par,TaskeventInfoTR,condsTask,condlabels,optsTR);
 
 
+saveFileName = sprintf('%s_%d-%d_PSTHs.mat',subject,dateRange(1),dateRange(end));
+save(saveFileName);
+
 %% ====== plot mean responses during stimulus
 
 % select tuning or Task
@@ -153,10 +155,14 @@ iae = 1;
 auFR_formatted  = reshape(auMat.data.FRmean{iae},length(hdgVec),[],size(auMat.data.FRmean{iae},2));
 conds_formatted = reshape(condMat,length(hdgVec),[],size(condMat,2));
 
+auMat.hdr.unitType(auMat.hdr.unitType==0) = 3;
+cluster_labels = dataStruct(1).data.(par).units.cluster_labels;
+cluster_labels{3} = 'un';
+
 condcols = 'kmcrb';
 numUnits = size(auFR_formatted,3);
 
-upp = 50; % units per 'page'
+upp = 100; % units per 'page'
 [p,q] = numSubplots(upp);   
 
 
@@ -191,7 +197,7 @@ for u=1:numUnits
 %    set(gca,'XTickLabel',[]);
 %    ylim(ax,[0 max(10,max(max(auFR_formatted(notNaNs,:,iu))))])
    title(ax,sprintf('%d, %d-%d\nunit %d (%s)',iu,auMat.hdr.unitDate(iu),auMat.hdr.unitSet(iu),...
-       auMat.hdr.unitID(iu),dataStruct(1).data.(par).units.cluster_labels{auMat.hdr.unitType(iu)}))
+       auMat.hdr.unitID(iu),cluster_labels{auMat.hdr.unitType(iu)}))
 
 end
 
@@ -212,6 +218,9 @@ switch par
         hdgVec  = hdgsTask;
 end
 
+auMat.unittype(auMat.unittype==0) = 3;
+cluster_labels = dataStruct(1).data.(par).units.cluster_labels;
+cluster_labels{3} = 'un';
 
 iu = 1; % which unit
 
@@ -232,7 +241,7 @@ for c = 1:size(conds_formatted,2)
 end
 set(gca,'XTick',hdgVec);
 title(sprintf('%d, %d-%d\nunit %d (%s)',iu,auMat.hdr.unitDate(iu),auMat.hdr.unitSet(iu),...
-       auMat.hdr.unitID(iu),dataStruct(1).data.(par).units.cluster_labels{auMat.hdr.unitType(iu)}));
+       auMat.hdr.unitID(iu),cluster_labels{auMat.hdr.unitType(iu)}));
 changeAxesFontSize(gca,20,20);
 hl=legend(legtxt); 
 set(hl,'box','off','location','northeast')

@@ -37,6 +37,7 @@ for n = 1:length(currentFolderList)
     [unique_sets,~,ic] = unique(info.rec_group);
     
     for u=1:length(unique_sets)
+        clear sp
 
         sess = sess+1; % increment the row in dataStruct
 
@@ -48,8 +49,10 @@ for n = 1:length(currentFolderList)
 
         try
             disp(mountDir)
-            sp = loadKSdir(mountDir);
+            params = struct('excludeNoise',0);
+            sp = loadKSdir(mountDir, params);
         catch
+            sp.st = [];
             warning('dots3DMP:createSessionData:loadKSdir','Could not load kilosort sp struct for %d, set %d\n\n',info.date,unique_sets(u));
         end
         try
@@ -90,23 +93,14 @@ for n = 1:length(currentFolderList)
                 st = en+1;
             end
             
-            % for each trellis file within a given set+paradigm, concatenate and store the events, and compute the necessary
-            % shift for the spiketimes as well
+            % for each trellis file within a given set+paradigm, concatenate and store the events
 
             [unique_trellis_files,~,ii] = unique(info.trellis_filenums(theseFiles));
             
-            currPos = 0;
-            
-            %if ~contains(info.probe_type{1},'Single')
-                thisParSpikes  = false(size(sp.st));
-%                 shiftSpikeTime = zeros(size(sp.st));
-            %else
-            %    sp.st = [];
-            %    sp.clu = [];
-            %    shiftSpikeTime = [];
-            %end
-            
+            thisParSpikes  = false(size(sp.st));
+
             % now loop over each trellis file within a particular paradigm
+            currPos = 0;
             for utf=1:length(unique_trellis_files)
                 NSfilename  = sprintf('%s%ddots3DMP%04d_RippleEvents.mat',info.subject,info.date,unique_trellis_files(utf));
                 
@@ -161,76 +155,18 @@ for n = 1:length(currentFolderList)
                 dataStruct(sess).data.(paradigms{par}).pldaps.blockNum2(1,currPos+1:currPos+nTr) = utf;
                 currPos = currPos+nTr;
 
-                % deal with single electrode recording neural data
-                % 01-2023 this is no longer necessary - now I am sorting
-                % single elec recordings with wave_clus via SpikeInterface,
-                % and then exporting to Phy, so format is the same
+                if ~isempty(sp.st)
+                    % pick out spikes from the sp.st vector which can be linked to this paradigm's timeframe (with a reasonable buffer on either
+                    % side, e.g. 20secs), and what time to shift the spike times by (if any) so that they align with events again
+                    % Note. this shift is only necessary if multiple Trellis recordings were made for same location - these will
+                    % have been concatenated for kilosort sorting, but events will still be separate
 
-                %{
-                    %                 if contains(info.probe_type{1},'Single')
-                    remoteDirSpikes = sprintf('/var/services/homes/fetschlab/data/%s/%s_neuro/%d/%s%ddots3DMP%04d/',subject,subject,info.date,subject,info.date,info.trellis_filenums(utf));
-                    mountDir = sprintf('/Volumes/homes/fetschlab/data/%s/%s_neuro/%d/%s%ddots3DMP%04d/',subject,subject,info.date,subject,info.date,unique_trellis_files(utf));
+                    timeLims = timeStampsShifted(1) + thisParEvents.Events.trStart([1 end]) + [-1 1]*20;
 
-                    cmd = ['ssh ' IPadd ' ls ' remoteDirSpikes];
-                    [~,remoteFileList] = system(cmd);
+                    thisFileSpikes = (sp.st >= timeLims(1) & sp.st < timeLims(2));
+                    thisParSpikes  = thisParSpikes | thisFileSpikes; % union
 
-                    newlines = strfind(remoteFileList,newline);
-                    remoteFiles = cell(length(newlines),1);
-                    for nl = 1:length(newlines)
-                        if nl==1, remoteFiles{nl} = remoteFileList(1:newlines(1)-1);
-                        else, remoteFiles{nl} = remoteFileList(newlines(nl-1)+1:newlines(nl)-1);
-                        end
-                    end
-
-                    try
-                        load([mountDir remoteFiles{contains(remoteFiles,'waveforms')}]);
-                    catch
-                        fprintf('Could not find or load waveforms file %d, id%04d\n',info.date,unique_trellis_files(utf))
-                        continue
-                    end
-
-                    % rename/refactor some vars to match kilosort style
-                    % mksort allows up to 4 units per ch - treat these
-                    % clusters as the 'cluster ids', assuming that we've
-                    % been consistent in labelling across separate files
-
-                    % concatenate spike times across recordings of the same
-                    % paradigm within a set (we will shift the times below)
-                    sp.st   = [sp.st; (waveforms.spikeTimes')/1000]; % mksort waveform times are in ms it seems
-                    sp.clu  = [sp.clu; waveforms.units'];
-
-                    if utf==1
-                        sp.cids = unique(sp.clu(sp.clu>0));
-
-                        % manual ratings as SU/MU/unsorted (4 or 3 --> 2 for SU, 2 or 1 --> 1 for MU, 0 as noise clusters --> 3)
-                        sp.cgs  = ceil(waveforms.ratings.ratings(sp.cids) / 2);
-                        sp.cgs(sp.cgs==0) = 3;
-                    end
-                    thisParSpikes  = true(size(sp.st));
-                    shiftSpikeTime = [shiftSpikeTime; timeStampsShifted(1)*ones(size(waveforms.spikeTimes'))];
-
-                    %                 else % kilosort data
-                end            
-                %}
-
-                % pick out spikes from the sp.st vector which can be linked to this paradigm's timeframe (with a reasonable buffer on either
-                % side, e.g. 20secs), and what time to shift the spike times by (if any) so that they align with events again
-                % Note. this shift is only necessary if multiple Trellis recordings were made for same location - these will
-                % have been concatenated for kilosort sorting, but events will still be separate      
-
-                timeLims = timeStampsShifted(1) + thisParEvents.Events.trStart([1 end]) + [-1 1]*20;
-
-                thisFileSpikes = (sp.st >= timeLims(1) & sp.st < timeLims(2));
-                thisParSpikes  = thisParSpikes | thisFileSpikes; % union
-
-                % set the shifted time for each spike associated with a particular file, to reconcile with events.
-                % NOTE: This is file- rather than paradigm-specific, as there may be more than one file for a given paradigm.
-                % also note that this will miss spikes outside the timeLims above, but we don't really care about them
-                % anyway because we select for thisParSpikes below
-%                 shiftSpikeTime(thisFileSpikes) = timeStampsShifted(1);
-
-                % SJ 01-2023 this was only necessary with mkSort, where I was sorting each trellis file separately, but
-                % wanted to merge events and spikes for one paradigm
+                end
 
             end
 
@@ -277,7 +213,7 @@ for n = 1:length(currentFolderList)
 
             end
 
-            fprintf('Adding %d SU, %d MU, %d unsorted\n\n',sum(cgs==2),sum(cgs==1),sum(cgs==3))
+            fprintf('Adding %d SU, %d MU, %d unsorted\n\n',sum(cgs==2),sum(cgs==1),sum(cgs==3|cgs==0))
 
             % add each unit's spikes to an entry in spiketimes cell
             for unit=1:sum(inds)
@@ -285,7 +221,6 @@ for n = 1:length(currentFolderList)
                 %                 theseSpikes = sp.clu==cids(unit);
                 dataStruct(sess).data.(paradigms{par}).units.spiketimes{unit} = sp.st(theseSpikes);
             end
-
         end
 
 
@@ -306,7 +241,7 @@ for n = 1:length(currentFolderList)
     end        
 end
 
-file = [subject '_' num2str(dateRange(1)) '-' num2str(dateRange(end)) '_neuralData_' area '.mat'];
+file = [subject '_' num2str(dateRange(1)) '-' num2str(dateRange(end)) '_neuralData.mat'];
 
 disp('saving...');
 save([localDir(1:length(localDir)-length(subject)-7) file], 'dataStruct');

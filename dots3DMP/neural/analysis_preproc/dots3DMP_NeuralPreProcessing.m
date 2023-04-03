@@ -68,9 +68,11 @@ paradigms = {'dots3DMPtuning','dots3DMP','RFMapping','VesMapping'};
 % per second, or the number of trials of any of the unique stimulus
 
 subject = 'lucio';
-area    = 'PIVC';
+% area    = 'PIVC';
 
-dateRange = [20220727:20220804 20220913:20220923 20221003 20230220 20230221 20230223]; % PIVC
+% dateRange = [20220727:20220804 20220913:20220923 20221003 20230220 20230221 20230223]; % PIVC
+
+dateRange = 20220512:20230223;
 
 % this is not sustatinable in the case of dual recordings...i just need a
 % way to mark units as coming from an area
@@ -87,7 +89,7 @@ keepMU = 1;           % include all SU and MU, by default, do it, can always rem
 useSCP = 1;
 useVPN = 0;
 overwriteLocalFiles = 0; % set to 1 to always use the server copy
-overwriteEventSets = 0;
+overwriteEventSets = 1;
 
 % SJ 04-2022
 % download associated PDS data files (we'll need this for some cleanup)
@@ -116,15 +118,15 @@ createSessionData;
 %% create one .mat file for events from all paradigms for a given set
 % this will be useful for pure behavior analyses (if desired)
 % and importing into python
+% this is also done inside createSessionData, and will only run on files
+% that don't already exist (if overwriteEventSets is false)
 
 % paradigms = {'dots3DMPtuning','dots3DMP','RFMapping','VesMapping'};
 % createSetEvents;
 
-
 %% exclude cells which were not adequately recorded in ALL fundamental experiments
 
 runCleanUp = 0; % don't do this here, do it later before analysis
-
 
 if runCleanUp
     % inputs to dots3DMP_NeuralStruct_runCleanUp

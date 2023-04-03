@@ -43,7 +43,9 @@ clear au
 clear condlist
 unitInd = 0;
 for ses = 1:length(dataStruct) 
-    if ~isfield(dataStruct(ses).data,par), continue, end
+    if ~isfield(dataStruct(ses).data,par) || ~isfield(dataStruct(ses).data.(par),'units')
+        continue
+    end
     temp = dataStruct(ses).data.(par);
 
     % kluge for now 11/06/22
