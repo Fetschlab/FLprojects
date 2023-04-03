@@ -86,7 +86,8 @@ for n = 1:length(currentFolderList)
 
         try
             disp(mountDir)
-            sp = loadKSdir(mountDir);
+            params = struct('excludeNoise',0);
+            sp = loadKSdir(mountDir, params);
         catch
             sp.st = [];
             error('dots3DMP:createSessionData:loadKSdir','Could not load kilosort sp struct for %d, set %d...Are you connected to the NAS?\n\n',info.date,unique_sets(u));

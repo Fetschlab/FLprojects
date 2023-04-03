@@ -113,7 +113,6 @@ createSessionData;
 % paradigms = {'dots3DMPtuning','dots3DMP','RFMapping','VesMapping'}; % use all pars
 % createSetEvents;
 
-
 %% exclude cells which were not adequately recorded in ALL fundamental experiments
 
 % SJ don't do this in pre-processing, do within analysis script
