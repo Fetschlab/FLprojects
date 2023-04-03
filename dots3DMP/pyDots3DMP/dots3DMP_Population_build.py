@@ -9,10 +9,11 @@ from dataclasses import dataclass, field
 
 # %% define Neuron and Population classes
 
+
 @dataclass
 class Neuron:
     spiketimes: np.ndarray = field(repr=False)
-    amps: np.ndarray  = field(repr=False)
+    amps: np.ndarray = field(repr=False)
 
     #wfs: np.ndarray = field(repr=False, default_factory=lambda: np.zeros(shape=int, dtype=np.float64))
     #template: np.ndarray = field(repr=False, default_factory=lambda: np.zeros(shape=int, dtype=np.float64))
@@ -24,12 +25,12 @@ class Neuron:
     clus_id: int = field(default=0)
     clus_group: int = field(default=0)
     clus_label: str = field(default='none')
-    ch_depth: tuple[int] = field(default=(0,1), 
-                                 metadata={'ord':('contact number','contact_depth')})
-    
+    ch_depth: tuple[int] = field(default=(0, 1),
+                                 metadata={'ord': ('contact number',
+                                                   'contact_depth')})
     rec_date: date = date.today().strftime("%Y%m%d")
     set_num: int = 1
-    
+
     def __post_init__(self):
         self.nspks = len(self.spiketimes)
 
@@ -45,10 +46,11 @@ class Neuron:
     #def summary(self, binsize=0.01, max=0.2, plot=False):
     #  isi, corr, ifr, wf_width 2x2 subplots
 
+
 @dataclass
 class Population:
     """
-    data from one recording set 
+    data from one recording set
         - metadata
         - list of unit instances, one per recorded unit
         - dictionary/pandas df of task events and times
@@ -58,13 +60,12 @@ class Population:
     subject: str = 'test'
     set_num: int = 1
     pen_no: int = 1
-    grid_xy: tuple[int] = field(default=(np.nan,np.nan))
+    grid_xy: tuple[int] = field(default=(np.nan, np.nan))
     grid_type: str = 'odd_sym'
 
-    mdi_depth: int = field(default=0,metadata={'unit':'mm'})
+    mdi_depth: int = field(default=0, metadata={'unit': 'mm'})
     device: str = ''
     chs: list = field(default_factory=list, repr=False)
-    
     sr: float = field(default=30000.0, metadata={'unit': 'Hz'})
 
     units: list = field(default_factory=list, repr=False)
@@ -75,21 +76,22 @@ class Population:
 
 # %%
 
+
 def build_rec_popn(subject, rec_date, sess_info, set_num=1, probe_num=1,
-                   groups2keep = ['good','mua'], 
-                   datapath = '/Volumes/homes/fetschlab/data/'):
+                   groups2keep=['good', 'mua'],
+                   datapath='/Volumes/homes/fetschlab/data/'):
     """
-    Population is a class instance containing all simulataneously recorded neurons 
+    Population is a class instance containing all simultaneous recorded units 
     (from one area/probe) and associated stimuli/behavioral events
 
     """
     session = f'{subject}{rec_date}_{set_num}'
-    filepath = PurePath(data_folder,session)
+    filepath = PurePath(data_folder, session)
 
     # read in events for this set
-    set_events_file = f'{subject}{rec_date}dots3DMPevents_{set_num}.mat'
-    set_events_path = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/data/lucio_neuro/rec_events'
-    events = sio.loadmat(PurePath(set_events_path,set_events_file), simplify_cells=True)
+    events_file = f'{subject}{rec_date}dots3DMPevents_{set_num}.mat'
+    events_path = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/data/lucio_neuro/rec_events'
+    events = sio.loadmat(PurePath(events_path,events_file), simplify_cells=True)
     events = pd.DataFrame.from_dict(events['S'])
 
     mdi_depth = np.mean(sess_info['depths'][sess_info['rec_group']==set_num])
@@ -118,10 +120,9 @@ def build_rec_popn(subject, rec_date, sess_info, set_num=1, probe_num=1,
     sa = np.squeeze(np.load(PurePath(filepath,'amplitudes.npy')))
 
     # initialize the neural population
-    rec_popn = Population(subject=subject,rec_date=rec_date, set_num=set_num, pen_no=sess_info['pen'],
+    rec_popn = Population(subject=subject.upper()[0], rec_date=rec_date, set_num=set_num, pen_no=sess_info['pen'],
                           grid_xy=gridxy, grid_type=gridtype, device=device, chs=chs, events=events)
     
-
     # only go through clusters in this group of chs (i.e. one probe/area)
     these_clus_ids = clus_info.loc[clus_info['ch'].isin(chs),'cluster_id']
     cgs = cgs.loc[cgs['cluster_id'].isin(these_clus_ids) & cgs['group'].isin(groups2keep),:]
@@ -145,7 +146,7 @@ def build_rec_popn(subject, rec_date, sess_info, set_num=1, probe_num=1,
 
     return rec_popn
 
-# %% helpers
+# %% helpers
 
 def get_cluster_group(clus_label, labels=['NaN','mua','good','noise']):
     """
@@ -159,25 +160,33 @@ def get_cluster_group(clus_label, labels=['NaN','mua','good','noise']):
 
 
 def trial_psth(spiketimes, align_ev, trange, binsize=0.05, all_trials=False, normalize=False):
-    pass
+    """
+    Inputs:
+        spiketimes - 1-D array of spike times
+        align_ev   - array of times on each trial (nTr*2 or nTr*2)
+        trange     - length 2 array, start and end times wrt align_ev 
+        binsize    - size of bin size count (default=0.05)
+        all_trials - compute for all trials in align_ev, or just trials spanned by range of spike times
+        normalize  - firing rate (divide by binsize), or just count (default=False)
+
+    spiketimes, align_ev, trange, and binsize should all be in the same units (default seconds)
+    """
 
     nTr = align_ev.shape[0]
 
-    if nTr==0:
+    if nTr == 0:
         return
     else:
-        
-        if align_ev.ndim==2:
-            align_ev = np.sort(align_ev,axis=1)
-            ev_order = np.argsort(align_ev,axis=1)
-            which_ev = ev_order[0] # align to this event
+        if align_ev.ndim == 2:
+            align_ev = np.sort(align_ev, axis=1)
+            ev_order = np.argsort(align_ev, axis=1)
+            which_ev = ev_order[0]  # align to this event
         else:
-            align_ev[:,1] = align_ev[:,0]
+            align_ev[:, 1] = align_ev[:, 0]
             which_ev = 0
 
-
-        tr_starts = align_ev[:,0] + trange[0]
-        tr_ends = align_ev[:,1] + trange[1]
+        tr_starts = align_ev[:, 0] + trange[0]
+        tr_ends = align_ev[:, 1] + trange[1]
 
         durs = tr_ends - tr_starts
 
@@ -188,6 +197,7 @@ def trial_psth(spiketimes, align_ev, trange, binsize=0.05, all_trials=False, nor
             itr_start = np.argmin(np.abs(tr_starts - spiketimes[0]))
             itr_end = np.argmin(np.abs(tr_ends - spiketimes[-1]))
         
+        # to be completed
         
 
 
@@ -202,22 +212,20 @@ if __name__ == '__main__':
 
     #subject = input("Enter subject:")
 
-    from dateutil.parser import parse
-
     subject = 'lucio'
-    datapath='/Volumes/homes/fetschlab/data/'
+    datapath = '/Volumes/homes/fetschlab/data/'
     data_folder = Path(datapath, subject, f'{subject}_neuro/')
 
     # https://stackoverflow.com/questions/973473/getting-a-list-of-all-subdirectories-in-the-current-directory
-    rec_dates = [f.parts[-1] for f in data_folder.iterdir() 
-        if f.is_dir() and f.parts[-1][0:2]=='20']
+    rec_dates = [f.parts[-1] for f in data_folder.iterdir()
+                 if f.is_dir() and f.parts[-1][0:2] == '20']
 
     for rec_date in rec_dates:
         rec_folder = PurePath(datapath, subject, f'{subject}_neuro/', str(rec_date))
 
        # read info file for this date
-        sess_info_file = f'{subject}{rec_date}dots3DMP_info.mat'  
-        s = sio.loadmat(PurePath(rec_folder,sess_info_file), simplify_cells=True)
+        sess_info_file = f'{subject}{rec_date}dots3DMP_info.mat'
+        s = sio.loadmat(PurePath(rec_folder, sess_info_file), simplify_cells=True)
         sess_info = s['info']
 
         if rec_date <= 20230330:
@@ -229,7 +237,7 @@ if __name__ == '__main__':
         for s in range(nSets):
             for p in range(nProbes):
                 rec_popn = build_rec_popn('lucio', rec_date, sess_info,
-                                         set_num=s+1, probe_num=p)
+                                          set_num=s+1, probe_num=p)
 
 
     
