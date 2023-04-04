@@ -1,6 +1,9 @@
 %% create event files by set
 
-% this is 
+folder = fullfile(mountDir,'rec_events');
+% if ~exist(folder,'dir')
+%     mkdir(folder)
+% end
 
 % fields in 'events' which contain event times, this will be important later
 tEvs   = {'trStart','fpOn','fixation','reward','stimOn','stimOff','saccOnset',...
@@ -111,15 +114,11 @@ for n = 1:length(currentFolderList)
             end
 
 
-            % check if CSV already exists, overwrite set off, and all parsspecified
-
+            % check if CSV already exists, overwrite set off, and all par sspecified
 
             S = createNeuralEvents_oneStruct(data);
-            folder = fullfile(localDir,'rec_events');
             fprintf('saving events file %s\n',filename)
-            if ~exist(folder,'dir')
-                mkdir(folder)
-            end
+            
             save(fullfile(folder,filename),'S');
         else
             fprintf('events file %s already exists...skipping\n',filename)
