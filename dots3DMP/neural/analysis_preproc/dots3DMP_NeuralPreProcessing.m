@@ -95,7 +95,7 @@ getNeuralEventsInfo;
 
 %% create the dataStruct
 
-createSessionData;   
+% createSessionData;   
 
 %% create one .mat file containing concatenated events from all paradigms for a given set
 
@@ -112,6 +112,7 @@ createSessionData;
 
 % paradigms = {'dots3DMPtuning','dots3DMP','RFMapping','VesMapping'}; % use all pars
 % createSetEvents;
+
 
 %% exclude cells which were not adequately recorded in ALL fundamental experiments
 
