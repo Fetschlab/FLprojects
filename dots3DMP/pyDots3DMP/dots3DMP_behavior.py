@@ -13,8 +13,25 @@ def cont_se(x):
 
 def gaus(x, ampl, mu, sigma, bsln):
     """
-    params of flipped gaussian are [baseline mu sigma amplitude]
-    x is the independent variable i.e. heading
+
+    Parameters
+    ----------
+    x : TYPE
+        DESCRIPTION.
+    ampl : TYPE
+        DESCRIPTION.
+    mu : TYPE
+        DESCRIPTION.
+    sigma : TYPE
+        DESCRIPTION.
+    bsln : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    TYPE
+        DESCRIPTION.
+
     """
     return ampl * np.exp(-(x-mu)**2 / (2*sigma**2)) + bsln
 
@@ -23,6 +40,31 @@ def gaus(x, ampl, mu, sigma, bsln):
 
 def behavior_means(df, conftask=2, RTtask=True,
                    by_delta=False, splitPDW=False):
+    """
+
+    Parameters
+    ----------
+    df : TYPE
+        DESCRIPTION.
+    conftask : TYPE, optional
+        DESCRIPTION. The default is 2.
+    RTtask : TYPE, optional
+        DESCRIPTION. The default is True.
+    by_delta : TYPE, optional
+        DESCRIPTION. The default is False.
+    splitPDW : TYPE, optional
+        DESCRIPTION. The default is False.
+
+    Returns
+    -------
+    pRight : TYPE
+        DESCRIPTION.
+    pHigh : TYPE
+        DESCRIPTION.
+    meanRT : TYPE
+        DESCRIPTION.
+
+    """
 
     grp_list = ['modality', 'coherence', 'heading']
 
@@ -86,6 +128,26 @@ def behavior_means(df, conftask=2, RTtask=True,
 
 
 def behavior_fit(df, fitType='logistic', numhdgs=200):
+    """
+    
+
+    Parameters
+    ----------
+    df : TYPE
+        DESCRIPTION.
+    fitType : TYPE, optional
+        DESCRIPTION. The default is 'logistic'.
+    numhdgs : TYPE, optional
+        DESCRIPTION. The default is 200.
+
+    Returns
+    -------
+    xhdgs : TYPE
+        DESCRIPTION.
+    fit_results : TYPE
+        DESCRIPTION.
+
+    """
 
     import statsmodels.api as sm
     import scipy
@@ -164,6 +226,23 @@ def behavior_fit(df, fitType='logistic', numhdgs=200):
 # %%
 
 def plot_behavior_means(pRight, pHigh, meanRT):
+    """
+    
+
+    Parameters
+    ----------
+    pRight : TYPE
+        DESCRIPTION.
+    pHigh : TYPE
+        DESCRIPTION.
+    meanRT : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    None.
+
+    """
 
     # import seaborn.objects as so
     # (
