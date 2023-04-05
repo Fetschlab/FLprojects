@@ -11,26 +11,50 @@ Created on Mon Apr  3 14:19:37 2023
 # fano factor calculations
 # multiple alignments, use map/apply? test in main
 
-
 import numpy as np
-import matplotlib.pyplot as plt
+import pandas as pd
+from scipy.stats import norm
+from scipy.ndimage import convolve1d
+
+import pickle
+from dots3DMP_build_population import Population, Neuron
+
+import seaborn as sns
+
+custom_params = {"axes.spines.right": False, "axes.spines.top": False}
+sns.set_theme(context="notebook", style="ticks", rc=custom_params)
 
 
-def trial_psth(spiketimes, align_ev, trange, binsize=0.05,
-               all_trials=False, normalize=False):
+def trial_psth(spiketimes, align_ev, trange, binsize=0.05, all_trials=False):
     """
-    Inputs:
-        spiketimes - 1-D array of spike times
-        align_ev   - array of times on each trial (nTr*2 or nTr*2)
-        trange     - length 2 array, start and end times wrt align_ev
-        binsize    - size of bin size count (default=0.05)
-        all_trials - compute for all trials in align_ev, or just trials
-        spanned by range of spike times
-        normalize  - firing rate (divide by binsize), or just count
-                (default=False)
 
-    spiketimes, align_ev, trange, and binsize should all be in the same units
-    (default seconds)
+    Parameters
+    ----------
+    spiketimes : 1-D numpy array
+        spike times
+    align_ev : numpy array
+        nTr x 1 or nTr x 2 array with event times (in same units as spiketimes)
+        spike times for psth are always aligned to first column
+    trange : numpy array
+        start and end times relative to align_ev (in same units as spiketimes)
+    binsize : int, optional
+        size of bins for spike counts (same units). The default is 0.05.
+    all_trials : boolean, optional
+        DESCRIPTION. The default is False.
+
+    Returns
+    -------
+    Yt : numpy array
+        DESCRIPTION.
+    x : 1-D numpy array
+        DESCRIPTION.
+    Y : numpy array
+        DESCRIPTION.
+    durs : numpy array
+        DESCRIPTION.
+    which_ev : int
+        DESCRIPTION.
+
     """
 
     nTr = align_ev.shape[0]
@@ -111,8 +135,131 @@ def trial_psth(spiketimes, align_ev, trange, binsize=0.05,
         # shift x values to bin centers
         x = x[:-1] + np.diff(x)/2
 
-        if normalize:
-            Yt = Yt / binsize
-            Y = Y / durs
-
         return Yt, x, Y, durs, which_ev
+
+
+def condition_average(spike_counts, conds, condlabels, t_vec, align='',
+                      normalize=False):
+
+    colnames = condlabels + ['time', 'firing_rate']
+    if spike_counts.ndim == 1:
+        if normalize:
+            spike_counts /= t_vec
+
+        df = pd.DataFrame(np.hstack([conds,
+                                     np.expand_dims(t_vec, axis=1),
+                                     spike_counts]),
+                          columns=colnames)
+
+        # grp_df = df.groupby(by=condlabels, axis=0).agg(
+        #     meanFR=pd.NamedAgg(column='spike counts', aggfunc="mean"),
+        #     semFR=pd.NamedAgg(column='spike counts',
+        #                       aggfunc=lambda x: np.std(x) / np.sqrt(len(x))))
+        # grp_df = grp_df.reset_index()  # remove multi-level index
+
+    else:
+        cond_groups, ic = np.unique(conds.to_numpy('float32'), axis=0,
+                                    return_inverse=True)
+        nC = cond_groups.shape[0]
+
+        if normalize:
+            spike_counts /= np.diff(t_vec[:2])
+
+        cond_mu = np.array([spike_counts[ic == c, :].mean(axis=0)
+                            for c in range(nC)]).T
+
+        # cond_sem = np.array([spike_counts[ic == c, :].std(axis=0) /
+        #                      np.sqrt(np.sum(ic == c))
+        #                      for c in range(nC)]).T
+
+        cond_groups = np.tile(cond_groups, (len(t_vec), 1))
+        timestamps = np.repeat(t_vec, nC)
+
+        df = pd.DataFrame(np.hstack([cond_groups,
+                                    np.expand_dims(timestamps, axis=1),
+                                    cond_mu.T.reshape(-1, 1)]),
+                          columns=colnames)
+
+    df.insert(0, 'align', align)
+
+    return df
+
+
+def plot_psth(df, palette, type=1):
+
+    # TODO
+    # code for rasterized spike plots
+    # rescale x-axes according to length of time vector
+    # show coherences
+
+    if type == 'avg':
+        sns.lineplot(data=df,
+                     x='heading', y='spike counts',
+                     estimator='mean', errorbar='se', err_style='bars',
+                     hue=df[condlabels[:-1]].apply(tuple, axis=1))
+    elif type == 'time':
+        g = sns.relplot(data=df,
+                        x='time', y='firing_rate',
+                        hue='heading', row='modality', col='align',
+                        palette=palette,
+                        facet_kws=dict(sharex=False),
+                        kind='line', aspect=.75)
+        
+
+
+def smooth_psth(spike_counts, method='boxcar', **kwargs):
+
+    if method == 'boxcar':
+
+        kw = kwargs['width']
+        kernel = np.ones(kw) / kw
+
+    elif method == 'gaussian':
+
+        mu = kwargs['mu']
+        sigma = kwargs['sigma']
+        kw = kwargs['width']
+
+        kernel_size = int(kw * sigma)  # choose kernel size based on sigma
+        kernel = norm.pdf(np.arange(-kernel_size, kernel_size+1),
+                          loc=mu, scale=sigma)
+        kernel /= kernel.sum()  # normalize kernel
+
+    smoothed_counts = convolve1d(spike_counts, kernel, axis=0, mode='reflect')
+    return smoothed_counts, kernel
+
+
+if __name__ == '__main__':
+
+    with open('test_data.pkl', 'rb') as file:
+        this_df = pickle.load(file)
+
+    popn = this_df.iloc[29]['data']
+
+    spiketimes = popn.units[0].spiketimes
+
+    align = ['stimOn', 'saccOnset']
+    trange = np.array([[-2, 0.8], [-0.5, 2]])
+
+    condlabels = ['modality', 'coherence', 'heading']
+
+    good_trs = popn.events[align].notna().to_numpy(dtype='bool').all(axis=1)
+
+    condlist = popn.events[condlabels].loc[good_trs, :]
+
+    palette = sns.color_palette('PRGn', len(np.unique(condlist['heading'])))
+
+    all_df = pd.DataFrame()
+
+    for a, t_r in list(zip(align, trange)):
+        align_ev = popn.events.loc[good_trs, a].to_numpy(dtype='float64')
+
+        spike_counts, t_vec, _, _, _ = trial_psth(spiketimes, align_ev, t_r,
+                                                  binsize=0.1)
+
+        df = condition_average(spike_counts, condlist, condlabels, t_vec,
+                               align=a)
+
+        all_df = pd.concat([all_df, df], axis=0, ignore_index=True)
+            
+        plot_psth(all_df, palette=palette, type='time')
