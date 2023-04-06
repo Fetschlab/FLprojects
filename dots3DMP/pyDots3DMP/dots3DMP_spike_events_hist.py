@@ -13,14 +13,15 @@ Created on Mon Apr  3 14:19:37 2023
 
 import numpy as np
 import pandas as pd
+import xarray as xr
 from scipy.stats import norm
 from scipy.ndimage import convolve1d
+from pathlib import PurePath
 
 import pickle
 from dots3DMP_build_population import Population, Neuron
 
 import seaborn as sns
-
 custom_params = {"axes.spines.right": False, "axes.spines.top": False}
 sns.set_theme(context="notebook", style="ticks", rc=custom_params)
 
@@ -146,7 +147,7 @@ def condition_average(spike_counts, conds, condlabels, t_vec, align='',
         if normalize:
             spike_counts /= t_vec
 
-        df = pd.DataFrame(np.hstack([conds,
+        data = pd.DataFrame(np.hstack([conds,
                                      np.expand_dims(t_vec, axis=1),
                                      spike_counts]),
                           columns=colnames)
@@ -182,7 +183,7 @@ def condition_average(spike_counts, conds, condlabels, t_vec, align='',
 
     df.insert(0, 'align', align)
 
-    return df
+    return data
 
 
 def plot_psth(df, palette, type=1):
@@ -231,7 +232,9 @@ def smooth_psth(spike_counts, method='boxcar', **kwargs):
 
 if __name__ == '__main__':
 
-    with open('test_data.pkl', 'rb') as file:
+    data_folder = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/data/lucio_neuro_datasets'
+    filename = PurePath(data_folder, 'test_data.pkl')
+    with open(filename, 'rb') as file:
         this_df = pickle.load(file)
 
     popn = this_df.iloc[29]['data']

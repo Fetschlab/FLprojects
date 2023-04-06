@@ -57,7 +57,7 @@ class Population:
         - list of unit instances, one per recorded unit
         - dictionary/pandas df of task events and times
     """
-    
+
     rec_date: date = date.today().strftime("%Y%m%d")
     create_date: date = date.today().strftime("%Y%m%d")
     subject: str = ''
@@ -76,9 +76,6 @@ class Population:
 
     units: list = field(default_factory=list, repr=False)
     events: dict = field(default_factory=dict, repr=False)
-
-    def __post_init__(self):
-        self.nUnits = len(self.units)
 
 # %% build Population class
 
@@ -106,7 +103,7 @@ def build_rec_popn(subject, rec_date, rec_info, data, data_folder):
     """
 
     session = f"{subject}{rec_date}_{rec_info['rec_set']}"
-    filepath = PurePath(data_folder, session)
+    # filepath = PurePath(data_folder, session)
 
     # # read in cluster groups (from manual curation)
     # cgs = pd.read_csv(PurePath(filepath, 'cluster_group.tsv'), sep='\t')
@@ -116,8 +113,10 @@ def build_rec_popn(subject, rec_date, rec_info, data, data_folder):
 
     # ss = np.squeeze(np.load(PurePath(filepath, 'spike_times.npy')))
     # sg = np.squeeze(np.load(PurePath(filepath, 'spike_clusters.npy')))
-    # # st = np.squeeze(np.load(PurePath(filepath, 'spike_templates.npy')))
+    # st = np.squeeze(np.load(PurePath(filepath, 'spike_templates.npy')))
     # sa = np.squeeze(np.load(PurePath(filepath, 'amplitudes.npy')))
+    
+
 
     events = {**data['events'], **data['pldaps']}
     # events = pd.DataFrame({k: pd.Series(v) for k, v in events.items()})
@@ -134,14 +133,29 @@ def build_rec_popn(subject, rec_date, rec_info, data, data_folder):
         vars(rec_popn)[key] = rec_info[key]
 
     # add the units
-    nUnits = data['units']['cluster_id'].size
-    for u in range(nUnits):
-        unit = Neuron(spiketimes=data['units']['spiketimes'][u],
-                      amps=np.empty(data['units']['spiketimes'][u].shape),
-                      clus_id=data['units']['cluster_id'][u],
+    if isinstance(data['units']['cluster_id'], int):
+        spk_times = np.array(data['units']['spiketimes'])
+        unit = Neuron(spiketimes=spk_times, amps=np.empty(spk_times.shape),
+                      clus_id=data['units']['cluster_id'],
                       clus_group=data['units']['cluster_type'],
+                      ch_depth=(data['units']['ch'], data['units']['depth']),
                       rec_date=rec_popn.rec_date, rec_set=rec_popn.rec_set)
         rec_popn.units.append(unit)
+
+    else:
+        nUnits = data['units']['cluster_id'].size
+        for u in range(nUnits):
+            spk_times = np.array(data['units']['spiketimes'])
+            unit = Neuron(spiketimes=spk_times,
+                          amps=np.empty(spk_times.shape),
+                          clus_id=data['units']['cluster_id'][u],
+                          clus_group=data['units']['cluster_type'][u],
+                          rec_date=rec_popn.rec_date, rec_set=rec_popn.rec_set)
+        rec_popn.units.append(unit)
+
+        # add these in later
+        # ch_depth=(data['units']['ch'][u],
+        #          data['units']['depth'][u]),
 
     # only go through clusters in this group of chs (i.e. one probe/area)
     # these_clus_ids = clus_info.loc[clus_info['ch'].isin(rec_info['chs']),
@@ -172,15 +186,15 @@ def build_rec_popn(subject, rec_date, rec_info, data, data_folder):
 # %%
 
 
-def get_cluster_group(clus_label, labels=['NaN', 'mua', 'good', 'noise']):
+def get_cluster_group(clus_label, labels=['unsorted', 'mua', 'good', 'noise']):
     """
 
     Parameters
     ----------
-    clus_label : TYPE
-        DESCRIPTION.
-    labels : TYPE, optional
-        DESCRIPTION. The default is ['NaN', 'mua', 'good', 'noise'].
+    clus_label : str
+        0, 1, 2, or 3
+    labels : list of strings, optional
+        kilosort label. The default is ['unsorted', 'mua', 'good', 'noise'].
 
     Returns
     -------
@@ -200,19 +214,18 @@ def get_cluster_group(clus_label, labels=['NaN', 'mua', 'good', 'noise']):
 
 if __name__ == '__main__':
 
+    # TODO - clean this up...
     # subject = input("Enter subject:")
     subject = 'lucio'
     datapath = '/Volumes/homes/fetschlab/data/'
     data_folder = Path(datapath, subject, f'{subject}_neuro/')
-    
-    mat_data_file = 'lucio_20220923-20230221_neuralData_PIVC.mat'
+
+    mat_data_file = 'lucio_20220512-20230331_neuralData.mat'
     mat_folder = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/data/lucio_neuro_datasets'
 
     m = sio.loadmat(PurePath(mat_folder, mat_data_file),
                     simplify_cells=True)
     data = m['dataStruct']
-
-    
 
     # https://stackoverflow.com/questions/973473/getting-a-list-of-all-subdirectories-in-the-current-directory
     # rec_dates = [f.parts[-1] for f in data_folder.iterdir()
@@ -232,7 +245,7 @@ if __name__ == '__main__':
                              'brain_area': 'area'}, inplace=True)
 
     rec_df = pd.DataFrame.from_dict(rec_info)
-    rec_df['data'] = np.nan
+    rec_df['data'] = pd.NA
     
     # TODO - decorator to create a column in rec_df for each paradigm
     par = 'dots3DMP'
@@ -241,12 +254,22 @@ if __name__ == '__main__':
 
         # rec_date = sess['DATE']
         rec_date = str(sess['date'])
-        set_num = sess['set']
-        print(rec_date, set_num)
+        rec_set = sess['rec_set']
+        
+        print(rec_date, rec_set)
 
         rec_folder = PurePath(data_folder, rec_date)
 
         idx = (rec_info['date'] == rec_date) & (rec_info['rec_set'] == set_num)
+
+        
+        data = sess['data'][par]
+
+
+
+
+        if 'units' not in data or not any(idx):
+            continue
 
         rec_sess_info = rec_info.loc[idx, :].to_dict('records')[0]
         rec_sess_info['chs'] = np.arange(rec_sess_info['min_ch'],
@@ -255,11 +278,12 @@ if __name__ == '__main__':
                                     rec_sess_info['grid_y'])
 
         rec_popn, events = build_rec_popn(subject, rec_date, rec_sess_info,
-                                  sess['data'][par], data_folder=rec_folder)
+                                          data, data_folder=rec_folder)
 
         rec_df['data'][idx] = rec_popn
 
-    with open('test_data.pkl', 'wb') as file:
+    filename = PurePath(mat_folder, 'test_data.pkl')
+    with open(filename, 'wb') as file:
         pickle.dump(rec_df, file)
         
     # with open('test_data.pkl', 'rb') as file:

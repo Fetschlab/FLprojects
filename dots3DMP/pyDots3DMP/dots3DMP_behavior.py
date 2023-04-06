@@ -1,5 +1,9 @@
 # %%
 
+# TODO
+# function for extracting behavior from neural recording dataset
+
+
 import numpy as np
 
 
