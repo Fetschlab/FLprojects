@@ -52,20 +52,32 @@ dataStruct = table2struct(sess_info);
 tEvs   = {'trStart','fpOn','fixation','reward','stimOn','stimOff','saccOnset',...
     'targsOn','targHold','postTargHold','reward','breakfix','nexStart','nexEnd','return'};
 
-% sess = length(dataStruct); % eventually allow for this code to append to
-% existing dataStruct if desired, instead of always starting from blank?
+% added 04/2023 SJ
+% externally defined excel file containing recording metadata
+% some information is redundant with individual info mat files, but this
+% data structure makes it easier to control which files become part of data
+% struct (e.g. probe recordings only), and splits by area/probe
 
-% added 04/2023
+% this could also be achieved by a loop over info.probe, but might require
+% some refactoring. Works fine for now.
+
 sess_info = readtable('/Users/stevenjerjian/Desktop/FetschLab/Analysis/RecSessionInfo.xlsx', sheet = subject);
 sess_info.Properties.VariableNames = lower(sess_info.Properties.VariableNames);
 sess_info.chs = table2cell(rowfun(@(x,y) x:y, sess_info(:,{'min_ch','max_ch'})));
+sess_info = sess_info(logical(sess_info.is_good),:);
 
-
-% dataStruct = struct();
-% sess = 0;
+% dataStruct = struct(); sess = 0; % original
 dataStruct = table2struct(sess_info);
 
-sflds = {'subject','date','pen','gridxy','probe_type','probe_ID'};
+%% main loop
+
+% loop over each 'date' in folder list, then over unique sets
+% each date/set is referenced against the sess_info sheet
+
+% fields in 'events' which contain event times, this will be important later
+tEvs   = {'trStart','fpOn','fixation','reward','stimOn','stimOff','saccOnset',...
+    'targsOn','targHold','postTargHold','reward','breakfix','nexStart','nexEnd','return'};
+
 for n = 1:length(currentFolderList)
 %     disp(currentFolderList{n})
     if isempty(strfind(currentFolderList{n},'20')) || contains(currentFolderList{n},'Impedance'); continue; end
@@ -80,7 +92,7 @@ for n = 1:length(currentFolderList)
     for u=1:length(unique_sets)
         clear sp
 
-%         sess = sess+1; % increment the row in dataStruct
+%         sess = sess+1; % increment the row in dataStruct % old
         sess = find(sess_info.date == datetime(num2str(info.date),'InputFormat','yyyyMMdd') & sess_info.rec_set==unique_sets(u));
 
         if sum(sess)==0
@@ -94,13 +106,12 @@ for n = 1:length(currentFolderList)
         % if recording was single electrode, sorting was done with SI, so sub-folder is phy_WC
         if contains(info.probe_type{1},'Single')
             mountDir = [mountDir 'phy_WC/']; 
-            continue
+            continue % skip these regardless for now
         end
 
 
         try
             disp(mountDir)
-%             params = struct('excludeNoise',0);
             sp = loadKSdir(mountDir);
         catch
             sp.st = [];
@@ -113,6 +124,7 @@ for n = 1:length(currentFolderList)
             error('dots3DMP:createSessionData:getUnitInfo','Could not get cluster info for this ks file..file has probably not been manually curated\n')
         end
 
+        % old SJ 04/2023
 %         dataStruct(sess).date = info.date;
 %         dataStruct(sess).info = info;
 %         dataStruct(sess).set = unique_sets(u);
@@ -224,24 +236,16 @@ for n = 1:length(currentFolderList)
 
             for s = 1:length(sess)
 
-            if exist('unitInfo','var')
-                try
-                    keepUnits = ismember(unitInfo.cluster_id,sp.cids)';
-                    depth     = unitInfo.depth(keepUnits)';
-                    ch        = unitInfo.ch(keepUnits)';
-                    nspks     = unitInfo.n_spikes(keepUnits)';
+                if contains(info.probe_type,'DBC')
+                    ch_depth  = calcProbeChDepth(depth,dataStruct(sess(s)));
+                elseif contains(info.probe_type,'Single')
+                    ch_depth = MDI_depth;
+                end
 
-                    % MDI_depth = info.depths{1}(theseFiles(1));
-                    MDI_depth = dataStruct(sess).mdi_depth_um;
-                    if contains(info.probe_type,'DBC')
-                        probe = ['DBC' info.probe_ID{1}(1:5)];
-                        ch_depth  = calcProbeChDepth(MDI_depth,depth,probe);
-                    elseif contains(info.probe_type,'Single')
-                        ch_depth = MDI_depth;
-                    end
+                if keepMU, inds = sp.cgs<=3;
+                else,      inds = sp.cgs==2;
+                end
 
-                    dataStruct(sess).data.(paradigms{par}).units.depth = ch_depth;
-                    dataStruct(sess).data.(paradigms{par}).units.ch    = depth;
 
                 dataStruct(sess(s)).data.(paradigms{par}).units.cluster_labels = {'MU','SU','UN'};
 
@@ -255,23 +259,19 @@ for n = 1:length(currentFolderList)
                 end
             end
 
-            inds = inds & ismember(depth, dataStruct(sess).chs);
+                dataStruct(sess(s)).data.(paradigms{par}).units.cluster_id = cids;
+                dataStruct(sess(s)).data.(paradigms{par}).units.cluster_type = cgs;
 
-            cids = sp.cids(inds);
-            cgs  = sp.cgs(inds);
+                dataStruct(sess(s)).data.(paradigms{par}).units.cluster_labels = {'MU','SU','UN'};
 
-            dataStruct(sess).data.(paradigms{par}).units.cluster_id = cids;
-            dataStruct(sess).data.(paradigms{par}).units.cluster_type = cgs;
+                fprintf('Adding %d SU, %d MU, %d unsorted\n\n',sum(cgs==2),sum(cgs==1),sum(cgs==3|cgs==0))
 
-            dataStruct(sess).data.(paradigms{par}).units.cluster_labels = {'MU','SU','UN'};
-
-            fprintf('Adding %d SU, %d MU, %d unsorted\n\n',sum(cgs==2),sum(cgs==1),sum(cgs==3|cgs==0))
-
-            % add each unit's spikes to an entry in spiketimes cell
-            for unit=1:sum(inds)
-                theseSpikes = sp.clu==cids(unit) & thisParSpikes;
-                %                 theseSpikes = sp.clu==cids(unit);
-                dataStruct(sess).data.(paradigms{par}).units.spiketimes{unit} = sp.st(theseSpikes);
+                % add each unit's spikes to an entry in spiketimes cell
+                for unit=1:sum(inds)
+                    theseSpikes = sp.clu==cids(unit) & thisParSpikes;
+                    %                 theseSpikes = sp.clu==cids(unit);
+                    dataStruct(sess(s)).data.(paradigms{par}).units.spiketimes{unit} = sp.st(theseSpikes);
+                end
             end
         end
 
