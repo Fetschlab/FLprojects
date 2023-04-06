@@ -1,19 +1,19 @@
 % Fetsch Lab
 % S. J. Jerjian
 % Created May 2022
-% Last updated Feb 2023
+% Last updated April 2023
 %
-% generate a struct containing spike sorted units and task data from rigB (dots3DMP recordings)
-% user should specify the subject, dateRange, and paradigms
+% This script generates a large dataStruct containing spike sorted units from rigB (dots3DMP recordings)
+% 
+% Included sessions (and the row structure of dataStruct) is specified in RecSessionInfo.xlsx
 %
-% organization of dataStruct is as follows:
+% organization of dataStruct:
 %
-% 1 - each row in dataStruct pertains to one recording 'session' (block/set) (in practice, this means each day)
-% 2 - within a row, 
-%       date and set
-%       info field, with header information, 
-%       data field
-% data field is further split into fields for each paradigm recorded in that session. Each of these fields contains:
+% 1 - each row in dataStruct pertains to one recording 'session'
+% (block/set) (in practice, this means each day) from a given probe
+% each row contains relevant metadata about recording, and a 'data' field
+% 2 - each data field contains subfields for each recorded paradigm
+% each paradigm contains:
 %
 %   'events'    condition information for each trial, as well as the timing of key stimulus and behavioral events)
 %   'pldaps'    useful pldaps information for each trial, largely bookkeeping
@@ -22,24 +22,18 @@
 %       'cluster_type' :  1 x N corresponding to cluster_ids above. By Kilosort convention,
 %                               1 = MU, 2 = SU, (3 = noise, not included by default)
 %                               if keepMU==1, MUs will be included, otherwise only SUs will be included in output struct
+%       'cluster_labels': 'MU','SU','UN'
 %       'spiketimes'   :  1 x N cell array containing spike times for each cluster, within the range of the given paradigm
-%       'moreInfo'     :  1 x N cell array containing additional useful metadata      
 % 
-% **** Further notes for the user ****
+% See createSessionData for understanding how the dataStruct is created 
 % 
-% 1. Each unique row of dataStruct pertains to an individual 'set' of
-% recordings, i.e. data recorded at a particular location. 
-% % A 'good' recording day with a full run of the task will likely only have one set, but 
-% % in principle, there could be more than one set for a given day.
-% 
-% 2. Recordings are grouped by set, so multiple dots3DMP paradigms recorded in
-% one set will be combined, whether the actual recording was done in
-% multiple Trellis files or a single one - the "rec_group" group field in info struct is therefore critical!
-% 
-% 
-% SJ 02-2023 select area for specific sessions
-% SJ 01-2023 all recordings use phy format clusters
-% SJ 08-2022 added in metadata (getUnitInfo.m)
+%
+% Updates
+%
+% SJ 04-2023 fixed issues with mismatched unitInfo - using readtable instead of textscan to read cluster_info files
+% SJ 04-2023 restructured to use recording metadata spreadsheet for defining dataStruct 
+% SJ 01-2023 all recordings use kilosort/phy (no more mksort - spikeInterface for single electrode recordings)
+% SJ 08-2022 added in metadata (getUnitInfo.m)                          
 % SJ 08-2022 cleanUp option - to sub-select desirable units
 % SJ 06-2022 significant updates
 %            Modified processing of mksort data, 
@@ -47,42 +41,36 @@
 %            Switched dataCell from {} to dataStruct () struct format.
 %
 %
-% Feature list to implement: 
-% - include metadata about recorded units (WORK IN PROGRESS)
-% - add option to load and append to existing dataStruct instead of generating from scratch at each run
-% - consider whether any other info merits its own field in top level of
-% dataStruct
-% - MDI and stopper depth? distance to first contact, 'actual'
-% distances between contacts
+% % TODO:
 %
-% I should add to nsEventConditions to fix up the cohInd so that >0.5 coh
-% is always '2' in the index? and ves is always low coh, or lowest within
-% the set
+% 1. remove redundancies in createSessionData / clean-up
+% 2. remove createSetEvents
+% 3. fix processing of phy_WC folders given lack of unitInfo
 
-%% decide which files to load
+clear;clc;close all
 
-% which paradigms do we care about?
+%% USER INPUTS
+
+clear;clc
+
 paradigms = {'dots3DMPtuning','dots3DMP','RFMapping','VesMapping'};
 
-% at the end, will discard any units whose gross spike rate is <minRate spikes
-% per second, or the number of trials of any of the unique stimulus
-
 subject = 'lucio';
+dateRange = 20220512:20230331;
 
-dateRange = [20220512:20230331];
+keepMU = 1;           % include all SU and MU, by default, do it, can always remove them later
+useSCP = 1; 
+useVPN = 0;
+overwriteLocalFiles = 0; % set to 1 to always use the server copy
+% overwriteEventSets = 0;
+
+
+%%
 
 dateStr = num2str(dateRange(1));
 for d = 2:length(dateRange)
     dateStr = [dateStr newline num2str(dateRange(d))];
 end
-
-%%
-
-keepMU = 1;           % include all SU and MU, by default, do it, can always remove them later
-useSCP = 1;
-useVPN = 0;
-overwriteLocalFiles = 0; % set to 1 to always use the server copy
-overwriteEventSets = 0;
 
 % SJ 04-2022
 % download associated PDS data files (we'll need this for some cleanup)
@@ -109,24 +97,29 @@ getNeuralEventsInfo;
 
 createSessionData;   
 
-%% create one .mat file for events from all paradigms for a given set
-% this will be useful for pure behavior analyses (if desired)
-% and importing into python
+%% create one .mat file containing concatenated events from all paradigms for a given set
 
-% paradigms = {'dots3DMPtuning','dots3DMP','RFMapping','VesMapping'};
+% SJ: initially wrote this to ease importing of data in Python code
+% (for now) python code will rely on already created dataStruct here, so
+% this is obsolete.
+% also rather roundabout, because it duplicates some of the code in
+% createSessionData dealing with multiple RippleEvents files for one
+% recording
+
+% as it stands a BUG FIX is required - ending up with some mismatches in
+% vector lengths
+% issue arising from RFmapping having some different fields to other pars
+
+% paradigms = {'dots3DMPtuning','dots3DMP','RFMapping','VesMapping'}; % use all pars
 % createSetEvents;
 
 
 %% exclude cells which were not adequately recorded in ALL fundamental experiments
 
-runCleanUp = 0; % don't do this here, do it later before analysis
+% SJ don't do this in pre-processing, do within analysis script
 
-
-if runCleanUp
-    % inputs to dots3DMP_NeuralStruct_runCleanUp
-    parSelect  = {'dots3DMPtuning','dots3DMP','RFmapping','VesMapping'};
-    minRate    = 5;
-    minTrs     = 5;
-
-    dots3DMP_NeuralStruct_runCleanUp(dataStruct,parSelect,minRate,minTrs);
-end
+% parSelect  = {'dots3DMPtuning','dots3DMP','RFmapping','VesMapping'};
+% minRate    = 5; % min average firing rate
+% minTrs     = 5; % unit must have spikes in at least 5 trials per condition
+% 
+% dots3DMP_NeuralStruct_runCleanUp(dataStruct,parSelect,minRate,minTrs);
