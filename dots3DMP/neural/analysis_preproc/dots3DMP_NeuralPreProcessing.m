@@ -69,11 +69,7 @@ paradigms = {'dots3DMPtuning','dots3DMP','RFMapping','VesMapping'};
 
 subject = 'lucio';
 
-dateRange = [20230328:20230331]; % PIVC
-
-% this is not sustatinable in the case of dual recordings...i just need a
-% way to mark units as coming from an area
-% dateRange = dots3DMP_getSessionDates(subject, area);
+dateRange = [20220512:20230331];
 
 dateStr = num2str(dateRange(1));
 for d = 2:length(dateRange)
@@ -111,14 +107,14 @@ getNeuralEventsInfo;
 
 %% create the dataStruct
 
-% createSessionData;   
+createSessionData;   
 
 %% create one .mat file for events from all paradigms for a given set
 % this will be useful for pure behavior analyses (if desired)
 % and importing into python
 
-paradigms = {'dots3DMPtuning','dots3DMP','RFMapping','VesMapping'};
-createSetEvents;
+% paradigms = {'dots3DMPtuning','dots3DMP','RFMapping','VesMapping'};
+% createSetEvents;
 
 
 %% exclude cells which were not adequately recorded in ALL fundamental experiments

@@ -21,8 +21,15 @@ tEvs   = {'trStart','fpOn','fixation','reward','stimOn','stimOff','saccOnset',..
 % sess = length(dataStruct); % eventually allow for this code to append to
 % existing dataStruct if desired, instead of always starting from blank?
 
-dataStruct = struct();
-sess = 0;
+% added 04/2023
+sess_info = readtable('/Users/stevenjerjian/Desktop/FetschLab/Analysis/RecSessionInfo.xlsx', sheet = subject);
+sess_info.Properties.VariableNames = lower(sess_info.Properties.VariableNames);
+sess_info.chs = table2cell(rowfun(@(x,y) x:y, sess_info(:,{'min_ch','max_ch'})));
+
+
+% dataStruct = struct();
+% sess = 0;
+dataStruct = table2struct(sess_info);
 
 sflds = {'subject','date','pen','gridxy','probe_type','probe_ID'};
 for n = 1:length(currentFolderList)
@@ -39,18 +46,21 @@ for n = 1:length(currentFolderList)
     for u=1:length(unique_sets)
         clear sp
 
-        sess = sess+1; % increment the row in dataStruct
+%         sess = sess+1; % increment the row in dataStruct
+        sess = find(sess_info.date == datetime(num2str(info.date),'InputFormat','yyyyMMdd') & sess_info.rec_set==unique_sets(u));
 
         remoteDirSpikes = sprintf('/var/services/homes/fetschlab/data/%s/%s_neuro/%d/%s%d_%d/',subject,subject,info.date,subject,info.date,unique_sets(u));
         mountDir = sprintf('/Volumes/homes/fetschlab/data/%s/%s_neuro/%d/%s%d_%d/',subject,subject,info.date,subject,info.date,unique_sets(u));
 
         if contains(info.probe_type{1},'Single')
-            mountDir = [mountDir 'phy_WC/']; end
+            mountDir = [mountDir 'phy_WC/']; 
+            continue
+        end
 
         try
             disp(mountDir)
-            params = struct('excludeNoise',0);
-            sp = loadKSdir(mountDir, params);
+%             params = struct('excludeNoise',0);
+            sp = loadKSdir(mountDir);
         catch
             sp.st = [];
             warning('dots3DMP:createSessionData:loadKSdir','Could not load kilosort sp struct for %d, set %d\n\n',info.date,unique_sets(u));
@@ -61,9 +71,9 @@ for n = 1:length(currentFolderList)
             warning('dots3DMP:createSessionData:getUnitInfo','Could not get cluster info for this ks file..file has probably not been manually curated\n')
         end
 
-        dataStruct(sess).date = info.date;
-        dataStruct(sess).info = info;
-        dataStruct(sess).set = unique_sets(u);
+%         dataStruct(sess).date = info.date;
+%         dataStruct(sess).info = info;
+%         dataStruct(sess).set = unique_sets(u);
         
         % loop over paradigms 
         % (NOTE that the logic here differs from how nsEvents is initially created on the experiment rig)
@@ -179,29 +189,21 @@ for n = 1:length(currentFolderList)
             else,      inds = sp.cgs==2;
             end
 
-            cids = sp.cids(inds);
-            cgs  = sp.cgs(inds);
-
-            dataStruct(sess).data.(paradigms{par}).units.cluster_id = cids;
-            dataStruct(sess).data.(paradigms{par}).units.cluster_type = cgs;
-
-            dataStruct(sess).data.(paradigms{par}).units.cluster_labels = {'MU','SU','UN'};
-
             if exist('unitInfo','var')
                 try
-                    keepUnits = ismember(unitInfo.cluster_id,sp.cids);
-                    depth     = unitInfo.depth(keepUnits);
-                    ch        = unitInfo.ch(keepUnits);
-                    nspks     = unitInfo.n_spikes(keepUnits);
+                    keepUnits = ismember(unitInfo.cluster_id,sp.cids)';
+                    depth     = unitInfo.depth(keepUnits)';
+                    ch        = unitInfo.ch(keepUnits)';
+                    nspks     = unitInfo.n_spikes(keepUnits)';
 
-                    MDI_depth = info.depths{1}(theseFiles(1));
+                    % MDI_depth = info.depths{1}(theseFiles(1));
+                    MDI_depth = dataStruct(sess).mdi_depth_um;
                     if contains(info.probe_type,'DBC')
                         probe = ['DBC' info.probe_ID{1}(1:5)];
                         ch_depth  = calcProbeChDepth(MDI_depth,depth,probe);
                     elseif contains(info.probe_type,'Single')
                         ch_depth = MDI_depth;
                     end
-
 
                     dataStruct(sess).data.(paradigms{par}).units.depth = ch_depth;
                     dataStruct(sess).data.(paradigms{par}).units.ch    = depth;
@@ -212,6 +214,16 @@ for n = 1:length(currentFolderList)
                 end
 
             end
+
+            inds = inds & ismember(depth, dataStruct(sess).chs);
+
+            cids = sp.cids(inds);
+            cgs  = sp.cgs(inds);
+
+            dataStruct(sess).data.(paradigms{par}).units.cluster_id = cids;
+            dataStruct(sess).data.(paradigms{par}).units.cluster_type = cgs;
+
+            dataStruct(sess).data.(paradigms{par}).units.cluster_labels = {'MU','SU','UN'};
 
             fprintf('Adding %d SU, %d MU, %d unsorted\n\n',sum(cgs==2),sum(cgs==1),sum(cgs==3|cgs==0))
 
