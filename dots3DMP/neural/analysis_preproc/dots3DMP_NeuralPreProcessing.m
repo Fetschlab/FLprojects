@@ -95,7 +95,7 @@ getNeuralEventsInfo;
 
 %% create the dataStruct
 
-% createSessionData;   
+createSessionData;   
 
 %% create one .mat file containing concatenated events from all paradigms for a given set
 
