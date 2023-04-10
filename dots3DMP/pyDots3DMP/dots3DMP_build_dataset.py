@@ -7,9 +7,12 @@ from datetime import date
 import scipy.io as sio
 from dataclasses import dataclass, field
 import pickle
+ 
+import pdb
 
 # %% define Neuron and Population classes
 
+# TODO create Neuron metaclass, and make current Neuron class a subclass for kilosort unit
 
 @dataclass
 class Neuron:
@@ -22,19 +25,13 @@ class Neuron:
 
     temp_amp: float = field(default=0.0)
 
-    nspks: int = field(init=False)
-
     clus_id: int = field(default=0)
     clus_group: int = field(default=0)
     clus_label: str = field(default='none')
-    ch_depth: tuple[int] = field(default=(0, 1),
-                                 metadata={'ord': ('contact number',
-                                                   'contact_depth')})
+    channel: int = 0
+    probe_depth: int = field(default=0, metadata={'unit': 'mm'})
     rec_date: date = date.today().strftime("%Y%m%d")
     rec_set: int = 1
-
-    def __post_init__(self):
-        self.nspks = len(self.spiketimes)
 
     # static methods?
 
@@ -115,9 +112,8 @@ def build_rec_popn(subject, rec_date, rec_info, data, data_folder):
     # sg = np.squeeze(np.load(PurePath(filepath, 'spike_clusters.npy')))
     # st = np.squeeze(np.load(PurePath(filepath, 'spike_templates.npy')))
     # sa = np.squeeze(np.load(PurePath(filepath, 'amplitudes.npy')))
-    
 
-
+    # get task timing and conditions - 'events'
     events = {**data['events'], **data['pldaps']}
     # events = pd.DataFrame({k: pd.Series(v) for k, v in events.items()})
     events = pd.DataFrame.from_dict(events, orient='index')
@@ -128,34 +124,40 @@ def build_rec_popn(subject, rec_date, rec_info, data, data_folder):
     rec_popn = Population(subject=subject.upper()[0], rec_date=rec_date,
                           session=session, chs=rec_info['chs'], events=events)
 
-    # add all the metadata
+    # add all the metadata from rec_info
     for key in rec_info.keys():
         vars(rec_popn)[key] = rec_info[key]
 
     # add the units
+
+    # if only one unit, data fields will not be lists
     if isinstance(data['units']['cluster_id'], int):
+
         spk_times = np.array(data['units']['spiketimes'])
+        clus_group = data['units']['cluster_type']
         unit = Neuron(spiketimes=spk_times, amps=np.empty(spk_times.shape),
                       clus_id=data['units']['cluster_id'],
-                      clus_group=data['units']['cluster_type'],
-                      ch_depth=(data['units']['ch'], data['units']['depth']),
+                      clus_group=clus_group,
+                      clus_label=get_cluster_label(clus_group),
+                      channel=data['units']['ch'],
+                      depth=data['units']['depth'],
                       rec_date=rec_popn.rec_date, rec_set=rec_popn.rec_set)
         rec_popn.units.append(unit)
 
     else:
         nUnits = data['units']['cluster_id'].size
         for u in range(nUnits):
-            spk_times = np.array(data['units']['spiketimes'])
+            spk_times = np.array(data['units']['spiketimes'][u])
+            clus_group = data['units']['cluster_type'][u]
             unit = Neuron(spiketimes=spk_times,
                           amps=np.empty(spk_times.shape),
                           clus_id=data['units']['cluster_id'][u],
-                          clus_group=data['units']['cluster_type'][u],
+                          clus_group=clus_group,
+                          clus_label=get_cluster_label(clus_group),
+                          channel=data['units']['ch'][u],
+                          depth=data['units']['depth'][u],
                           rec_date=rec_popn.rec_date, rec_set=rec_popn.rec_set)
-        rec_popn.units.append(unit)
-
-        # add these in later
-        # ch_depth=(data['units']['ch'][u],
-        #          data['units']['depth'][u]),
+            rec_popn.units.append(unit)
 
     # only go through clusters in this group of chs (i.e. one probe/area)
     # these_clus_ids = clus_info.loc[clus_info['ch'].isin(rec_info['chs']),
@@ -186,12 +188,12 @@ def build_rec_popn(subject, rec_date, rec_info, data, data_folder):
 # %%
 
 
-def get_cluster_group(clus_label, labels=['unsorted', 'mua', 'good', 'noise']):
+def get_cluster_label(clus_group, labels=['unsorted', 'mua', 'good', 'noise']):
     """
 
     Parameters
     ----------
-    clus_label : str
+    clus_group : str
         0, 1, 2, or 3
     labels : list of strings, optional
         kilosort label. The default is ['unsorted', 'mua', 'good', 'noise'].
@@ -204,7 +206,7 @@ def get_cluster_group(clus_label, labels=['unsorted', 'mua', 'good', 'noise']):
     """
 
     try:
-        return labels.index(clus_label)
+        return labels.index(clus_group)
     except ValueError:
         return None
 
@@ -239,52 +241,43 @@ if __name__ == '__main__':
     rec_info['date'] = rec_info['date'].apply(lambda x:
                                               x.date().strftime('%Y%m%d'))
 
-    rec_info.rename(columns={'mdi_depth_um': 'mdi_depth',
+    rec_info.rename(columns={'mdi_depth_um': 'probe_depth',
                              'gt_depth_cm': 'gt_depth',
                              'pen_no_total': 'pen_num',
                              'brain_area': 'area'}, inplace=True)
 
-    rec_df = pd.DataFrame.from_dict(rec_info)
-    rec_df['data'] = pd.NA
-    
-    # TODO - decorator to create a column in rec_df for each paradigm
-    par = 'dots3DMP'
+    pars = ['Tuning', 'Task']
+    par_labels = ['dots3DMPtuning', 'dots3DMP']
+
+    rec_df = rec_info.copy(deep=True)
+    rec_df[pars] = pd.NA
 
     for index, sess in enumerate(data):
 
         # rec_date = sess['DATE']
-        rec_date = str(sess['date'])
+        rec_date = sess['date']
         rec_set = sess['rec_set']
-        
+
         print(rec_date, rec_set)
 
         rec_folder = PurePath(data_folder, rec_date)
 
-        idx = (rec_info['date'] == rec_date) & (rec_info['rec_set'] == set_num)
-
-        
-        data = sess['data'][par]
-
-
-
-
-        if 'units' not in data or not any(idx):
-            continue
-
-        rec_sess_info = rec_info.loc[idx, :].to_dict('records')[0]
+        rec_sess_info = rec_info.iloc[index, :].to_dict()
         rec_sess_info['chs'] = np.arange(rec_sess_info['min_ch'],
                                          rec_sess_info['max_ch']+1)
         rec_sess_info['grid_xy'] = (rec_sess_info['grid_x'],
                                     rec_sess_info['grid_y'])
 
-        rec_popn, events = build_rec_popn(subject, rec_date, rec_sess_info,
-                                          data, data_folder=rec_folder)
+        for p, par in enumerate(pars):
 
-        rec_df['data'][idx] = rec_popn
+            if type(sess['data']) == dict and par_labels[p] in sess['data'].keys():
+
+                rec_popn, events = build_rec_popn(subject, rec_date, rec_sess_info,
+                                                  data=sess['data'][par_labels[p]],
+                                                  data_folder=rec_folder)
+
+                rec_df.loc[index, par] = rec_popn
 
     filename = PurePath(mat_folder, 'test_data.pkl')
     with open(filename, 'wb') as file:
         pickle.dump(rec_df, file)
-        
-    # with open('test_data.pkl', 'rb') as file:
-    #    this_df = pickle.load(file)
