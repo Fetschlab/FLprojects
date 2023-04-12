@@ -6,7 +6,7 @@
 % RECORDING SET NOTES
 %
 % Successive recordings with the same putative units (i.e. at the same location) are concatenated where necessary, since Kilosort spike sorting on the combined data with kilosort 
-% is much preferred, rather than trying to reconcile cluster ids post-hoc.
+% is much preferred (e.g. rather than trying to reconcile cluster ids across files post-hoc
 % The convention throughout the codebase is to refer to such 'combined' recordings as recording 'sets'.
 % If recordings are concatenated, the de facto timestamps (0-len) are shifted according to the length of the concatenated set so that the range of events and spikes is
 % matched for a given recording (nsEvents.analogData.timeStamps and .timeStampsShifted).
@@ -14,7 +14,7 @@
 % e.g. if a set is comprised of two recordings, with timestamp ranges 0-->N and 0-->M, respectively the final timestamps will run from 0 --> N+M. 
 % Spiketimes and events from recording 1 will be stored as is, spiketimes and events from recording 2 will be re-assigned to their existing value plus N.
 % 
-% If recording is left running across experiments, the set will be 1-to-1 matched to recording files, rendering the above shifting superfluous. 
+% If recording is left running across experiments (which is typically true), the set will be 1-to-1 matched to recording files, rendering the above shifting superfluous. 
 % However, multiple PLDAPS files will be associated with one recording file, which requires other considerations.
 
 % the loop structure is:

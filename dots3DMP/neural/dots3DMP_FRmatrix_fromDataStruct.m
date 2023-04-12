@@ -154,8 +154,9 @@ for ses = 1:length(dataStruct)
 
 %             fprintf('unit %d, ae %d\n',unitInd,iae)
 
-            au.hdr.unitDate(unitInd) = dataStruct(ses).date;
-            au.hdr.unitSet(unitInd)  = dataStruct(ses).set;
+            au.hdr.unitDate{unitInd} = datestr(dataStruct(ses).date,'yyyymmdd');
+            au.hdr.unitSet(unitInd)  = dataStruct(ses).rec_set;
+            au.hdr.area{unitInd}  = dataStruct(ses).brain_area;
             au.hdr.unitID(unitInd)   = temp.units.cluster_id(unit_inds(u));
             au.hdr.unitType(unitInd) = temp.units.cluster_type(unit_inds(u));
 
