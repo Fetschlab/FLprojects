@@ -6,34 +6,56 @@ from pathlib import Path, PurePath
 from datetime import date
 import scipy.io as sio
 from dataclasses import dataclass, field
+from dots3DMP_spike_rates import trial_psth, condition_averages
 import pickle
- 
 import pdb
 
 # %% define Neuron and Population classes
 
 # TODO create Neuron metaclass, and make current Neuron class a subclass for kilosort unit
 
+
 @dataclass
-class Neuron:
-    
+class Unit:
+
     spiketimes: np.ndarray = field(repr=False)
     amps: np.ndarray = field(repr=False)
 
-    #wfs: np.ndarray = field(repr=False, default_factory=lambda: np.zeros(shape=int, dtype=np.float64))
-    #template: np.ndarray = field(repr=False, default_factory=lambda: np.zeros(shape=int, dtype=np.float64))
-
-    temp_amp: float = field(default=0.0)
-
     clus_id: int = field(default=0)
-    clus_group: int = field(default=0)
-    clus_label: str = field(default='none')
-    channel: int = 0
-    probe_depth: int = field(default=0, metadata={'unit': 'mm'})
     rec_date: date = date.today().strftime("%Y%m%d")
+
+    # TODO post_init on waveforms
+    
+    # TODO simple methods e.g. isi, autocorr, ifr
+    # TODO inter-unit methods e.g. cross-corr in spiketimes, similarity
+
+@dataclass
+class ksUnit(Unit):
+    """
+    a unit extracted from Kilosort, should have a template with amplitude
+    also cluster information, and lab/rig specific info
+    """
+    # TODO
+    # wfs: np.ndarray = field(repr=False, default_factory=lambda: np.zeros(shape=int, dtype=np.float64))
+    # template: np.ndarray = field(repr=False, default_factory=lambda: np.zeros(shape=int, dtype=np.float64))
+
+    temp_amp: float = np.nan
+
+    # TODO force clus_group to be 0-3, clus_label to be UN, MU, SU, or noise
+    clus_group: int = 0
+    clus_label: str = ''
+    channel: int = 0
+    depth: int = field(default=0, metadata={'unit': 'mm'})
     rec_set: int = 1
 
-    # static methods?
+    @property
+    def trial_psth(self, align_ev, **kwargs):
+        return trial_psth(self.spiketimes, align_ev, **kwargs)
+
+    @property
+    def condition_psth(self, condlist, cond_groups=None):
+        return condition_averages(self.frates, condlist, cond_groups)
+        
 
     #def isi(self, binsize=0.01, max=0.2, plot=False): 
     # return isi hist, violations count
@@ -61,13 +83,14 @@ class Population:
     session: str = ''
     rec_set: int = 1
     probe_num: int = 1
+    device: str = ''
+    
     pen_num: int = 1
     grid_xy: tuple[int] = field(default=(np.nan, np.nan))
     grid_type: str = ''
     area: str = ''
 
     mdi_depth: int = field(default=0, metadata={'unit': 'mm'})
-    device: str = ''
     chs: list = field(default_factory=list, repr=False)
     sr: float = field(default=30000.0, metadata={'unit': 'Hz'})
 
@@ -102,17 +125,6 @@ def build_rec_popn(subject, rec_date, rec_info, data, data_folder):
     session = f"{subject}{rec_date}_{rec_info['rec_set']}"
     # filepath = PurePath(data_folder, session)
 
-    # # read in cluster groups (from manual curation)
-    # cgs = pd.read_csv(PurePath(filepath, 'cluster_group.tsv'), sep='\t')
-
-    # # read cluster info
-    # clus_info = pd.read_csv(PurePath(filepath, 'cluster_info.tsv'), sep='\t')
-
-    # ss = np.squeeze(np.load(PurePath(filepath, 'spike_times.npy')))
-    # sg = np.squeeze(np.load(PurePath(filepath, 'spike_clusters.npy')))
-    # st = np.squeeze(np.load(PurePath(filepath, 'spike_templates.npy')))
-    # sa = np.squeeze(np.load(PurePath(filepath, 'amplitudes.npy')))
-
     # get task timing and conditions - 'events'
     events = {**data['events'], **data['pldaps']}
     # events = pd.DataFrame({k: pd.Series(v) for k, v in events.items()})
@@ -135,7 +147,7 @@ def build_rec_popn(subject, rec_date, rec_info, data, data_folder):
 
         spk_times = np.array(data['units']['spiketimes'])
         clus_group = data['units']['cluster_type']
-        unit = Neuron(spiketimes=spk_times, amps=np.empty(spk_times.shape),
+        unit = ksUnit(spiketimes=spk_times, amps=np.empty(spk_times.shape),
                       clus_id=data['units']['cluster_id'],
                       clus_group=clus_group,
                       clus_label=get_cluster_label(clus_group),
@@ -149,7 +161,7 @@ def build_rec_popn(subject, rec_date, rec_info, data, data_folder):
         for u in range(nUnits):
             spk_times = np.array(data['units']['spiketimes'][u])
             clus_group = data['units']['cluster_type'][u]
-            unit = Neuron(spiketimes=spk_times,
+            unit = ksUnit(spiketimes=spk_times,
                           amps=np.empty(spk_times.shape),
                           clus_id=data['units']['cluster_id'][u],
                           clus_group=clus_group,
@@ -158,6 +170,18 @@ def build_rec_popn(subject, rec_date, rec_info, data, data_folder):
                           depth=data['units']['depth'][u],
                           rec_date=rec_popn.rec_date, rec_set=rec_popn.rec_set)
             rec_popn.units.append(unit)
+
+
+    # # read in cluster groups (from manual curation)
+    # cgs = pd.read_csv(PurePath(filepath, 'cluster_group.tsv'), sep='\t')
+    
+    # # read cluster info
+    # clus_info = pd.read_csv(PurePath(filepath, 'cluster_info.tsv'), sep='\t')
+    
+    # ss = np.squeeze(np.load(PurePath(filepath, 'spike_times.npy')))
+    # sg = np.squeeze(np.load(PurePath(filepath, 'spike_clusters.npy')))
+    # st = np.squeeze(np.load(PurePath(filepath, 'spike_templates.npy')))
+    # sa = np.squeeze(np.load(PurePath(filepath, 'amplitudes.npy')))
 
     # only go through clusters in this group of chs (i.e. one probe/area)
     # these_clus_ids = clus_info.loc[clus_info['ch'].isin(rec_info['chs']),
@@ -171,17 +195,6 @@ def build_rec_popn(subject, rec_date, rec_info, data, data_folder):
     #     clus_id = clus.cluster_id
     #     unit_info = clus_info[clus_info['cluster_id'] == clus_id].to_dict(
     #         'records')[0]
-
-    #     # create Neuron instance for this cluster
-    #     unit = Neuron(spiketimes=ss[sg == clus_id]/rec_popn.sr,
-    #                   amps=sa[sg == clus_id],
-    #                   clus_id=clus_id, clus_label=clus.group,
-    #                   clus_group=get_cluster_group(clus.group),
-    #                   ch_depth=(unit_info['ch'], unit_info['depth']),
-    #                   rec_date=rec_popn.rec_date, set_num=rec_popn.set_num)
-
-    #     # ...and add it to the population
-    #     rec_popn.units.append(unit)
 
     return rec_popn, events
 
