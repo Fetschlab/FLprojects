@@ -3,3 +3,5 @@
 *.icloud
 *.asv
 *.mat
+
+dots3DMP/pyDots3DMP/__pycache__/
