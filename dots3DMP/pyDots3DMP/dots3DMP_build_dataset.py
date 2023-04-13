@@ -3,99 +3,9 @@
 import numpy as np
 import pandas as pd
 from pathlib import Path, PurePath
-from datetime import date
 import scipy.io as sio
-from dataclasses import dataclass, field
-from dots3DMP_spike_rates import trial_psth, condition_averages
-import pickle
-import pdb
-
-# %% define Neuron and Population classes
-
-# TODO create Neuron metaclass, and make current Neuron class a subclass for kilosort unit
-
-
-@dataclass
-class Unit:
-
-    spiketimes: np.ndarray = field(repr=False)
-    amps: np.ndarray = field(repr=False)
-
-    clus_id: int = field(default=0)
-    rec_date: date = date.today().strftime("%Y%m%d")
-
-    # TODO post_init on waveforms
-    
-    # TODO simple methods e.g. isi, autocorr, ifr
-    # TODO inter-unit methods e.g. cross-corr in spiketimes, similarity
-
-@dataclass
-class ksUnit(Unit):
-    """
-    a unit extracted from Kilosort, should have a template with amplitude
-    also cluster information, and lab/rig specific info
-    """
-    # TODO
-    # wfs: np.ndarray = field(repr=False, default_factory=lambda: np.zeros(shape=int, dtype=np.float64))
-    # template: np.ndarray = field(repr=False, default_factory=lambda: np.zeros(shape=int, dtype=np.float64))
-
-    temp_amp: float = np.nan
-
-    # TODO force clus_group to be 0-3, clus_label to be UN, MU, SU, or noise
-    clus_group: int = 0
-    clus_label: str = ''
-    channel: int = 0
-    depth: int = field(default=0, metadata={'unit': 'mm'})
-    rec_set: int = 1
-
-    @property
-    def trial_psth(self, align_ev, **kwargs):
-        return trial_psth(self.spiketimes, align_ev, **kwargs)
-
-    @property
-    def condition_psth(self, condlist, cond_groups=None):
-        return condition_averages(self.frates, condlist, cond_groups)
-        
-
-    #def isi(self, binsize=0.01, max=0.2, plot=False): 
-    # return isi hist, violations count
-    #def corr(self, binsize=0.01, max=0.2, plot=False):
-    #def ifr(self, binsize=0.1, plot=False)
-    #def plot_waveforms(self):  
-    #def wf_width(self):
-
-    #def summary(self, binsize=0.01, max=0.2, plot=False):
-    #  isi, corr, ifr, wf_width 2x2 subplots
-
-
-@dataclass
-class Population:
-    """
-    data from one recording set
-        - metadata
-        - list of unit instances, one per recorded unit
-        - dictionary/pandas df of task events and times
-    """
-
-    rec_date: date = date.today().strftime("%Y%m%d")
-    create_date: date = date.today().strftime("%Y%m%d")
-    subject: str = ''
-    session: str = ''
-    rec_set: int = 1
-    probe_num: int = 1
-    device: str = ''
-    
-    pen_num: int = 1
-    grid_xy: tuple[int] = field(default=(np.nan, np.nan))
-    grid_type: str = ''
-    area: str = ''
-
-    mdi_depth: int = field(default=0, metadata={'unit': 'mm'})
-    chs: list = field(default_factory=list, repr=False)
-    sr: float = field(default=30000.0, metadata={'unit': 'Hz'})
-
-    units: list = field(default_factory=list, repr=False)
-    events: dict = field(default_factory=dict, repr=False)
+import pickle as pkl
+from NeuralDataClasses import Population, ksUnit, Unit
 
 # %% build Population class
 
@@ -235,10 +145,11 @@ if __name__ == '__main__':
     datapath = '/Volumes/homes/fetschlab/data/'
     data_folder = Path(datapath, subject, f'{subject}_neuro/')
 
-    mat_data_file = 'lucio_20220512-20230331_neuralData.mat'
-    mat_folder = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/data/lucio_neuro_datasets'
+    mat_data_file = 'lucio_20220512-20230411_neuralData.mat'
+    local_folder = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/data/'
 
-    m = sio.loadmat(PurePath(mat_folder, mat_data_file),
+    m = sio.loadmat(PurePath(local_folder, 'lucio_neuro_datasets',
+                             mat_data_file),
                     simplify_cells=True)
     data = m['dataStruct']
 
@@ -267,7 +178,6 @@ if __name__ == '__main__':
 
     for index, sess in enumerate(data):
 
-        # rec_date = sess['DATE']
         rec_date = sess['date']
         rec_set = sess['rec_set']
 
@@ -291,6 +201,6 @@ if __name__ == '__main__':
 
                 rec_df.loc[index, par] = rec_popn
 
-    filename = PurePath(mat_folder, 'test_data.pkl')
+    filename = PurePath(local_folder, f"{mat_data_file.split('.')[0]}.pkl")
     with open(filename, 'wb') as file:
-        pickle.dump(rec_df, file)
+        pkl.dump(rec_df, file)
