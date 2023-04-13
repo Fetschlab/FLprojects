@@ -5,6 +5,7 @@
 
 
 import numpy as np
+import pandas as pd
 
 
 def prop_se(x):
@@ -344,11 +345,12 @@ def dots3DMP_create_trial_list(hdgs, mods, cohs, deltas, nreps, shuff=True):
     if shuff:
         trial_table = trial_table[np.random.permutation(ntrials)]
 
-    hdg, modality, coh, delta = trial_table.T
+    trial_table = np.stack(trial_table.T, axis=1)
+    trial_table = pd.DataFrame(trial_table[:, [1, 2, 0, 3]],
+                               columns=('modality', 'coherence',
+                                        'heading', 'delta'))
 
-    return (hdg, modality, coh, delta), ntrials
-
-
+    return trial_table, ntrials
 
 
 if __name__ == "__main__":
