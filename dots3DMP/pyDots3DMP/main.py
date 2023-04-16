@@ -10,6 +10,7 @@ Created on Wed Apr 12 08:49:37 2023
 
 import numpy as np
 import pandas as pd
+from itertools import repeat
 from pathlib import PurePath
 import pickle as pkl
 
@@ -19,6 +20,8 @@ from dots3DMP_behavior import dots3DMP_create_trial_list
 import dots3DMP_FRutils as FRutils
 import tuning_utils as tuning
 
+import matplotlib.pyplot as plt
+
 data_folder = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/data'
 filename = PurePath(data_folder, 'lucio_neuro_datasets',
                     'lucio_20220512-20230411_neuralData.pkl')
@@ -26,95 +29,261 @@ filename = PurePath(data_folder, 'lucio_neuro_datasets',
 with open(filename, 'rb') as file:
     this_df = pkl.load(file)
 
-# %% define conditions and data of interest
 
-# define conditions of interest
+par = ['Tuning', 'Task']
+data = this_df[this_df[par].notna().all(axis=1)][par]
+
+# %% define conditions of interest
+
+# shared for tuning and task
 condlabels = ['modality', 'coherenceInd', 'heading', 'delta']
 mods = np.array([1, 2, 3])
 cohs = np.array([1, 2])
-# hdgs = np.array([-60, -45, -25, -22.5, -12, 0, 12, 22.5, 25, 45, 60])
-hdgs = np.array([-12, -6, -3, -1.5, 0, 1.5, 3, 6, 12])
 deltas = np.array([0])
 
-trial_table, ntrials = dots3DMP_create_trial_list(hdgs, mods, cohs, deltas, 1,
-                                                  shuff=False)
+# TUNING
+hdgs_tuning = np.array([-60, -45, -25, -22.5, -12, 0, 12, 22.5, 25, 45, 60])
+tr_tab_tuning, _ = dots3DMP_create_trial_list(hdgs_tuning, mods, cohs,
+                                              deltas, 1, shuff=False)
+tr_tab_tuning.columns = condlabels
 
-# parameters for extracting firing rates
-par = 'Task'
-align = [['stimOn', 'stimOn'], ['stimOn', 'stimOff']]
-trange = np.array([[-0.5, 0], [0, 0]])
+# align = [['stimOn', 'stimOff']]
+# trange = np.array([[0, 0]])
+# binsize = 0
+# sm_params = ('boxcar', 0)
 
-# time-resolved
-binsize = 0.05
-smbinsize = 0.2
-sm_params = ('boxcar', int(smbinsize/binsize))
 
-# aggregated spike rates in intervals
+# TASK
+hdgs_task = np.array([-12, -6, -3, -1.5, 0, 1.5, 3, 6, 12])
+tr_tab_task, _ = dots3DMP_create_trial_list(hdgs_task, mods, cohs,
+                                            deltas, 1, shuff=False)
+tr_tab_task.columns = condlabels
+
+# aggregated spike rates in stimOn-stimOff interval
+# same for tuning and task for now
+
 binsize = 0
 sm_params = ('boxcar', 0)
 
-data = this_df[this_df[par].notna()][par]
 
-# %% get all unit firing rates across trials/conds
+# %% trial firing rates, tuning/task
 
+# get all unit firing rates across trials/conds, for tuning and task
+
+# TODO modify get_aligned rates to recalculate tsrat and end using third arg (see MATLAB ver)
+align = [['stimOn', 'stimOff']]
+trange = np.array([[0.5, -0.5]])
 
 # firing rate over time across units and trials, per session
-rates, unitlabels, tvecs, align_lst, conds = zip(*data.apply(
-    FRutils.get_aligned_rates, args=(align, trange, binsize, sm_params,
-                                     condlabels)))
+rates_tuning, ulabs_tuning, uids_tuning, tvecs, align_lst, conds_tuning = \
+    zip(*data['Tuning'].apply(FRutils.get_aligned_rates,
+                              args=(align, trange, binsize, sm_params,
+                                    condlabels)))
 
-# avg firing rate over time across units, each cond, per session
-cond_frs, ucond_all = [], []
-for f_in, cond in zip(rates, conds):
-    # for k, f in f_in.items() # if using dict for alignment events
+align = [['stimOn', 'stimOff']]
+trange = np.array([[0, 0]])
+
+rates_task, ulabs_task, uids_task, tvecs, align_lst, conds_task = \
+    zip(*data['Task'].apply(FRutils.get_aligned_rates,
+                            args=(align, trange, binsize, sm_params,
+                                  condlabels)))
+
+rates_tuning_cat, _ = FRutils.concat_aligned_rates(rates_tuning)
+rates_task_cat, _ = FRutils.concat_aligned_rates(rates_task)
+
+# %% cond avg + hdg tuning, in TUNING paradigm
+
+# this is bad python practice [], []
+# also use some dicts to reduce variable clutter and store relationships
+# TODO
+
+cond_frs, unqconds = [], []
+fstats_all, pvals_all, unqconds2 = [], [], []
+
+for f_in, cond in zip(rates_tuning_cat, conds_tuning):
+
+    # avg firing rate over time across units, each cond, per session
     f_out, _, cg = FRutils.condition_averages(f_in, cond,
-                                              cond_groups=trial_table)
+                                              cond_groups=tr_tab_tuning)
     cond_frs.append(f_out)
-    ucond_all.append(cg)
-au_frs = np.vstack(cond_frs)
+    unqconds.append(cg)
+
+    # tuning significance - across headings within mod/coh and interval
+    f_stats, pvals, cg = tuning.tuning_sig(f_in, cond, tr_tab_tuning, condlabels[:-1])
+    fstats_all.append(f_stats)
+    pvals_all.append(pvals)
+    unqconds2.append(cg)
+
+# %% Curation
+
+# TODO clean this up...
+
+# select neurons based on significant tuning
+cc = np.array([0, 1, 2, 3, 4])
+tuning_sig = list(map(lambda p, c: np.any(p[:, c, 0] < 0.1, axis=1),
+                      pvals_all, repeat(cc)))
+
+# drop units with low fr or no significant tuning
+bad_tuning = list(map(lambda x: FRutils.bad_rate_units(x, 5), rates_tuning_cat))
+bad_task = list(map(lambda x: FRutils.bad_rate_units(x, 5), rates_task_cat))
+
+bad_units = [np.logical_or(np.logical_or(a, b), sig)
+             for a, b, sig in zip(bad_tuning, bad_task, tuning_sig)]
+
+rates_tuning_cat = [fr[~b, :, :] for fr, b in zip(rates_tuning_cat, bad_units)]
+rates_task_cat = [fr[~b, :, :] for fr, b in zip(rates_task_cat, bad_units)]
+cond_frs = [fr[~b, :, :] for fr, b in zip(cond_frs, bad_units)]
 
 
-# %% tuning curves
+# and drop entire 'Population's if <=1 unit
+has_units = list(map(lambda fr: fr.shape[0] > 1, rates_tuning_cat))
+rates_tuning_cat = [arr for arr, k in zip(rates_tuning_cat, has_units) if k]
+rates_task_cat = [arr for arr, k in zip(rates_task_cat, has_units) if k]
 
-# this needs work
+cond_frs = [arr for arr, k in zip(cond_frs, has_units) if k]
 
-xhdgs = np.linspace(hdgs.min(), hdgs.max(), 200)
-nUnits = au_frs.shape[0]
+conds_tuning = [arr for arr, k in zip(conds_tuning, has_units) if k]
+conds_task = [arr for arr, k in zip(conds_task, has_units) if k]
 
-# for u in range(nUnits):
-#     for m in mods:
-#         for c in cohs:
+# %% tuning + r_sig
 
-#             temp = au_frs[u, (u_conds['modality'] == m) &
-#                              (u_conds['coherenceInd'] == c), :]
-#             inds = ~(np.any(np.isnan(temp), axis=1))
-#             temp = temp[inds, :]
-#             thesehdgs = hdgs[inds]
+# TODO, fix corr_popn to work separately on each interval/bin, and return corrs
+# correspondingly (i.e. independently for each column)
 
-#             y_pred, popt, p0, perr = \
-#                 zip(*np.apply_along_axis(tuning.fit_predict_vonMises,
-#                                          axis=0, arr=temp,
-#                                          x=thesehdgs, x_pred=xhdgs).T)
-#             y_pred = np.vstack(y_pred)
+# define preferred heading and direction using condition-averaged FRs
+cond_columns = ['modality', 'coherenceInd', 'heading']
+dictkeys = ['corrs', 'pvals', 'conds']
 
-# %% 'noise' correlations
+sig_corr_results = dict(zip(dictkeys, ([] for _ in dictkeys)))
+
+for f_in, uconds in zip(cond_frs, unqconds):
+
+    # split back up, to calculate tuning separately for each interval
+    f_in = np.split(f_in, f_in.shape[2], axis=2)
+
+    corrs_t, pvals_t = [], []
+    for f_t in f_in:
+        pair_corrs, pair_pvals, cg = \
+            FRutils.corr_popn(f_t, uconds, tr_tab_tuning, cond_columns,
+                              rtype='signal')
+        corrs_t.append(pair_corrs)
+        pvals_t.append(pair_pvals)
+
+    sig_corr_results['corrs'].append(corrs_t)
+    sig_corr_results['pvals'].append(pvals_t)
+    sig_corr_results['conds'].append(cg)
+
+
+# %% spike count/noise correlation (rsc)
 
 # within recording areas
 
-# TODO use map to reduce loops here
-cond_corrs, cond_pvals = [], []
-for f_in, cond in zip(rates, conds):
+noise_corr_results = dict(zip(dictkeys, ([] for _ in dictkeys)))
+
+for f_in, cond in zip(rates_task_cat, conds_task):
+
+    # split back up, to calculate noise corr separately for each interval
+    f_in = np.split(f_in, f_in.shape[2], axis=2)
+
     corrs_t, pvals_t = [], []
     for f_t in f_in:
-        corrs, pvals = FRutils.rsc_within(f_t, cond,
-                                          cond_groups=trial_table)
-        corrs_t.append(corrs)
-        pvals_t.append(pvals)
-    cond_corrs.append(corrs_t)
-    cond_pvals.append(pvals_t)
+        pair_corrs, pair_pvals, cg = \
+            FRutils.corr_popn(f_t, cond, tr_tab_task, cond_columns,
+                              rtype='noise')
+        corrs_t.append(pair_corrs)
+        pvals_t.append(pair_pvals)
 
-# across areas
+    noise_corr_results['corrs'].append(corrs_t)
+    noise_corr_results['pvals'].append(pvals_t)
+    noise_corr_results['conds'].append(cg)
 
 
+# %% final, plotting
+
+# stacking time
+sig_corrs = np.hstack([np.vstack(s[0]) for s in sig_corr_results['corrs']])
+noise_corrs = np.hstack([np.vstack(n[0]) for n in noise_corr_results['corrs']])
+
+colors = ['black', 'magenta', 'red', 'cyan', 'blue']
+fig, ax = plt.subplots(1, 1)
+for c in range(sig_corrs.shape[0]):
+    x = sig_corrs[c, :]
+    y = noise_corrs[c, :]
+    plt.scatter(x, y, color=colors[c], s=10)
+
+
+
+# %% noise correlations split by wager
+
+condlabels = ['modality', 'coherenceInd', 'heading', 'delta',
+              'PDW']
+rates_task, ulabs_task, uids_task, tvecs, align_lst, conds_task = \
+    zip(*data['Task'].apply(FRutils.get_aligned_rates,
+                            args=(align, trange, binsize, sm_params,
+                                  condlabels)))
+
+rates_task_PDW, _ = FRutils.concat_aligned_rates(rates_task)
+
+nconds = len(tr_tab_task.index)
+tr_tab_task_lo = tr_tab_task.copy()
+tr_tab_task_hi = tr_tab_task.copy()
+
+tr_tab_task_lo['PDW'] = np.zeros(nconds)
+tr_tab_task_hi['PDW'] = np.ones(nconds)
+
+tr_tab_task_PDW = pd.concat([tr_tab_task_lo, tr_tab_task_hi], ignore_index=True)
+tr_tab_task_PDW = tr_tab_task_PDW.loc[np.abs(tr_tab_task_PDW['heading'])< 3, :]
+
+# drop units with low fr or no significant tuning
+bad_tuning = list(map(lambda x: FRutils.bad_rate_units(x, 5), rates_task_PDW))
+rates_task_PDW = [fr[~b, :, :] for fr, b in zip(rates_task_PDW, bad_units)]
+
+# and drop entire 'Population's if <=1 unit
+has_units = list(map(lambda fr: fr.shape[0] > 1, rates_task_PDW))
+rates_task_PDW = [arr for arr, k in zip(rates_task_PDW, has_units) if k]
+conds_task = [arr for arr, k in zip(conds_task, has_units) if k]
+
+cond_columns = ['modality', 'coherenceInd', 'PDW', 'heading']
+
+noise_corr_PDW = dict(zip(dictkeys, ([] for _ in dictkeys)))
+
+for f_in, cond in zip(rates_task_PDW, conds_task):
+
+    # split back up, to calculate noise corr separately for each interval
+    f_in = np.split(f_in, f_in.shape[2], axis=2)
+
+    corrs_t, pvals_t = [], []
+    for f_t in f_in:
+        pair_corrs, pair_pvals, cg = \
+            FRutils.corr_popn(f_t, cond, tr_tab_task_PDW, cond_columns,
+                              rtype='noise')
+        corrs_t.append(pair_corrs)
+        pvals_t.append(pair_pvals)
+
+    noise_corr_PDW['corrs'].append(corrs_t)
+    noise_corr_PDW['pvals'].append(pvals_t)
+    noise_corr_PDW['conds'].append(cg)
+
+noise_corrs = np.hstack([np.vstack(n[0]) for n in noise_corr_PDW['corrs']])
+
+
+colors = ['black', 'magenta', 'red', 'cyan', 'blue']*2
+fig, ax = plt.subplots(2, 1)
+for c in range(noise_corrs.shape[0]):
+    axnum = c//5
+    y = noise_corrs[c, :]
+    ax[axnum].hist(y, color=colors[c])
+    ax[axnum].set_xlim([-1, 1])
+
+
+# %% misc scraps
+
+# Drop units not recorded in all conditions
+# all_conds = list(map(lambda x: len(x[0]) == 5, noise_corr_results['corrs']))
+# for k in noise_corr_results.keys():
+#     noise_corr_results[k] = [f for f, keep in zip(noise_corr_results[k], all_conds) if keep]
+#     sig_corr_results[k] = [f for f, keep in zip(sig_corr_results[k], all_conds) if keep]
+
+# pref_hdg, pref_dir, pref_hdg_diffs = tuning.tuning_basic(y, hdgs_tuning[~nidx], axis=1)
 
 
