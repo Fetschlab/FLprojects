@@ -347,8 +347,8 @@ def dots3DMP_create_trial_list(hdgs, mods, cohs, deltas, nreps, shuff=True):
 
     trial_table = np.stack(trial_table.T, axis=1)
     trial_table = pd.DataFrame(trial_table[:, [1, 2, 0, 3]],
-                               columns=('modality', 'coherence',
-                                        'heading', 'delta'))
+                               columns=['modality', 'coherence',
+                                        'heading', 'delta'])
 
     return trial_table, ntrials
 
