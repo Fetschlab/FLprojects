@@ -22,6 +22,7 @@ import pdb
 from itertools import repeat, combinations
 from scipy.ndimage import convolve1d, gaussian_filter1d
 from scipy.stats import pearsonr, zscore
+from scipy.special import comb
 
 # import matplotlib.pyplot as plt
 # import seaborn as sns
@@ -29,6 +30,7 @@ from scipy.stats import pearsonr, zscore
 # sns.set_theme(context="notebook", style="ticks", rc=custom_params)
 
 # %% per-trial spike counts/firing rates
+
 
 def trial_psth(spiketimes, align_ev, trange=np.array([-1, 1]),
                binsize=0.05, smooth_params=('boxcar', 5),
@@ -69,6 +71,7 @@ def trial_psth(spiketimes, align_ev, trange=np.array([-1, 1]),
             tstart_new = np.min(tstarts_new)
             tend_new = trange[1]
             tends_new = tend_new.repeat(tstarts_new.shape[0])
+            # TODO can't we just use np.repeat here, rather than itertools
 
         elif which_ev == 0:
             tends_new = tr_ends - align_ev[:, 0]
@@ -149,11 +152,12 @@ def smooth_counts(raw_fr, smooth_params=('boxcar', 5)):
 
 # %% Extract firing rates for population
 
-# really this should be a Population method...
+# co-opt this as a Population method at some point
 
 def get_aligned_rates(popn, align=['stimOn'], trange=np.array([-2, 2]),
                       binsize=0.05, smooth_params=('boxcar', 5),
                       condlabels=['modality', 'coherence', 'heading'],
+                      clus_groups=[1, 2],
                       return_as_Dataset=False):
 
     # TODO somewhere need to get an update to tvec to be all relative to one event?
@@ -180,7 +184,7 @@ def get_aligned_rates(popn, align=['stimOn'], trange=np.array([-2, 2]),
         spike_counts, t_vec, which_ev = \
             zip(*[(trial_psth(unit.spiketimes, align_ev, t_r, binsize,
                               smooth_params))
-                  for unit in popn.units])
+                  for unit in popn.units if unit.clus_group in clus_groups])
 
         rates.append(np.asarray(spike_counts))
         tvecs.append(np.asarray(t_vec[0]))
@@ -189,7 +193,10 @@ def get_aligned_rates(popn, align=['stimOn'], trange=np.array([-2, 2]),
         align_lst.append(np.asarray(list(repeat(al, len(t_vec[0])))))
 
     align_arr = np.concatenate(align_lst)
-    unitlabels = np.array([u.clus_group for u in popn.units])
+    unitlabels = np.array([u.clus_group for u in popn.units
+                           if u.clus_group in clus_groups])
+    unit_ids  = np.array([u.clus_id for u in popn.units
+                           if u.clus_group in clus_groups])
 
     if return_as_Dataset:
         # now construct a dataset
@@ -280,7 +287,7 @@ def condition_index(condlist, cond_groups=None):
             ic[(condlist == cond).all(axis=1)] = i
 
     nC = len(cond_groups.index)
-    return ic, nC
+    return ic, nC, cond_groups
 
 
 def condition_averages_ds(ds, *args):
@@ -290,10 +297,7 @@ def condition_averages_ds(ds, *args):
 
 def condition_averages(f_rates, condlist, cond_groups=None):
 
-    ic, nC = condition_index(condlist, cond_groups)
-
-    if isinstance(f_rates, list):
-        f_rates = np.dstack(f_rates)
+    ic, nC, cond_groups = condition_index(condlist, cond_groups)
 
     cond_fr = np.full((f_rates.shape[0], nC, f_rates.shape[2]), np.nan)
     cond_sem = np.full((f_rates.shape[0], nC, f_rates.shape[2]), np.nan)
@@ -301,13 +305,12 @@ def condition_averages(f_rates, condlist, cond_groups=None):
     for c in range(nC):
         if np.sum(ic == c):
             cond_fr[:, c, :] = np.mean(f_rates[:, ic == c, :], axis=1)
-            cond_fr[:, c, :] = np.std(f_rates[:, ic == c, :],
-                                      axis=1) / np.sqrt(np.sum(ic == c))
+            cond_sem[:, c, :] = np.std(f_rates[:, ic == c, :],
+                                       axis=1) / np.sqrt(np.sum(ic == c))
 
     return cond_fr, cond_sem, cond_groups
 
-# %% Noise correlations
-
+# %% 
 
 def pearsonr_dropna(x, y):
     nidx = np.logical_or(np.isnan(x), np.isnan(x))
@@ -315,9 +318,23 @@ def pearsonr_dropna(x, y):
     return corr, pvals
 
 
-def rsc_within(f_rates, condlist, cond_groups=None):
+def zscore_bygroup(arr, grp, axis=None):
 
-    ic, nC = condition_index(condlist, cond_groups)
+    zscore_subarrs = []
+    for group in np.unique(grp):
+
+        sub_arr = np.compress(grp == group, arr, axis=axis)
+        z_arr = zscore(sub_arr, axis=axis)
+        zscore_subarrs.append(z_arr)
+
+    return np.concatenate(zscore_subarrs, axis=axis)
+
+
+def corr_popn(f_rates, condlist, cond_groups, cond_columns, rtype=''):
+    # pairwise correlations within a population (nChoose2 pairs)
+    
+    cg = cond_groups[cond_columns[:-1]].drop_duplicates()
+    ic, nC, cg = condition_index(condlist[cond_columns[:-1]], cg)
 
     pair_corrs = []
     pair_pvals = []
@@ -325,32 +342,67 @@ def rsc_within(f_rates, condlist, cond_groups=None):
     for c in range(nC):
         if np.sum(ic == c):
             temp = f_rates[:, ic == c]
-            temp = zscore(temp, axis=1)  # zscore over trials for each unit
+
+            # zscore over trials for each unit and heading separately
+            if rtype == 'noise':
+                hdgs = condlist.loc[ic == c, cond_columns[-1]].to_numpy()
+
+                try:
+                    temp = zscore_bygroup(temp, hdgs, axis=1)
+                except ValueError:
+                    pdb.set_trace()
+
             pairs = combinations(np.split(temp, temp.shape[0], axis=0), 2)
 
             try:
                 corr, pval = zip(*[(pearsonr_dropna(pair[0][0], pair[1][0]))
-                                    for pair in pairs])
+                                   for pair in pairs])
             except ValueError:
-                corr = np.nan
-                pval = np.nan
-
-            pair_corrs.append(corr)
-            pair_pvals.append(pval)
+                corr = [np.nan]*int(comb(temp.shape[0], 2))
+                pval = [np.nan]*int(comb(temp.shape[0], 2))
 
         else:
-            pair_corrs.append(np.nan)
-            pair_pvals.append(np.nan)
+            corr = [np.nan]*int(comb(f_rates.shape[0], 2))
+            pval = [np.nan]*int(comb(f_rates.shape[0], 2))
+        
+        pair_corrs.append(np.array(corr))
+        pair_pvals.append(np.array(pval))
+
+    return pair_corrs, pair_pvals, cg
+
+
+def corr_popn2(f_rates1, f_rates2, condlist, cond_groups, cond_columns, rtype=''):
+
+    # pairwise correlations across two populations (nxm pairs)
+    cg = cond_groups[cond_columns[:-1]].drop_duplicates()
+    ic, nC, cg = condition_index(condlist[cond_columns[:-1]], cg)
+    
+    nUnits = [f_rates1.shape[0], f_rates2.shape[0]]
+    pair_corrs = np.ndarray((nUnits[0], nUnits[1], nC))
+    pair_pvals = np.ndarray((nUnits[0], nUnits[1], nC))
+
+    for c in range(nC):
+        if np.sum(ic == c):
+            f1 = f_rates1[:, ic == c]
+            f2 = f_rates2[:, ic == c]
+
+            # zscore over trials for each unit and heading separately
+            if rtype == 'noise':
+                hdgs = condlist.loc[ic == c, cond_columns[-1]]
+                f1 = zscore_bygroup(f1, hdgs, axis=1)
+                f2 = zscore_bygroup(f2, hdgs, axis=1)
+
+            for i in range(nUnits[0]):
+                for j in range(nUnits[1]):
+                    corr, pval = pearsonr(f1[i, :], f2[j, :])
+
+                    pair_corrs[i, j, c] = corr
+                    pair_pvals[i, j, c] = pval
 
     return pair_corrs, pair_pvals
 
 
-def rsc_across(f_rates1, f_rates2, condlist, cond_groups=None):
-    
-    ic, nC = condition_index(condlist, cond_groups)
-
-    
-
+        
 # %% plot functions
 
 def plot_rates(cond_fr):
