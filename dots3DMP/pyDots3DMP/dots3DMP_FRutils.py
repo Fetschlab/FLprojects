@@ -213,7 +213,50 @@ def get_aligned_rates(popn, align=['stimOn'], trange=np.array([-2, 2]),
 
     else:
         # return separate vars
-        return rates, unitlabels, tvecs, align_lst, condlist
+        return rates, unitlabels, unit_ids, tvecs, align_lst, condlist
+
+
+def concat_aligned_rates(f_rates, tvecs=None):
+    """
+
+    Parameters
+    ----------
+    f_rates : list
+        list of firing rates, where each element is a different interval
+        containing units x trials or units x trials x binned time
+    tvecs : TYPE
+        corresponding time vector (only for time-resolved f_rates)
+        if None, 
+
+    Returns
+    -------
+    rates_cat : TYPE
+        concatenated rates
+    len_intervals : TYPE
+        DESCRIPTION.
+
+    """
+
+    if tvecs is not None:
+        # concatenate all different alignments...
+        # but store the lens for later splits
+        len_intervals = [np.array(list(map(len, x)), dtype=int).cumsum()
+                     for x in tvecs]
+        rates_cat = list(map(lambda x: np.concatenate(x, axis=2), f_rates))
+    else:
+        # each 'interval' is length 1 if binsize was set to 0
+        len_intervals = [np.ones(len(r), dtype=int).cumsum() for r in f_rates]
+        rates_cat = list(map(np.dstack, f_rates))
+
+    return rates_cat, len_intervals
+
+
+def bad_rate_units(f_rates, minfr=0):
+
+    mean_fr = np.squeeze(np.mean(f_rates, axis=1))
+    bad_units = np.logical_or(np.isnan(mean_fr), mean_fr <= minfr)
+    
+    return bad_units
 
 
 # %% trial condition helpers
