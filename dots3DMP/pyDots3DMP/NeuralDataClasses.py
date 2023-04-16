@@ -48,6 +48,7 @@ class ksUnit(Unit):
     # wfs: np.ndarray = field(repr=False, default_factory=lambda: np.zeros(shape=int, dtype=np.float64))
     # template: np.ndarray = field(repr=False, default_factory=lambda: np.zeros(shape=int, dtype=np.float64))
 
+    unique_id: int = field(init=False)
     temp_amp: float = np.nan
 
     # TODO force clus_group to be 0-3, clus_label to be UN, MU, SU, or noise
@@ -56,6 +57,11 @@ class ksUnit(Unit):
     channel: int = 0
     depth: int = field(default=0, metadata={'unit': 'mm'})
     rec_set: int = 1
+
+    def __post_init__(self):
+        self.unique_id = \
+            int(f"{self.rec_date}{self.rec_set:02d}{self.clus_id:03d}")
+
     # TODO add contam pct?
 
     # TODO fix these up, should they be properties??
