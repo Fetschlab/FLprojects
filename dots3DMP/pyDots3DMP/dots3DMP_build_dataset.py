@@ -9,7 +9,6 @@ from NeuralDataClasses import Population, ksUnit, Unit
 
 # %% build Population class
 
-
 def build_rec_popn(subject, rec_date, rec_info, data, data_folder):
     """
     Parameters
@@ -190,6 +189,9 @@ if __name__ == '__main__':
                                          rec_sess_info['max_ch']+1)
         rec_sess_info['grid_xy'] = (rec_sess_info['grid_x'],
                                     rec_sess_info['grid_y'])
+
+        if not rec_sess_info['is_good']:
+            continue
 
         for p, par in enumerate(pars):
 
