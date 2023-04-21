@@ -104,7 +104,8 @@ def tuning_basic(y, x, axis=1):
     yL = y[:, x < 0]
 
     pref_hdg = x[np.argmax(np.abs(y - np.mean(y, axis=axis,
-                                              keepdims=True)), axis=axis)]
+                                              keepdims=True)),
+                           axis=axis)]
 
     #pref_mag = (np.mean(yR, axis=axis) - np.mean(yL, axis=axis))
     #pref_dir = np.sign(pref_mag)
