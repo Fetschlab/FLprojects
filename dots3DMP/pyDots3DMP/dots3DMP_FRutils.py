@@ -17,10 +17,15 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+import seaborn as sns
+
 import pdb
 
 from itertools import repeat, combinations
-from scipy.ndimage import convolve1d, gaussian_filter1d
+from scipy.ndimage import convolve1d #, gaussian_filter1d
+from scipy.signal import gaussian
 from scipy.stats import pearsonr, zscore
 from scipy.special import comb
 
@@ -33,7 +38,8 @@ from scipy.special import comb
 
 
 def trial_psth(spiketimes, align_ev, trange=np.array([-1, 1]),
-               binsize=0.05, smooth_params=('boxcar', 5),
+               binsize=0.05, sm_params={'kind': 'boxcar', 'binsize': 0.05,
+                                        'width': 0.4, 'sigma': 0.25},
                all_trials=False, normalize=True):
 
     nTr = align_ev.shape[0]
@@ -101,6 +107,7 @@ def trial_psth(spiketimes, align_ev, trange=np.array([-1, 1]),
                 itr_start = np.argmin(np.abs(tr_starts - spiketimes[0]))
                 itr_end = np.argmin(np.abs(tr_ends - spiketimes[-1]))
 
+            spktimes_aligned = []
             for itr in range(itr_start, itr_end+1):
                 spk_inds = np.logical_and(spiketimes >= tr_starts[itr],
                                           spiketimes <= tr_ends[itr])
@@ -112,6 +119,8 @@ def trial_psth(spiketimes, align_ev, trange=np.array([-1, 1]),
                     inds_t = spiketimes[spk_inds] - align_ev[itr, which_ev]
                     fr_out[itr, :], _ = np.histogram(inds_t, x)
 
+                    spktimes_aligned.append(inds_t)
+
                     # set nans outside the range of align/trange for each trial
                     if which_ev == 0:
                         end_pos = np.argmin(abs(x - tends_new[itr]))
@@ -122,45 +131,60 @@ def trial_psth(spiketimes, align_ev, trange=np.array([-1, 1]),
 
             if binsize > 0:
                 x = x[:-1] + np.diff(x)/2  # shift x values to bin centers
-                fr_out = smooth_counts(fr_out, smooth_params=smooth_params)
+
+                if sm_params:
+                    fr_out = smooth_counts(fr_out, params=sm_params)
+
                 if normalize:
                     fr_out /= binsize
             elif binsize == 0:
                 if normalize:
                     fr_out /= x
 
-        return fr_out, x, which_ev
+        return fr_out, x, spktimes_aligned
 
 
-def smooth_counts(raw_fr, smooth_params=('boxcar', 5)):
+def smooth_counts(raw_fr, params={'kind': 'boxcar', 'binsize': 0.05,
+                                  'width': 0.4, 'sigma': 0.25}):
 
-    if smooth_params[0] == 'boxcar':
+    N = int(np.ceil(params['width'] / params['binsize']))  # width, in bins
 
-        kw = smooth_params[1]  # width, in bins
-        kernel = np.ones(kw) / kw
-        smoothed_fr = convolve1d(raw_fr, kernel,
-                                 axis=0, mode='reflect')
+    if params['kind'] == 'boxcar':
 
-    elif smooth_params[0] == 'gaussian':
+        win = np.ones(N) / N
 
-        sigma = smooth_params[1]
-        smoothed_fr = gaussian_filter1d(raw_fr, sigma=sigma)
+    elif params['kind'] == 'gaussian':
 
-    # TODO causal filter
+        alpha = (N - 1) / (2 * (params['sigma'] / params['binsize']))
+        win = gaussian(N, std=alpha)
+        # win /= np.sum(win)  # win is already normalized to win in scipy
 
+        # smoothed_fr = gaussian_filter1d(raw_fr, sigma=alpha)
+
+    elif params['kind'] == 'CHG':  # causal half-gaussian
+
+        alpha = (N - 1) / (2 * (params['sigma'] / params['binsize']))
+        win = gaussian(N, std=alpha)
+        win[:(N//2)-1] = 0
+        win /= np.sum(win)  # renormalize here
+
+    smoothed_fr = convolve1d(raw_fr, win, axis=0, mode='nearest')
     return smoothed_fr
+
 
 # %% Extract firing rates for population
 
-# co-opt this as a Population method at some point
 
 def get_aligned_rates(popn, align=['stimOn'], trange=np.array([-2, 2]),
-                      binsize=0.05, smooth_params=('boxcar', 5),
+                      binsize=0.05, sm_params={'kind': 'boxcar',
+                                               'binsize': 0.05,
+                                               'width': 0.4, 'sigma': 0.25},
                       condlabels=['modality', 'coherence', 'heading'],
                       clus_groups=[1, 2],
                       return_as_Dataset=False):
 
     # TODO somewhere need to get an update to tvec to be all relative to one event?
+    # or just conca
     # so that we can plot on the same time axis if we want
 
     good_trs = popn.events['goodtrial'].to_numpy(dtype='bool')
@@ -181,9 +205,9 @@ def get_aligned_rates(popn, align=['stimOn'], trange=np.array([-2, 2]),
         # trial_psth in list comprehesnsion is going to generate a list of
         # tuples, the zip(*iter) syntax allows us to unpack the tuples into
         # separate variables
-        spike_counts, t_vec, which_ev = \
-            zip(*[(trial_psth(unit.spiketimes, align_ev, t_r, binsize,
-                              smooth_params))
+        spike_counts, t_vec, _ = \
+            zip(*[(trial_psth(unit.spiketimes, align_ev,
+                              t_r, binsize, sm_params=sm_params))
                   for unit in popn.units if unit.clus_group in clus_groups])
 
         rates.append(np.asarray(spike_counts))
@@ -193,10 +217,10 @@ def get_aligned_rates(popn, align=['stimOn'], trange=np.array([-2, 2]),
         align_lst.append(np.asarray(list(repeat(al, len(t_vec[0])))))
 
     align_arr = np.concatenate(align_lst)
-    unitlabels = np.array([u.clus_group for u in popn.units
-                           if u.clus_group in clus_groups])
-    unit_ids  = np.array([u.clus_id for u in popn.units
-                           if u.clus_group in clus_groups])
+    # unitlabels = np.array([u.clus_group for u in popn.units
+    #                        if u.clus_group in clus_groups])
+    # unit_ids  = np.array([u.clus_id for u in popn.units
+    #                        if u.clus_group in clus_groups])
 
     if return_as_Dataset:
         # now construct a dataset
@@ -220,7 +244,7 @@ def get_aligned_rates(popn, align=['stimOn'], trange=np.array([-2, 2]),
 
     else:
         # return separate vars
-        return rates, unitlabels, unit_ids, tvecs, align_lst, condlist
+        return rates, tvecs, condlist
 
 
 def concat_aligned_rates(f_rates, tvecs=None):
@@ -231,16 +255,16 @@ def concat_aligned_rates(f_rates, tvecs=None):
     f_rates : list
         list of firing rates, where each element is a different interval
         containing units x trials or units x trials x binned time
-    tvecs : TYPE
+    tvecs : list or None
         corresponding time vector (only for time-resolved f_rates)
-        if None, 
+        default: None
 
     Returns
     -------
     rates_cat : TYPE
         concatenated rates
     len_intervals : TYPE
-        DESCRIPTION.
+        array containing 
 
     """
 
@@ -258,12 +282,12 @@ def concat_aligned_rates(f_rates, tvecs=None):
     return rates_cat, len_intervals
 
 
-def bad_rate_units(f_rates, minfr=0):
+def lowfr_units(f_rates, minfr=0):
 
     mean_fr = np.squeeze(np.mean(f_rates, axis=1))
-    bad_units = np.logical_or(np.isnan(mean_fr), mean_fr <= minfr)
-    
-    return bad_units
+    lowfr_units = np.logical_or(np.isnan(mean_fr), mean_fr <= minfr)
+
+    return lowfr_units
 
 
 # %% trial condition helpers
@@ -282,6 +306,7 @@ def condition_index(condlist, cond_groups=None):
         assert isinstance(cond_groups, pd.DataFrame)
         cond_groups = cond_groups.loc[:, condlist.columns]
 
+        # fill with nan?
         ic = np.full(condlist.shape[0], fill_value=-1, dtype=int)
         for i, cond in enumerate(cond_groups.values):
             ic[(condlist == cond).all(axis=1)] = i
@@ -312,6 +337,7 @@ def condition_averages(f_rates, condlist, cond_groups=None):
 
 # %% 
 
+
 def pearsonr_dropna(x, y):
     nidx = np.logical_or(np.isnan(x), np.isnan(x))
     corr, pvals = pearsonr(x[~nidx], y[~nidx])
@@ -341,6 +367,9 @@ def corr_popn(f_rates, condlist, cond_groups, cond_columns, rtype=''):
 
     for c in range(nC):
         if np.sum(ic == c):
+            # currently f_rates must be units x trials (no time/interval axis)
+            # to be improved - so that we don't need a loop over third axis
+            # outside the function (i.e. so it can also operate on cat rates)
             temp = f_rates[:, ic == c]
 
             # zscore over trials for each unit and heading separately
