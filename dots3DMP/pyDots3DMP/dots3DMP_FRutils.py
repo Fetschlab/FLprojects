@@ -272,7 +272,7 @@ def concat_aligned_rates(f_rates, tvecs=None):
         # concatenate all different alignments...
         # but store the lens for later splits
         len_intervals = [np.array(list(map(len, x)), dtype=int).cumsum()
-                     for x in tvecs]
+                         for x in tvecs]
         rates_cat = list(map(lambda x: np.concatenate(x, axis=2), f_rates))
     else:
         # each 'interval' is length 1 if binsize was set to 0
@@ -358,7 +358,7 @@ def zscore_bygroup(arr, grp, axis=None):
 
 def corr_popn(f_rates, condlist, cond_groups, cond_columns, rtype=''):
     # pairwise correlations within a population (nChoose2 pairs)
-    
+
     cg = cond_groups[cond_columns[:-1]].drop_duplicates()
     ic, nC, cg = condition_index(condlist[cond_columns[:-1]], cg)
 
@@ -430,30 +430,86 @@ def corr_popn2(f_rates1, f_rates2, condlist, cond_groups, cond_columns, rtype=''
 
     return pair_corrs, pair_pvals
 
-
-        
 # %% plot functions
 
-def plot_rates(cond_fr):
-    pass
+
+# plot raster
+# dataframe containing conditions on each trial, and list of spikes on each trial
+# list of spikes can be multiple columns for multiple alignments
+# then should loop over these and put them on subplots within same subplot
+
+def plot_raster(df, row, col, hue, colors):
+
+    good_trs = events['goodtrial'].to_numpy(dtype='bool')
+    condlist = events.loc[good_trs, :]
+
+    align_ev = events.loc[good_trs, align_ev].to_numpy(dtype='float64')
+
+    fr, x, spks = trial_psth(spiketimes, align_ev, trange,
+                             binsize, sm_params)
+
+    if row and col:
+        split_conds = (row, col)
+    elif row:
+        split_conds = row
+    else:
+        split_conds = col
+        
+
+    df = events[[row, col, hue]]
+    df['spikes'] = spks
+
+    g = sns.FacetGrid(df, row=row, col=col, sharex=True)
+
+    for (row, col), cond_df in df.groupby(split_cond):
+        ax = g.axes_dict[(row, col)]
+        ic, nC, cond_groups = condition_index(this_df.drop(['spikes'], axis=1))
+
+        spks_c = this_df['spikes'].to_numpy(dtype='object')
+        ic2 = np.sort(ic)
+        order = np.argsort(ic)
+
+        # time these two at some point
+        spks_c = list(spks_c[order])
+        # spks_c = [spks_c[i] for i in order]
+
+        # default is horizontal
+        colors = [cvals[i] for i in ic2]
+        ax.eventplot(spks_c, lineoffsets=list(range(len(spks_c))),
+                     colors=colors)
+        ax.invert_yaxis()
+        #ax.eventplot(spks_c, lineoffsets=order, colors=colors)
+        
+    plt.show()
+
+    return fr, x, spks
+
+raster_plot(u.spiketimes, align[1], events, color_cond, split_cond)
+
+# plot psth (time-res)
+
+# plot condition averages (non-time res, heading on x-axis)
+
+# plot tuning curves (with or without error bars/dots to show rsc)
+# plot noise correlation (rsc) scatter plot
 
 
-def plot_psth(df, palette, type=1):
+#def plot_psth(df, palette, type=1):
 
     # TODO
     # code for rasterized spike plots
     # rescale x-axes according to length of time vector
     # show coherences
 
-    if type == 'avg':
-        sns.lineplot(data=df,
-                     x='heading', y='spike counts',
-                     estimator='mean', errorbar='se', err_style='bars',
-                     hue=df[condlabels[:-1]].apply(tuple, axis=1))
-    elif type == 'time':
-        g = sns.relplot(data=df,
-                        x='time', y='firing_rate',
-                        hue='heading', row='modality', col='align',
-                        palette=palette,
-                        facet_kws=dict(sharex=False),
-                        kind='line', aspect=.75)
+    # if type == 'avg':
+    #     sns.lineplot(data=df,
+    #                  x='heading', y='spike counts',
+    #                  estimator='mean', errorbar='se', err_style='bars',
+    #                  hue=df[condlabels[:-1]].apply(tuple, axis=1))
+    # elif type == 'time':
+    #     g = sns.relplot(data=df,
+    #                     x='time', y='firing_rate',
+    #                     hue='heading', row='modality', col='align',
+    #                     palette=palette,
+    #                     facet_kws=dict(sharex=False),
+    #                     kind='line', aspect=.75)
