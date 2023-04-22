@@ -1,4 +1,4 @@
-function [au, nUnits] = dots3DMP_FRmatrix_fromDataStruct(dataStruct,par,timingInfo,conds,condlabels,opts)
+function [au, conds, nUnits] = dots3DMP_FRmatrix_fromDataStruct(dataStruct,par,timingInfo,aconds,condlabels,opts)
 % au = DOTS3MP_FRMATRIX_FROMDATASTRUCT(dataStruct,par,timingInfo,conds,condlabels,opts)
 %
 % 
@@ -27,6 +27,7 @@ end
 
 if ~isfield(opts,'keepSingleTrials'), opts.keepSingleTrials = 0; end
 if ~isfield(timingInfo,'overlap'), timingInfo.overlap = 0; end
+if ~isfield(opts, 'collapse_conds'), opts.collapse_conds = false(1, size(aconds,2)); end
 
 % set defaults for timingInfo
 
@@ -38,6 +39,8 @@ binSize     = timingInfo.binSize;
 overlap     = timingInfo.overlap;
 
 %% now loop over the dataStruct
+
+
 
 clear au
 clear condlist
@@ -51,7 +54,9 @@ for ses = 1:length(dataStruct)
     % kluge for now 11/06/22
     % stimOn sent from PLDAPS to Ripple is the 'motion' state begin, not
     % the motionOnsetLatency when actual motion begins...
-    %try temp.events.stimOn = temp.events.stimOn + 0.2994; end
+    if ~isfield(temp.events, 'motionOn')
+        temp.events.motionOn = temp.events.stimOn + 0.2994;
+    end
     
     if opts.keepMU, unit_inds = find(temp.units.cluster_type<=3);
     else,           unit_inds = find(temp.units.cluster_type==2); % SU only
@@ -91,23 +96,23 @@ for ses = 1:length(dataStruct)
     end
     % =======
     
-    % maybe we optionally specify a separate grouping variable to collapse
-    % e.g. we want -1.5, 0, 1.5 heading trials but want to group them
-    % together, so need to specify anoither grouping variable for headings
-    % to re-assign condI
-    
     % remove any unwanted trials - brfix, or condition not in the conds list
     isInCondList = false(1,Ntr);
     condI        = nan(1,Ntr); 
     for itr=1:Ntr
-        [isInCondList(itr),condI(itr)] = ismember(condlist(itr,:),conds,'rows');
+        [isInCondList(itr),condI(itr)] = ismember(condlist(itr,:),aconds,'rows');
     end
     goodtrs = temp.events.goodtrial & isInCondList;
     
-    % condlist contains each unique condition (per row)
     % condI stores the condition of each trial by its index in conds
     condI    = condI(goodtrs);
     condlist = condlist(goodtrs,:);
+
+    % re-assign condI after collapsing across collapse_conds columns
+    % we've already stored goodtrs here, so we should
+    [conds, ~, ic] = unique(aconds(:, ~opts.collapse_conds), 'rows', 'stable');
+    condI = ic(condI);
+%     conds = aconds;
 
     % startInd (+1) is the starting ind for units in the current session, unitInd will go from 1:length(unit_inds) for each alignment event
     startInd = unitInd;
@@ -142,7 +147,6 @@ for ses = 1:length(dataStruct)
             end
         end
 
-        au.times.evTimes_bySession{iae} = nan(size(conds,1),length(otherEvents{iae}),length(dataStruct));
         for ic = 1:size(conds,1)
             au.times.evTimes_bySession{iae}(ic,:,ses) = nanmedian(oe_times(condI==ic,:),1);
         end
@@ -154,14 +158,28 @@ for ses = 1:length(dataStruct)
 
 %             fprintf('unit %d, ae %d\n',unitInd,iae)
 
-            au.hdr.unitDate{unitInd} = datestr(dataStruct(ses).date,'yyyymmdd');
+            au.hdr.unitDate{unitInd} = dataStruct(ses).date;
             au.hdr.unitSet(unitInd)  = dataStruct(ses).rec_set;
-            au.hdr.area{unitInd}  = dataStruct(ses).brain_area;
+            au.hdr.area{unitInd}     = dataStruct(ses).brain_area;
             au.hdr.unitID(unitInd)   = temp.units.cluster_id(unit_inds(u));
             au.hdr.unitType(unitInd) = temp.units.cluster_type(unit_inds(u));
 
+            
             % calculate time-resolved and average firing rate within desired intervals
             [fr, x, fr_mean, durs, aeI]  = trial_psth(temp.units.spiketimes{unit_inds(u)},ae,'tStart',tStart(iae),'tEnd',tEnd(iae),'binSize',binSize,'overlap',overlap);
+
+            if opts.smoothFR
+                % extend time intervals a bit to avoid edge effects of conv
+                t_ext = length(opts.convKernel)/2 * binSize;
+                [fr, x1, ~, ~, ~]  = trial_psth(temp.units.spiketimes{unit_inds(u)},ae,'tStart',tStart(iae)-t_ext,'tEnd',tEnd(iae)+t_ext,'binSize',binSize,'overlap',overlap);
+
+                [~,pos(1)] = min(abs(x1-x(1)));
+                [~,pos(2)] = min(abs(x1-x(end)));
+
+                fr = smoothRaster ( fr , opts.convKernel );
+                fr = fr(:,pos(1):pos(2)); % cut back to size
+
+            end
 
             % now get activity across trials of each condition in conds
 
@@ -200,9 +218,7 @@ for ses = 1:length(dataStruct)
             end
 
 
-            if opts.smoothFR
-                condFR = smoothRaster ( condFR , opts.convKernel );
-            end
+            
 
             % these could be slightly different lengths across units
             % so keep as cells and then we will 'matricise' them outside

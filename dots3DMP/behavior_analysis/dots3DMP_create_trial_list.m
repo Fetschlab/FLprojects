@@ -68,7 +68,7 @@ hdg      = trialTable(:,1);
 modality = trialTable(:,2);  
 coh      = trialTable(:,3);  
 delta    = trialTable(:,4);  
-ntrials  = length(trialTable);
+ntrials  = size(trialTable,1);
 
 
 

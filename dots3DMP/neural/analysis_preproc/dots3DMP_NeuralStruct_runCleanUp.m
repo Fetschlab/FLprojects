@@ -41,7 +41,7 @@ for s = 1:length(dataStruct)
 
         % 01-2023 this didn't account for good vs bad trials!
         if contains(parSelect{par},'dots3DMP')
-            stimCondList = [events.heading; events.modality; events.coherence; events.delta]';
+            stimCondList = [events.heading; events.modality; events.coherence]';
         else
             stimCondList = [events.targetR; events.targetTheta; events.coherence; events.numDirs; events.apertureDiam; events.amplitude]';
         end
