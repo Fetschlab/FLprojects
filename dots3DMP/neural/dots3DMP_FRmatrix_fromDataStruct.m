@@ -109,7 +109,7 @@ for ses = 1:length(dataStruct)
     condlist = condlist(goodtrs,:);
 
     % re-assign condI after collapsing across collapse_conds columns
-    % we've already stored goodtrs here, so we should
+    % we've already stored goodtrs here, so we should be ok
     [conds, ~, ic] = unique(aconds(:, ~opts.collapse_conds), 'rows', 'stable');
     condI = ic(condI);
 %     conds = aconds;

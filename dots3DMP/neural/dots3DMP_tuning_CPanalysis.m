@@ -1,11 +1,7 @@
 % class 'tuned' neurons during dots3DMPtuning paradigm
-
 % e.g. so that we can reference CPs to preference during tuning task
 
-clear;clc;close all
-addpath(genpath('/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/'))
-
-%% Load in the data
+%% Load data
 
 subject   = 'lucio';
 dateRange = 20220512:20230411;
@@ -15,6 +11,7 @@ dataFileName = sprintf('%s_%d-%d_neuralData.mat',subject,dateRange(1),dateRange(
 load(fullfile(dataPath,dataFileName));
 
 %% 'clean up' - keep units recorded in both pars
+% crude diagnostic criteria could be revised
 parSelect  = {'dots3DMPtuning','dots3DMP'}; 
 minRate    = 2;
 minTrs     = [5 8];
@@ -24,7 +21,8 @@ dataStruct = dots3DMP_NeuralStruct_runCleanUp(dataStruct,parSelect,minRate,minTr
 
 mods = [1 2 3];
 % cohs = [0.2 0.6];
-cohs = [1]; % use inds instead, real-val cohs were sometimes different
+% cohs = [1 2]; % use inds instead, real-val cohs were sometimes different
+cohs = 1; % collapse across cohs later anyway
 deltas = 0;
 
 % use actual headings vector, and then remove/ignore NaNs
@@ -47,7 +45,7 @@ condlabels = {'modality','heading'};
 useFullDur = 0;
 optsMS.smoothFR = 0;
 optsMS.convKernel = fspecial('gaussian', [1 40], 5);
-optsMS.keepSingleTrials = 1;
+optsMS.keepSingleTrials = 1; % needed for tuning statistics 
 optsMS.keepMU = 1;
 
 if useFullDur
@@ -286,7 +284,7 @@ eventInfoTR.binSize = 0.01;
 opts.keepMU = 1; 
 opts.keepSingleTrials = 1; % need single trials for CPs
 opts.smoothFR = 1;
-optsoptsMS.convKernel = fspecial('gaussian', [1 40], 5);
+opts.convKernel = fspecial('gaussian', [1 40], 5);
 
 
 allUnitsTaskTR = dots3DMP_FRmatrix_fromDataStruct(dataStruct,'dots3DMP',eventInfoTR,condsTask,condTasklabels,opts);
@@ -370,8 +368,6 @@ for iae = 1:length(eventInfoTR.alignEvent)
 end
 
 
-
-
 % save TuningStats_w_ChoiceWagerProbabilities choiceP wagerP p_bslnStimXhdgs p_bslnVSstim prefDir prefAmp -mat
 
 
@@ -384,14 +380,14 @@ end
 
 % sigTuned = any(p_bslnStimXhdgs(:,:,2)<0.05,1);
 % sigTuned = all(p_bslnStimXhdgs(:,:,2)<0.05,1); 
-sigTuned = true(1, size(choiceP,2));
+% sigTuned = true(1, size(choiceP,2));
 
 % sigTuned = p_bslnStimXhdgs(1,:,2)<0.05 & any(p_bslnStimXhdgs(2:3,:,2)>0.05); % ves-tuned but NOT vis-tuned
-sigTuned = p_bslnStimXhdgs(1,:,2)>0.05 & any(p_bslnStimXhdgs(2:3,:,2)<0.05); % vis-tuned but NOT ves-tuned
+% sigTuned = p_bslnStimXhdgs(1,:,2)>0.05 & any(p_bslnStimXhdgs(2:3,:,2)<0.05); % vis-tuned but NOT ves-tuned
 % sigTuned = p_bslnStimXhdgs(1,:,2)<0.05 & any(p_bslnStimXhdgs(2:3,:,2)<0.05); % ves- and vis-tuned
 
 inds = [1 2 3];
-% sigTuned = any(p_bslnStimXhdgs(inds,:,2)<0.05);
+sigTuned = any(p_bslnStimXhdgs(inds,:,2)<0.05);
 % sigTuned = all(p_bslnStimXhdgs(2:3,:,2)>0.05); 
 
 areaMST = strcmp(allUnitsTask.hdr.area, 'MSTd');
@@ -404,9 +400,7 @@ condnames = {'Ves','Vis','Comb'};
 condcols = 'krb';
 spcx = -0.1:0.05:0.1;
 
-pt_titles = {'Unconditioned','Choice-High','Choice-Low'};
-
-% plot High conditioned only, and high coh only
+%%  plot High conditioned only, and high coh only
 pt = 2;
 figure('position',[500 200 600 400],'color','w'); hold on
 for uc = [1 2 3]%1:size(choiceP,1)
@@ -422,8 +416,9 @@ for uc = [1 2 3]%1:size(choiceP,1)
 
 end
 
-%%
+%% plot all
 
+pt_titles = {'Unconditioned','Choice-High','Choice-Low'};
 
 figure('position',[500 200 1400 400],'color','w')
 
@@ -489,7 +484,8 @@ sigTuned = any(p_bslnStimXhdgs(:,:,2)<0.05,1);
 % sigTuned = true(size(choiceP,2),1);
 
 
-subplotInd = [1 3 4 5 6];
+% subplotInd = [1 3 4 5 6];
+subplotInd = [1 2 3];
 
 
 % relative subplot widths for alignments
@@ -582,32 +578,39 @@ condsTask(:,2) = [];
 condTasklabels(2) = [];
 
 
+% optsTR.collapse_conds = [0 1 1 0 0 0]; % collapse across hdgs
+optsTR.collapse_conds = [0 1 0 0 0];
+
+
+%%
 % heading conditions
 hdgs = [-12 -6 -3 -1.5 0 1.5 3 6 12];
 [hdg,modality,coh,~,ntr] = dots3DMP_create_trial_list(hdgs,mods,1,deltas,1,0); % 0 heading
 condsTask = [modality,coh,hdg];
 condsTask      = repmat(condsTask,2,1);                                 
-condsTask(:,4) = [zeros(ntr,1); ones(ntr,1)];                          % choice/correct
+condsTask(:,end+1) = [zeros(ntr,1); ones(ntr,1)];                          % correct
+% condsTask(:,end+1) = [ones(ntr,1); 2*ones(ntr,1)];                          % choice
 condTasklabels = {'modality','coherenceInd','heading','correct'};
 
 % ignore coh
 condsTask(:,2) = [];
 condTasklabels(2) = [];
 
+%optsTR.collapse_conds = [0 0 0];
+
+
+%%
 eventInfoTR.alignLabel      = { 'Baseline' , 'stimulus on',             'saccade'};  % labels, for plotting
 eventInfoTR.alignEvent      = {{'fixation'}, {'motionOn'} ,             {'saccOnset'}};
 eventInfoTR.otherEvents     = {{'targsOn'} , {'fixation','saccOnset'} , {'postTargHold'}};
 eventInfoTR.otherEventnames = {{'targsOn'}  , {'FixAcq', 'RT'}  ,       {'WagerHold'}}; % labels, for plotting
 eventInfoTR.tStart          = [-0.5             -0.7                    -0.3]; 
-eventInfoTR.tEnd            = [0                1.2                     5.0];
-eventInfoTR.binSize         = 0.01; 
+eventInfoTR.tEnd            = [0                1.2                     1.0];
+eventInfoTR.binSize         = 0.001; 
 
 optsTR.smoothFR = 1;
-optsTR.convKernel = fspecial('gaussian', [1 40], 5);
-
-% optsTR.collapse_conds = [0 1 1 0 0 0]; % collapse across hdgs
-% optsTR.collapse_conds = [0 1 0 0 0];
-optsTR.collapse_conds = [0 0 0];
+optsTR.convKernel = fspecial('gaussian', [1 150], 25);
+% NOTE: conv with gaussian is really slow!
 
 [allUnitsTaskTR, condsTask, ~] = dots3DMP_FRmatrix_fromDataStruct(dataStruct,'dots3DMP',eventInfoTR,condsTask,condTasklabels,optsTR);
 
@@ -649,11 +652,16 @@ for iae = 1:length(recoded_psths)
             temp_conds = condsTask(uc==ic, :);
 
             if prefDir(uc,u)==1
-%                 newFR(temp_conds(:,choiceCol)==2, :) = tempFR(temp_conds(:,choiceCol)==1, :);
-%                 newFR(temp_conds(:,choiceCol)==1, :) = tempFR(temp_conds(:,choiceCol)==2, :);
 
-                newFR(sign(temp_conds(:,2))==1, :) = tempFR(sign(temp_conds(:,2))==-1, :);
-                newFR(sign(temp_conds(:,2))==-1, :) = tempFR(sign(temp_conds(:,2))==1, :);
+                % for wagering plots
+                newFR(temp_conds(:,choiceCol)==2, :) = tempFR(temp_conds(:,choiceCol)==1, :);
+                newFR(temp_conds(:,choiceCol)==1, :) = tempFR(temp_conds(:,choiceCol)==2, :);
+
+
+                % for heading conditions
+%                 newFR(temp_conds(:,2)==0, :) = tempFR(temp_conds(:,2)==0, :);
+%                 newFR(sign(temp_conds(:,2))==1, :) = tempFR(sign(temp_conds(:,2))==-1, :);
+%                 newFR(sign(temp_conds(:,2))==-1, :) = tempFR(sign(temp_conds(:,2))==1, :);
 
             else
                 newFR = tempFR;
@@ -690,28 +698,30 @@ areaSel = strcmp(allUnitsTaskTR.hdr.area, 'MSTd');
 % sigTuned = p_bslnStimXhdgs(1,:,2)>0.05 & p_bslnStimXhdgs(2,:,2)<0.05; % vis-tuned but NOT ves-tuned
 % sigTuned = p_bslnStimXhdgs(1,:,2)<0.05 & p_bslnStimXhdgs(2,:,2)<0.05; % ves- and vis-tuned
 
-inds = [1 2];
+inds = [1 2 3];
 sigTuned = any(p_bslnStimXhdgs(inds,:,2)<0.05);
 % sigTuned = all(p_bslnStimXhdgs(2:3,:,2)>0.05); 
 
 selUnits = areaSel & sigTuned;
 
 % for choice/wager (blue green shades, like targets in task)
-cols = [0.65 0.80 0.90;
+hdgcols = [0.65 0.80 0.90;
         0.10 0.45 0.70;
         0.70 0.90 0.55;
         0.20 0.60 0.20];
 
 % for headings, spectrum
-N = length(hdgs);
-cols = cbrewer('div','RdBu',N*2);
-cols = cols([1:floor(N/2) end-floor(N/2):end],:);
-cols(hdgs==0,:) = [0 0 0];
+% N = length(hdgs);
+% cols = cbrewer('div','RdBu',N*2);
+% cols = cols([1:floor(N/2) end-floor(N/2):end],:);
+% cols(hdgs==0,:) = [0 0 0];
 
-cols = repmat(cols, size(condsTask,1)/size(cols,1), 1);
+% hdgcols = repmat(cols, size(condsTask,1)/size(cols,1), 1);
 
 % subplotInd = [1 3 4 5 6];
 subplotInd = [1 2 3];
+
+ls = '-';
 
 % relative subplot widths for alignments
 al_inds = 2:3;
@@ -753,20 +763,25 @@ for uc = 1:size(unqModCoh,1)
             hh.YAxis.Visible = 'off';
         end
         hh.XLim = t([1 end]);
-        hh.YLim = [-5 16];
+        hh.YLim = [-2 4];
+
+        nTrs_conds = allUnitsTaskTR.data.condntrs{iae}(ic==uc, :);
+        enough_trials = all(nTrs_conds>=3);
 
         oevs = allUnitsTaskTR.times.evTimes_bySession{iae};
         oevs = nanmean(nanmean(oevs(ic==uc, :, :), 3), 1);
 
         % Plot the actual means
-        temp_psth = recoded_psths{iae}(ic==uc,:,selUnits);
+        temp_psth = recoded_psths{iae}(ic==uc,:,selUnits & enough_trials);
+%         temp_psth = zscored_psths{iae}(ic==uc,:,selUnits);
+
         temp_conds = condsTask(ic==uc,:);
 
         for cc = 1:size(temp_psth, 1)
-            if cc>9, ls = '-'; else, ls = '--'; end
+            %if cc>9, ls = '-'; else, ls = ':'; end
             %if ismember(cc,[1:3 7:9]), continue, end
-            if cc<=9, continue, end
-            plot(t, nanmean(temp_psth(cc,:,:), 3), 'color', cols(cc,:),'linew',1.5, 'linestyle',ls)
+            %if cc<=9, continue, end
+            plot(t, nanmean(temp_psth(cc,:,:), 3), 'color', hdgcols(cc,:),'linew',1.5, 'linestyle',ls)
         end
         ylim = get(hh, 'ylim');
 
@@ -795,3 +810,34 @@ for uc = 1:size(unqModCoh,1)
     end
 
 end
+
+%%
+fsz=12;
+hdgVec = hdgs;
+figure('position',[1000 100 600 600],'color','w')
+if max(hdgVec)==12
+    sc = 3; len = 3;
+elseif max(hdgVec)==90
+    sc=1; len = 3;
+end
+
+hdgXY = len .* [sind(hdgVec*sc); cosd(hdgVec*sc)];
+textVec = hdgXY .* [1.05; 1.1];
+startPoint = [0 0];
+% axis([-6 6 -6 6]);
+axis([-1 1 -1 1]*4); axis square
+hold on
+for h=1:length(hdgVec)
+    plot(startPoint(1)+[0; hdgXY(1,h)],startPoint(2)+[0; hdgXY(2,h)],'linew',2,'color',hdgcols(h,:));
+
+    [th,r] = cart2pol(startPoint(1)+textVec(1,:),startPoint(2)+textVec(2,:));
+    th = rad2deg(th);
+    if hdgVec(h)>0, ha = 'left'; ra = th(h); va = 'middle';
+    elseif hdgVec(h)<0, ha = 'right'; ra = th(h)-180; va = 'middle';
+    else , ha = 'center'; ra = 0; va = 'bottom';
+    end
+    if hdgVec(h)==0 || abs(hdgVec(h))>2
+        text(startPoint(1)+textVec(1,h),startPoint(2)+textVec(2,h),num2str(hdgVec(h)),'fontsize',fsz,'horizo',ha,'verti',va,'rotation',ra,'color',hdgcols(h,:),'fontweight','bold')
+    end
+end
+set(gca,'Visible','Off');
