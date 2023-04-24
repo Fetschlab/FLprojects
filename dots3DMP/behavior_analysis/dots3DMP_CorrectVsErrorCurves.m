@@ -102,9 +102,13 @@ if RTtask
 subplot(222); hold on
 for c = 1:nconds
     errorbar(RTCorr(:,c),confCorr(:,c),confCorrSE(:,c),'color',mcols(c,:),'linestyle','-','linew',1.5,'marker','o');
+    if c==2
+        for h=1:length(uhdg)
+            text(RTCorr(h,c)+0.02,confCorr(h,c)+0.02,sprintf('%g',uhdg(h)),'color',mcols(c,:),'fontsize',12)
+        end
+    end
 end
 axis([xRange 0 1])
-set(gca,'xtick',uhdg);
 try changeAxesFontSize(gca,12,12); tidyaxes; catch; end
 title('Correct')
 
@@ -115,7 +119,6 @@ for c = 1:nconds
 end
 xlabel('RT (s)')
 axis([xRange 0 1])
-set(gca,'xtick',uhdg);
 try changeAxesFontSize(gca,12,12); tidyaxes; catch; end
 end
 title('Error')
