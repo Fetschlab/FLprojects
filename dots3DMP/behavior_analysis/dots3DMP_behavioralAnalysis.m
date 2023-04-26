@@ -17,12 +17,12 @@ clear; clc; close all
 %% select subject, load the data
 
 datapath = '/Users/stevenjerjian/Desktop/FetschLab/PLDAPS_data/dataStructs';
-subject = 'human';
+subject = 'lucio';
 export_figs = 0;
 
 fig_folder = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/figs';
 
-conftask = 1;
+conftask = 2;
 RTtask   = 1;
 
 data = dots3DMP_loadBehaviorData(subject,datapath,conftask,RTtask);
@@ -64,7 +64,7 @@ mods   = [1 2 3]; %unique(data.modality);
 cohs   = unique(data.coherence); 
 deltas = unique(data.delta);
 % deltas = [-3 3];
-% deltas = 0;
+deltas = 0;
 hdgs   = unique(data.heading);
 
 %% basic parsing and plot of logistic fits
@@ -139,7 +139,7 @@ dots3DMP_CorrectVsErrorCurves(data,conftask,RTtask,1)
 % Choice curves for low bet should be shallower - indicative that PDW is
 % predictive of accuracy, even within a stimulus condition!
 
-cohs = 0.3;
+cohs = 0.2;
 parsedData_byConf = dots3DMP_parseData_byConf(data,mods,cohs,deltas,hdgs,conftask,RTtask); 
 gfit_byConf       = dots3DMP_fit_cgauss_byConf(data,mods,cohs,deltas,conftask,RTtask);
 

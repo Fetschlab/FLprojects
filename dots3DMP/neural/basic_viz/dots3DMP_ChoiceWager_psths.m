@@ -66,7 +66,6 @@ ltxt = {'L-hi','L-lo','R-hi','R-lo'};
 condlabels  = {'modality','coherenceInd','heading','oneTargConf','choice','PDW'}; 
 % condlabels  = {'modality','coherenceInd','heading','choice'}; 
 
-optsTR.collapse = [0 0 0 0 0]; % this doesn't work yet I think?
 
 % time-resolved psths, separate alignments to stimOn and saccOnset
 TaskeventInfoTR.alignEvent      = {{'stimOn'},{'saccOnset'}};

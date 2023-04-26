@@ -32,12 +32,12 @@ if conftask==1
     confdata = data.conf;
     errfun   = @(x,n) std(x) / sqrt(n);
     yLab = 'confidence';
-    yL = [0 1];
+    yL = [0.25 0.85];
     nbins = 3; % number of RT quantiles
     xRange = [0.4 2.2];  % assume human for RT purposes
 elseif conftask==2 
     confdata = data.PDW;
-    errfun   = @(x,n) sqrt( (x.*(1-x)) ./ n);
+    errfun   = @(x,n) sqrt( (mean(x).*(1-mean(x))) ./ n);
     yLab = 'P(High Bet)';
     yL = [0 1];
     nbins = 5;
@@ -204,7 +204,7 @@ for c = 1:size(ucond,1) % the extra one is for all conditions pooled
     
 
     xlim(xRange);
-    ylim([0.25 0.85])
+    ylim(yL)
     if c==2, xlabel('response time (s)'); end
  
 %     text(xRange(2)*0.8+0.25,0.75,'|hdg|','color',cmap(end,:),'fontsize',14,'horizo','center','fontweight','bold');

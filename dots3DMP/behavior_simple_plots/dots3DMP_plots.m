@@ -43,7 +43,7 @@ for c = 1:length(cohs)
         end
         xlabel('heading angle (deg)');
          if conftask==1, ylim([0.4 0.8]); ylabel('SEP (''confidence'', %)');
-        elseif conftask==2, ylim([0.4 0.1]); ylabel('P(high bet)');
+        elseif conftask==2, ylim([0.4 1.0]); ylabel('P(high bet)');
         end
         try changeAxesFontSize(gca,20,20); catch; end
     end
@@ -100,7 +100,7 @@ for c = 1:length(cohs)
         
         xlabel('heading angle (deg)'); 
         if conftask==1, ylim([0.5 0.8]); ylabel('SEP (''confidence'', %)');
-        elseif conftask==2, ylim([0.4 0.1]); ylabel('P(high bet)');
+        elseif conftask==2, ylim([0.4 1.0]); ylabel('P(high bet)');
         end
         try changeAxesFontSize(gca,20,20); catch; end
     end 

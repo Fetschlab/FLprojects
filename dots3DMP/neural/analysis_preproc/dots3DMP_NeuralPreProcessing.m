@@ -13,6 +13,9 @@
 % (block/set) (in practice, this means each day) from a given probe
 % each row contains relevant metadata about recording, and a 'data' field
 % 2 - each data field contains subfields for each recorded paradigm
+% paradigm can be one of:
+% 'VesMapping','RFMapping','dots3DMPtuning','dots3DMP'
+%
 % each paradigm contains:
 %
 %   'events'    condition information for each trial, as well as the timing of key stimulus and behavioral events)
@@ -30,16 +33,19 @@
 %
 % Updates
 %
-% SJ 04-2023 fixed issues with mismatched unitInfo - using readtable instead of textscan to read cluster_info files
-% SJ 04-2023 restructured to use recording metadata spreadsheet for defining dataStruct 
+% SJ 04-2023 extensive improvements to documentation
+%            fixed issues with mismatched unitInfo - using readtable instead of textscan to read cluster_info files
+%            restructured to use recording metadata spreadsheet for defining dataStruct 
 % SJ 01-2023 all recordings use kilosort/phy (no more mksort - spikeInterface for single electrode recordings)
 % SJ 08-2022 added in metadata (getUnitInfo.m)                          
-% SJ 08-2022 cleanUp option - to sub-select desirable units
-% SJ 06-2022 significant updates
-%            Modified processing of mksort data, 
-%            + shifting of timestamps of multiple recordings. 
-%            Switched dataCell from {} to dataStruct () struct format.
+%            cleanUp option - to sub-select desirable units
+% SJ 06-2022 shifting of timestamps of multiple recordings. 
+%            switched dataCell from {} to dataStruct () struct format.
 %
+% Warnings/possible bugs
+%
+% 1. assignment of unitInfo
+% 2. dealing with non-kilosort/probe recordings
 %
 % % TODO:
 %
@@ -56,13 +62,13 @@ clear;clc
 paradigms = {'dots3DMPtuning','dots3DMP','RFMapping','VesMapping'};
 
 subject = 'lucio';
-dateRange = 20220512:20230331;
+dateRange = 20220512:20230411;
 
 keepMU = 1;           % include all SU and MU, by default, do it, can always remove them later
 useSCP = 1; 
 useVPN = 0;
 overwriteLocalFiles = 0; % set to 1 to always use the server copy
-% overwriteEventSets = 0;
+% overwriteEventSets = 0; % obsolete for now
 
 
 %%

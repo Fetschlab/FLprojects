@@ -5,7 +5,7 @@ addpath(genpath('/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/'))
 % Load in the data
 
 subject   = 'lucio';
-dateRange = 20220512:20230223;
+dateRange = 20220512:20230411;
 
 % area = 'MST';
 % dateRange = 20220512:20230131;
@@ -135,9 +135,10 @@ save(saveFileName);
 %% ====== plot mean responses during stimulus
 
 % select tuning or Task
+close all
 
-par = 'dots3DMPtuning';
-% par = 'dots3DMP';
+% par = 'dots3DMPtuning';
+par = 'dots3DMP';
 
 switch par
     case 'dots3DMPtuning'
@@ -162,7 +163,7 @@ cluster_labels{3} = 'un';
 condcols = 'kmcrb';
 numUnits = size(auFR_formatted,3);
 
-upp = 100; % units per 'page'
+upp = 56; % units per 'page'
 [p,q] = numSubplots(upp);   
 
 
@@ -177,8 +178,7 @@ for u=1:numUnits
 %             tiledlayout(h_fig,p(1),p(2));
         end
 
-        snum = mod(u,upp)+upp*(mod(u,upp)==0);
-        
+        snum = mod(u,upp)+upp*(mod(u,upp)==0);      
 
     else
         fignum = 2;
@@ -196,8 +196,9 @@ for u=1:numUnits
    set(ax,'XTick',hdgVec(notNaNs));
 %    set(gca,'XTickLabel',[]);
 %    ylim(ax,[0 max(10,max(max(auFR_formatted(notNaNs,:,iu))))])
-   title(ax,sprintf('%d, %d-%d\nunit %d (%s)',iu,auMat.hdr.unitDate(iu),auMat.hdr.unitSet(iu),...
+   title(ax,sprintf('%d, %s, set %d\nunit %d (%s)',iu,string(auMat.hdr.unitDate(iu)),auMat.hdr.unitSet(iu),...
        auMat.hdr.unitID(iu),cluster_labels{auMat.hdr.unitType(iu)}))
+%    exportgraphics(ax, sprintf('au_20230412_%s.pdf',par), "Append", true)
 
 end
 
@@ -258,7 +259,7 @@ xlabel(sprintf('Heading angle [%s]',char(176)))
 par = 'dots3DMPtuning';
 % par = 'dots3DMP';
 
-u = 81;
+u = 340;
 
 fsz = 20;
 
@@ -399,7 +400,7 @@ for c=1:size(ucond,1)
         hh.YLim = [0 my];
 
         if c==1 && iae==length(muFRs)
-            text(thisTmax+2,my*0.9,sprintf('%d-%d, %s',auMat.hdr.unitDate(u),auMat.hdr.unitID(u),dataStruct(1).data.(par).units.cluster_labels{auMat.hdr.unitType(u)}),...
+            text(thisTmax+2,my*0.9,sprintf('%d-%d, %s',auMat.hdr.unitDate{u},auMat.hdr.unitID(u),dataStruct(1).data.(par).units.cluster_labels{auMat.hdr.unitType(u)}),...
                 'horizo','right','fontsize',fsz);
         end
         changeAxesFontSize(gca,fsz,fsz);

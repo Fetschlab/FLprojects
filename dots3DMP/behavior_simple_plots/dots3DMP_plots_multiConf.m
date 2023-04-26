@@ -37,7 +37,7 @@ fh(1) = figure(201+D);
 set(gcf,'Color',[1 1 1],'Position',[300 500 180+300*(length(cohs)-1) 600],'PaperPositionMode','auto'); clf;
 for c=1:length(cohs)
     for m=1:length(mods)
-        subplot(length(mods),length(cohs),c+(m-1)*length(cohs))
+        subplot(length(mods),length(cohs),c+(m-1)*length(cohs)); hold on
         %         subplot(1,length(mods),m)
         if m==1 && c~=1, delete(gca); continue, end
         % plot all trials here?
@@ -103,7 +103,7 @@ fh(2) = figure(201+D+2);
 set(gcf,'Color',[1 1 1],'Position',[300 500 180+300*(length(cohs)-1) 600],'PaperPositionMode','auto'); clf;
 for c=1:length(cohs)
     for m=1:length(mods)
-        subplot(length(mods),length(cohs),c+(m-1)*length(cohs))
+        subplot(length(mods),length(cohs),c+(m-1)*length(cohs)); hold on
         %         subplot(1,length(mods),m)
         if m==1 && c~=1, delete(gca); continue, end
         for nc=1:nConfGroups
@@ -152,7 +152,7 @@ if conftask==2 && splitPDW==0
     set(gcf,'Color',[1 1 1],'Position',[300 500 180+300*(length(cohs)-1) 600],'PaperPositionMode','auto'); clf;
     for c=1:length(cohs)
         for m=1:length(mods)
-            subplot(length(mods),length(cohs),c+(m-1)*length(cohs))
+            subplot(length(mods),length(cohs),c+(m-1)*length(cohs)); hold on
             if m==1 && c~=1, delete(gca); continue, end
             for nc=1:nConfGroups
                 colind = mod(nc,parsedData.confGroupSplit); colind(colind==0) = parsedData.confGroupSplit;

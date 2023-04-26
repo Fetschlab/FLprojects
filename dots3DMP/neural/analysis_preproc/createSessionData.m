@@ -6,7 +6,7 @@
 % RECORDING SET NOTES
 %
 % Successive recordings with the same putative units (i.e. at the same location) are concatenated where necessary, since Kilosort spike sorting on the combined data with kilosort 
-% is much preferred, rather than trying to reconcile cluster ids post-hoc.
+% is much preferred (e.g. rather than trying to reconcile cluster ids across files post-hoc
 % The convention throughout the codebase is to refer to such 'combined' recordings as recording 'sets'.
 % If recordings are concatenated, the de facto timestamps (0-len) are shifted according to the length of the concatenated set so that the range of events and spikes is
 % matched for a given recording (nsEvents.analogData.timeStamps and .timeStampsShifted).
@@ -14,7 +14,7 @@
 % e.g. if a set is comprised of two recordings, with timestamp ranges 0-->N and 0-->M, respectively the final timestamps will run from 0 --> N+M. 
 % Spiketimes and events from recording 1 will be stored as is, spiketimes and events from recording 2 will be re-assigned to their existing value plus N.
 % 
-% If recording is left running across experiments, the set will be 1-to-1 matched to recording files, rendering the above shifting superfluous. 
+% If recording is left running across experiments (which is typically true), the set will be 1-to-1 matched to recording files, rendering the above shifting superfluous. 
 % However, multiple PLDAPS files will be associated with one recording file, which requires other considerations.
 
 % the loop structure is:
@@ -25,6 +25,32 @@
 %                   
 
 %% initialize dataStruct
+
+% added 04/2023 SJ
+% externally defined excel file containing recording metadata
+% some information is redundant with individual info mat files, but this
+% data structure makes it easier to control which files become part of data
+% struct (e.g. probe recordings only), and splits by area/probe
+
+% this could also be achieved by a loop over info.probe, but might require
+% some refactoring. Works fine for now.
+
+sess_info = readtable('/Users/stevenjerjian/Desktop/FetschLab/Analysis/RecSessionInfo.xlsx', sheet = subject);
+sess_info.Properties.VariableNames = lower(sess_info.Properties.VariableNames);
+sess_info.chs = table2cell(rowfun(@(x,y) x:y, sess_info(:,{'min_ch','max_ch'})));
+sess_info = sess_info(logical(sess_info.is_good),:);
+
+% dataStruct = struct(); sess = 0; % original
+dataStruct = table2struct(sess_info);
+
+%% main loop
+
+% loop over each 'date' in folder list, then over unique sets
+% each date/set is referenced against the sess_info sheet
+
+% fields in 'events' which contain event times, this will be important later
+tEvs   = {'trStart','fpOn','fixation','reward','stimOn','stimOff','saccOnset',...
+    'targsOn','targHold','postTargHold','reward','breakfix','nexStart','nexEnd','return'};
 
 % added 04/2023 SJ
 % externally defined excel file containing recording metadata
@@ -221,13 +247,17 @@ for n = 1:length(currentFolderList)
                 end
 
 
-                dataStruct(sess(s)).data.(paradigms{par}).units.depth = ch_depth;
-                dataStruct(sess(s)).data.(paradigms{par}).units.ch    = depth;
+                dataStruct(sess(s)).data.(paradigms{par}).units.cluster_labels = {'MU','SU','UN'};
 
-                inds = inds & ismember(ch+1, dataStruct(sess(s)).chs);
+                fprintf('Adding %d SU, %d MU, %d unsorted\n\n',sum(cgs==2),sum(cgs==1),sum(cgs==3|cgs==0))
 
-                cids = sp.cids(inds);
-                cgs  = sp.cgs(inds);
+                % add each unit's spikes to an entry in spiketimes cell
+                for unit=1:sum(inds)
+                    theseSpikes = sp.clu==cids(unit) & thisParSpikes;
+                    %                 theseSpikes = sp.clu==cids(unit);
+                    dataStruct(sess(s)).data.(paradigms{par}).units.spiketimes{unit} = sp.st(theseSpikes);
+                end
+            end
 
                 dataStruct(sess(s)).data.(paradigms{par}).units.cluster_id = cids;
                 dataStruct(sess(s)).data.(paradigms{par}).units.cluster_type = cgs;

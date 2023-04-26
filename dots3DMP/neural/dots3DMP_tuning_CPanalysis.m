@@ -1,35 +1,28 @@
 % class 'tuned' neurons during dots3DMPtuning paradigm
-
 % e.g. so that we can reference CPs to preference during tuning task
 
-clear;clc;close all
-addpath(genpath('/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/'))
-
-%% Load in the data
+%% Load data
 
 subject   = 'lucio';
-area      = 'MST';
-dateRange = 20220512:20230131;
+dateRange = 20220512:20230411;
 
-dataPath = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/data/';
-dataFileName = sprintf('%s_%d-%d_neuralData_%s.mat',subject,dateRange(1),dateRange(end),area);
+dataPath = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/data/lucio_neuro_datasets';
+dataFileName = sprintf('%s_%d-%d_neuralData.mat',subject,dateRange(1),dateRange(end));
 load(fullfile(dataPath,dataFileName));
 
-% 20220512-20230131, remove PIVC and single electrode sessions
-removethese = [4 5 8:24 37:41];
-dataStruct(removethese) = [];
-
-% % 'clean up' - keep units recorded in both pars
+%% 'clean up' - keep units recorded in both pars
+% crude diagnostic criteria could be revised
 parSelect  = {'dots3DMPtuning','dots3DMP'}; 
-minRate    = 5;
-minTrs     = [5 10];
+minRate    = 2;
+minTrs     = [5 8];
 dataStruct = dots3DMP_NeuralStruct_runCleanUp(dataStruct,parSelect,minRate,minTrs);
 
 %% define conditions
 
 mods = [1 2 3];
 % cohs = [0.2 0.6];
-cohs = [1 2]; % use inds instead, real-val cohs were sometimes different
+% cohs = [1 2]; % use inds instead, real-val cohs were sometimes different
+cohs = 1; % collapse across cohs later anyway
 deltas = 0;
 
 % use actual headings vector, and then remove/ignore NaNs
@@ -43,12 +36,17 @@ hdgsTuning([1 end]) = []; % drop +/- 90, weird platform motion
 condsTuning = [modality,coh,hdg];
 condlabels  = {'modality','coherenceInd','heading'}; % must be consistent order with conds lists below
 
+% collapse across cohs
+condsTuning = [modality, hdg];
+condlabels = {'modality','heading'};
+
 %% create FR matrix
 
 useFullDur = 0;
-optsMS.smoothFR    = 0;
-optsMS.keepSingleTrials = 1;
-optsMS.keepMU = 0;
+optsMS.smoothFR = 0;
+optsMS.convKernel = fspecial('gaussian', [1 40], 5);
+optsMS.keepSingleTrials = 1; % needed for tuning statistics 
+optsMS.keepMU = 1;
 
 if useFullDur
     % use full duration of the stimulus
@@ -64,10 +62,9 @@ end
 
 eventInfo.otherEvents = {{'stimOn'},{'fixation'}};
 eventInfo.otherEventnames = {{'stimOn'},{'FixAcq'}};
-eventInfo.binSize = 0.05;
+eventInfo.binSize = 0.2;
 
-[allUnitsTuning, nUnits] = dots3DMP_FRmatrix_fromDataStruct(dataStruct,'dots3DMPtuning',eventInfo,condsTuning,condlabels,optsMS);
-
+[allUnitsTuning, ~, nUnits] = dots3DMP_FRmatrix_fromDataStruct(dataStruct,'dots3DMPtuning',eventInfo,condsTuning,condlabels,optsMS);
 
 
 %% statistics
@@ -81,10 +78,10 @@ eventInfo.binSize = 0.05;
 % consider neuron as task-mod and dir tuned if 1 & 2 are significant
 
 % TO DO LIST
-% validate against rh_plots
+% validate/sanity-check against rh_plots
 % check anova assumptions
 % post-hocs?
-% switch statistics to R, analysis to Python, viz to Python?
+
 
 % assumptions of ANOVA
 % normality - each sample is drawn from normal dist
@@ -92,7 +89,7 @@ eventInfo.binSize = 0.05;
 % indep     - each sample per group is independent and observations within
 % group are random
 
-[unqModCoh,ia,ic] = unique(condsTuning(:,~contains(condlabels,'heading')),'rows');
+[unqModCoh,ia,ic] = unique(condsTuning(:,contains(condlabels,{'modality','coherence'})),'rows');
 
 p_bslnVSstim     = nan(size(unqModCoh,1),nUnits);       % test 1
 p_bslnStimXhdgs  = nan(size(unqModCoh,1),nUnits,2);     % test 2a,2b
@@ -115,7 +112,6 @@ for u = 1:nUnits
         stimFR = cell2mat(allUnitsTuning.data.FRtrialmean{2}(uc==ic,u));
 
         if isempty(bslnFR) || isempty(stimFR), continue, end
-
 
         % create headings vector to correspond to trial frs
         nTrs_per_hdg = allUnitsTuning.data.condntrs{2}(uc==ic,u);
@@ -156,34 +152,63 @@ for u = 1:nUnits
 end
 
 
+% impute pref dir in combined condition if not available
+% if it prefers different directions in two modalities, assume prefDir in
+% comb matches
+% whichever unisensory preference is stronger
+
+% within coh?
+
+if any(contains(condlabels, 'coherence'))
+    
+end
+
+[~, prefmod] = max(prefAmp);
+nancomb = isnan(prefDir(3,:));
+
+prefDir_imputed = prefDir;
+prefDir_imputed(3,nancomb) = prefDir(sub2ind(size(prefDir),prefmod(nancomb),find(nancomb)));
+
+prefDir = prefDir_imputed;
+
 %% CP analysis (using entire interval mean FRs)
 
-% list of conditions for CPs
-[hdg,modality,coh,~,ntr] = dots3DMP_create_trial_list(0,mods,cohs,deltas,1,0); 
-condsTask = [modality,coh];
-condsTask      = repmat(condsTask,4,1);                                 % for 4 possible choice-wager combinations
-condsTask(:,3) = [ones(ntr*2,1); 2*ones(ntr*2,1)];                          % CHOICE
-condsTask(:,4) = [zeros(ntr,1); ones(ntr,1); zeros(ntr,1); ones(ntr,1)];    % WAGER
-condsTask(:,5) = zeros(size(condsTask,1),1);                                % remove 1-target wagers
-condTasklabels = {'modality','coherenceInd','choice','PDW','oneTargConf'};
+% make this a function with inputs e.g. "conditions_matrix"
 
-opts.keepMU = 0; 
+% list of conditions for CPs
+
+[hdg,modality,coh,~,ntr] = dots3DMP_create_trial_list(0,mods,1,deltas,1,0); 
+condsTask = [modality,coh,hdg];
+condsTask      = repmat(condsTask,4,1);                                 % for 4 possible choice-wager combinations
+condsTask(:,4) = [ones(ntr*2,1); 2*ones(ntr*2,1)];                          % CHOICE
+condsTask(:,5) = [zeros(ntr,1); ones(ntr,1); zeros(ntr,1); ones(ntr,1)];    % WAGER
+condsTask(:,6) = zeros(size(condsTask,1),1);                                % remove 1-target wagers
+condTasklabels = {'modality','coherenceInd','heading', 'choice','PDW','oneTargConf'};
+
+condsTask(:,2)=[];
+condTasklabels(2)=[];
+
+clear opts
+opts.keepMU = 1; 
 opts.keepSingleTrials = 1; % need single trials for CPs
+%opts.smoothFR = 1;
+%optsMS.convKernel = fspecial('gaussian', [1 40], 5);
 
 % Task
-eventInfo.alignEvent  = {{'stimOn'},{'stimOn','saccOnset'},{'saccOnset'},{'saccOnset','postTargHold'}};
+clear eventInfo
+eventInfo.alignEvent  = {{'stimOn'},{'stimOn','saccOnset'},{'saccOnset'},{'saccOnset'}};
 eventInfo.otherEvents = {{''},{''},{''},{''}};
 eventInfo.otherEventnames = {{''},{''},{''},{''}};
-eventInfo.tStart = [-0.3, 0, -0.3,    0]; 
-eventInfo.tEnd   = [   0, 0, -0.1,    0];
-eventInfo.binSize = 0.4;
-eventInfo.overlap = 0.75;
+eventInfo.tStart = [-0.3, 0, -0.3,    -0.1]; 
+eventInfo.tEnd   = [   0, 0, -0.1,    +0.1];
+eventInfo.binSize = 0.2;
+% eventInfo.overlap = 0.75;
 
 allUnitsTask = dots3DMP_FRmatrix_fromDataStruct(dataStruct,'dots3DMP',eventInfo,condsTask,condTasklabels,opts);
 
 % now use prefDir from above, & FRtrialmean fields to calculate CP/WPs
 
-[unqModCoh,ia,ic] = unique(condsTask(:,1:2),'rows');
+[unqModCoh,ia,ic] = unique(condsTask(:,contains(condTasklabels,{'modality','coherence'})),'rows');
 
 choiceCol = strcmpi(condTasklabels,'choice');
 pdwCol    = strcmpi(condTasklabels,'pdw') | strcmpi(condTasklabels,'wager');
@@ -202,17 +227,25 @@ for u = 1:nUnits
 
             fr_mean = allUnitsTask.data.FRtrialmean{iae}(:,u);
 
+            if ~sum(uc==ic & ~cellfun(@isempty,fr_mean))
+                continue
+            end
+
             % choice only
             pref_trs = uc==ic & condsTask(:,choiceCol)==prefDir(uc,u);
             null_trs = uc==ic & condsTask(:,choiceCol)~=prefDir(uc,u);
 
-            choiceP(uc,u,iae,1) = rocN(cell2mat(fr_mean(pref_trs)), cell2mat(fr_mean(null_trs)), 100);
+            try
+                choiceP(uc,u,iae,1) = rocN(cell2mat(fr_mean(pref_trs)), cell2mat(fr_mean(null_trs)), 100);
+            end
 
             % wager only
             hi_trs = uc==ic & condsTask(:,pdwCol)==1;
             lo_trs = uc==ic & condsTask(:,pdwCol)==0;
 
-            wagerP(uc,u,iae,1) = rocN(cell2mat(fr_mean(hi_trs)), cell2mat(fr_mean(lo_trs)), 100);
+            try
+                wagerP(uc,u,iae,1) = rocN(cell2mat(fr_mean(hi_trs)), cell2mat(fr_mean(lo_trs)), 100);
+            end
 
             % choice/wager, conditioned
             pref_hi = uc==ic & condsTask(:,choiceCol)==prefDir(uc,u) & condsTask(:,pdwCol)==1;
@@ -221,9 +254,11 @@ for u = 1:nUnits
             pref_lo = uc==ic & condsTask(:,choiceCol)==prefDir(uc,u) & condsTask(:,pdwCol)==0;
             null_lo = uc==ic & condsTask(:,choiceCol)~=prefDir(uc,u) & condsTask(:,pdwCol)==0;
 
-            % CPs by high and low bets separately
-            choiceP(uc,u,iae,2) = rocN(cell2mat(fr_mean(pref_hi)), cell2mat(fr_mean(null_hi)), 100);
-            choiceP(uc,u,iae,3) = rocN(cell2mat(fr_mean(pref_lo)), cell2mat(fr_mean(null_lo)), 100);
+            try
+                % CPs by high and low bets separately
+                choiceP(uc,u,iae,2) = rocN(cell2mat(fr_mean(pref_hi)), cell2mat(fr_mean(null_hi)), 100);
+                choiceP(uc,u,iae,3) = rocN(cell2mat(fr_mean(pref_lo)), cell2mat(fr_mean(null_lo)), 100);
+            end
 
             if sum(pref_hi) && sum(pref_lo) && sum(null_hi) && sum(null_lo)
                 % WPs by pref and null dir separately
@@ -244,14 +279,18 @@ eventInfoTR.otherEvents = {{'fixation'},{'postTargHold'}};
 eventInfoTR.otherEventnames = {{'FixAcq'},{'WagerHold'}};
 eventInfoTR.tStart = [-0.6 -0.3]; 
 eventInfoTR.tEnd   = [+0.9 0.6];
-eventInfoTR.binSize = 0.3;
-eventInfoTR.overlap = 0.5; % 50% overlap
+eventInfoTR.binSize = 0.01;
+
+opts.keepMU = 1; 
+opts.keepSingleTrials = 1; % need single trials for CPs
+opts.smoothFR = 1;
+opts.convKernel = fspecial('gaussian', [1 40], 5);
+
 
 allUnitsTaskTR = dots3DMP_FRmatrix_fromDataStruct(dataStruct,'dots3DMP',eventInfoTR,condsTask,condTasklabels,opts);
 
 % now use prefDir from above, & FRtrial fields to calculate CP/WPs in bins
-
-[unqModCoh,ia,ic] = unique(condsTask(:,1:2),'rows');
+[unqModCoh,ia,ic] = unique(condsTask(:,contains(condlabels,{'modality','coherence'})),'rows');
 
 choiceCol = strcmpi(condTasklabels,'choice');
 pdwCol    = strcmpi(condTasklabels,'pdw') | strcmpi(condTasklabels,'wager');
@@ -329,8 +368,6 @@ for iae = 1:length(eventInfoTR.alignEvent)
 end
 
 
-
-
 % save TuningStats_w_ChoiceWagerProbabilities choiceP wagerP p_bslnStimXhdgs p_bslnVSstim prefDir prefAmp -mat
 
 
@@ -343,28 +380,33 @@ end
 
 % sigTuned = any(p_bslnStimXhdgs(:,:,2)<0.05,1);
 % sigTuned = all(p_bslnStimXhdgs(:,:,2)<0.05,1); 
-% sigTuned = true(size(choiceP,2),1);
+% sigTuned = true(1, size(choiceP,2));
 
 % sigTuned = p_bslnStimXhdgs(1,:,2)<0.05 & any(p_bslnStimXhdgs(2:3,:,2)>0.05); % ves-tuned but NOT vis-tuned
 % sigTuned = p_bslnStimXhdgs(1,:,2)>0.05 & any(p_bslnStimXhdgs(2:3,:,2)<0.05); % vis-tuned but NOT ves-tuned
-sigTuned = p_bslnStimXhdgs(1,:,2)<0.05 & any(p_bslnStimXhdgs(2:3,:,2)<0.05); % ves- and vis-tuned
+% sigTuned = p_bslnStimXhdgs(1,:,2)<0.05 & any(p_bslnStimXhdgs(2:3,:,2)<0.05); % ves- and vis-tuned
 
-% sigTuned = any(p_bslnStimXhdgs([1 3 5],:,2)<0.05);
+inds = [1 2 3];
+sigTuned = any(p_bslnStimXhdgs(inds,:,2)<0.05);
 % sigTuned = all(p_bslnStimXhdgs(2:3,:,2)>0.05); 
+
+areaMST = strcmp(allUnitsTask.hdr.area, 'MSTd');
+
+selUnits = sigTuned & areaMST;
 
 condnames = {'Ves','Vis-L','Vis-H','Comb-L','Comb-H'};
 condcols = 'kmrcb';
+condnames = {'Ves','Vis','Comb'};
+condcols = 'krb';
 spcx = -0.1:0.05:0.1;
 
-pt_titles = {'Unconditioned','Choice-High','Choice-Low'};
-
-% plot High conditioned only, and high coh only
+%%  plot High conditioned only, and high coh only
 pt = 2;
 figure('position',[500 200 600 400],'color','w'); hold on
-for uc = [1 3 5]%1:size(choiceP,1)
+for uc = [1 2 3]%1:size(choiceP,1)
 
-    yy = choiceP(uc,sigTuned,:,pt);
-    errorbar((1:4)+spcx(uc),squeeze(nanmean(yy,2)),squeeze(nanstd(yy,[],2))./sqrt(sum(sigTuned)),'color',condcols(uc),'marker','o','linewidth',2);
+    yy = choiceP(uc,selUnits,:,pt);
+    errorbar((1:4)+spcx(uc),squeeze(nanmean(yy,2)),squeeze(nanstd(yy,[],2))./sqrt(sum(selUnits)),'color',condcols(uc),'marker','o','linewidth',2);
     plot([0.5 4.5],[0.5 0.5],'k--')
     set(gca,'xtick',1:4); title(pt_titles{pt})
     set(gca,'xticklabel',{'500ms pre-motion','Stim Period','-300 to -100ms pre-saccade','Saccade to PDW Hold'})
@@ -374,7 +416,9 @@ for uc = [1 3 5]%1:size(choiceP,1)
 
 end
 
-%%
+%% plot all
+
+pt_titles = {'Unconditioned','Choice-High','Choice-Low'};
 
 figure('position',[500 200 1400 400],'color','w')
 
@@ -382,8 +426,8 @@ for pt=1:3
     subplot(1,3,pt); hold on; axis([0.5 4.5 0.4 0.6]);
     for uc = 1:size(choiceP,1)
 
-        yy = choiceP(uc,sigTuned,:,pt);
-        errorbar((1:4)+spcx(uc),squeeze(nanmean(yy,2)),squeeze(nanstd(yy,[],2))./sqrt(sum(sigTuned)),'color',condcols(uc),'marker','o','linewidth',1.5);
+        yy = choiceP(uc,selUnits,:,pt);
+        errorbar((1:4)+spcx(uc),squeeze(nanmean(yy,2)),squeeze(nanstd(yy,[],2))./sqrt(sum(selUnits)),'color',condcols(uc),'marker','o','linewidth',1.5);
         plot([0.5 4.5],[0.5 0.5],'k--')
         set(gca,'xtick',1:4); title(pt_titles{pt})
         set(gca,'xticklabel',{'500ms pre-motion','Stim Period','-300 to -100ms pre-saccade','Saccade to PDW Hold'})
@@ -407,8 +451,8 @@ for pt=1:3
     subplot(1,3,pt); hold on; axis([0.5 4.5 0.4 0.6]);
     for uc = 1:size(wagerP,1)
 
-        yy = wagerP(uc,sigTuned,:,pt);
-        errorbar((1:4)+spcx(uc),squeeze(nanmean(yy,2)),squeeze(nanstd(yy,[],2))./sqrt(sum(sigTuned)),'color',condcols(uc),'marker','o','linewidth',1.5);
+        yy = wagerP(uc,selUnits,:,pt);
+        errorbar((1:4)+spcx(uc),squeeze(nanmean(yy,2)),squeeze(nanstd(yy,[],2))./sqrt(sum(selUnits)),'color',condcols(uc),'marker','o','linewidth',1.5);
         plot([0.5 4.5],[0.5 0.5],'k--')
         set(gca,'xtick',1:4); title(pt_titles{pt})
         set(gca,'xticklabel',{'500ms pre-motion','Stim Period','-300 to -100ms pre-saccade','Saccade to PDW Hold'})
@@ -440,7 +484,8 @@ sigTuned = any(p_bslnStimXhdgs(:,:,2)<0.05,1);
 % sigTuned = true(size(choiceP,2),1);
 
 
-subplotInd = [1 3 4 5 6];
+% subplotInd = [1 3 4 5 6];
+subplotInd = [1 2 3];
 
 
 % relative subplot widths for alignments
@@ -512,3 +557,287 @@ for uc = 1:size(unqModCoh,1)
     end
 
 end
+
+
+%%  ======= conditioned PSTH averages =======
+
+% list of conditions for conditioned PSTHs
+% choice/wager
+hdgs = [0];
+[hdg,modality,coh,~,ntr] = dots3DMP_create_trial_list(hdgs,mods,1,deltas,1,0); % 0 heading
+condsTask = [modality,coh,hdg];
+condsTask      = repmat(condsTask,4,1);                                 % for 4 possible choice-wager combinations
+condsTask(:,4) = [ones(ntr*2,1); 2*ones(ntr*2,1)];                          % CHOICE
+condsTask(:,5) = [zeros(ntr,1); ones(ntr,1); zeros(ntr,1); ones(ntr,1)];    % WAGER
+condsTask(:,6) = zeros(size(condsTask,1),1);                                % remove 1-target wagers
+condTasklabels = {'modality','coherenceInd','heading','choice','PDW','oneTargConf'};
+% condTasklabels = {'modality','coherenceInd','choice','PDW','oneTargConf'};
+
+% ignore coh
+condsTask(:,2) = [];
+condTasklabels(2) = [];
+
+
+% optsTR.collapse_conds = [0 1 1 0 0 0]; % collapse across hdgs
+optsTR.collapse_conds = [0 1 0 0 0];
+
+
+%%
+% heading conditions
+hdgs = [-12 -6 -3 -1.5 0 1.5 3 6 12];
+[hdg,modality,coh,~,ntr] = dots3DMP_create_trial_list(hdgs,mods,1,deltas,1,0); % 0 heading
+condsTask = [modality,coh,hdg];
+condsTask      = repmat(condsTask,2,1);                                 
+condsTask(:,end+1) = [zeros(ntr,1); ones(ntr,1)];                          % correct
+% condsTask(:,end+1) = [ones(ntr,1); 2*ones(ntr,1)];                          % choice
+condTasklabels = {'modality','coherenceInd','heading','correct'};
+
+% ignore coh
+condsTask(:,2) = [];
+condTasklabels(2) = [];
+
+%optsTR.collapse_conds = [0 0 0];
+
+
+%%
+eventInfoTR.alignLabel      = { 'Baseline' , 'stimulus on',             'saccade'};  % labels, for plotting
+eventInfoTR.alignEvent      = {{'fixation'}, {'motionOn'} ,             {'saccOnset'}};
+eventInfoTR.otherEvents     = {{'targsOn'} , {'fixation','saccOnset'} , {'postTargHold'}};
+eventInfoTR.otherEventnames = {{'targsOn'}  , {'FixAcq', 'RT'}  ,       {'WagerHold'}}; % labels, for plotting
+eventInfoTR.tStart          = [-0.5             -0.7                    -0.3]; 
+eventInfoTR.tEnd            = [0                1.2                     1.0];
+eventInfoTR.binSize         = 0.001; 
+
+optsTR.smoothFR = 1;
+optsTR.convKernel = fspecial('gaussian', [1 150], 25);
+% NOTE: conv with gaussian is really slow!
+
+[allUnitsTaskTR, condsTask, ~] = dots3DMP_FRmatrix_fromDataStruct(dataStruct,'dots3DMP',eventInfoTR,condsTask,condTasklabels,optsTR);
+
+
+%% processing of PSTHs
+
+% zscore against baseline, and recode for pref/null direction preference
+
+% bsln is 1st
+% mean across conditions, std across conditions in 'baseline' interval
+
+% mean across time first, then mean or sd across conditions
+% could use FRmean, but then have to deal with dims. Future problem :)
+mu = nanmean(nanmean(allUnitsTaskTR.data.PSTHs{1}, 1), 2); % mean for each unit independently
+sd = nanstd(nanmean(allUnitsTaskTR.data.PSTHs{1}, 1), [], 2); % std
+
+zscored_psths = cellfun(@(x) (x-mu)./sd, allUnitsTaskTR.data.PSTHs, 'UniformOutput', false);
+
+% recode psths to be pref/null instead of right/left
+
+condTasklabels_collapsed = condTasklabels(~optsTR.collapse_conds);
+% condTasklabels_collapsed = condTasklabels;
+
+[unqModCoh,ia,ic] = unique(condsTask(:,contains(condTasklabels_collapsed,{'modality','coherence'})),'rows');
+choiceCol = strcmpi(condTasklabels_collapsed,'choice');
+% choiceCol = strcmpi(condTasklabels_collapsed,'correct');
+
+
+recoded_psths = cell(size(zscored_psths));
+for iae = 1:length(recoded_psths)
+    recoded_psths{iae} = nan(size(zscored_psths{iae}));
+
+    for u = 1:nUnits
+
+        for uc = 1:size(unqModCoh,1)
+
+            tempFR = zscored_psths{iae}(uc==ic, :, u);
+            newFR  = nan(size(tempFR));
+            temp_conds = condsTask(uc==ic, :);
+
+            if prefDir(uc,u)==1
+
+                % for wagering plots
+                newFR(temp_conds(:,choiceCol)==2, :) = tempFR(temp_conds(:,choiceCol)==1, :);
+                newFR(temp_conds(:,choiceCol)==1, :) = tempFR(temp_conds(:,choiceCol)==2, :);
+
+
+                % for heading conditions
+%                 newFR(temp_conds(:,2)==0, :) = tempFR(temp_conds(:,2)==0, :);
+%                 newFR(sign(temp_conds(:,2))==1, :) = tempFR(sign(temp_conds(:,2))==-1, :);
+%                 newFR(sign(temp_conds(:,2))==-1, :) = tempFR(sign(temp_conds(:,2))==1, :);
+
+            else
+                newFR = tempFR;
+            end
+
+            recoded_psths{iae}(uc==ic, :, u) = newFR;
+
+        end
+    end
+
+end
+
+
+%% plot average conditioned PSTH for example groups of conditions
+
+% TODO
+% zscore across ALL headings?
+% collapse cohs
+% split cells by 'area', MST or PIVC
+% add relevant 'otherevents' to plots
+% somehow flip sign of all neurons so that prefDir is always rightward?
+
+condnames = {'Ves','Vis','Comb'};
+
+
+areaSel = strcmp(allUnitsTaskTR.hdr.area, 'MSTd');
+%areaSel = strcmp(allUnitsTaskTR.hdr.area, 'PIVC');
+
+% sigTuned = any(p_bslnStimXhdgs(:,:,2)<0.05,1); % any cond significant
+% sigTuned = all(p_bslnStimXhdgs(:,:,2)<0.05,1); % all conds sig
+% sigTuned = true(size(areaSel)); % ignore tuning sig
+
+% sigTuned = p_bslnStimXhdgs(1,:,2)<0.05 & p_bslnStimXhdgs(2,:,2)>0.05; % ves-tuned but NOT vis-tuned
+% sigTuned = p_bslnStimXhdgs(1,:,2)>0.05 & p_bslnStimXhdgs(2,:,2)<0.05; % vis-tuned but NOT ves-tuned
+% sigTuned = p_bslnStimXhdgs(1,:,2)<0.05 & p_bslnStimXhdgs(2,:,2)<0.05; % ves- and vis-tuned
+
+inds = [1 2 3];
+sigTuned = any(p_bslnStimXhdgs(inds,:,2)<0.05);
+% sigTuned = all(p_bslnStimXhdgs(2:3,:,2)>0.05); 
+
+selUnits = areaSel & sigTuned;
+
+% for choice/wager (blue green shades, like targets in task)
+hdgcols = [0.65 0.80 0.90;
+        0.10 0.45 0.70;
+        0.70 0.90 0.55;
+        0.20 0.60 0.20];
+
+% for headings, spectrum
+% N = length(hdgs);
+% cols = cbrewer('div','RdBu',N*2);
+% cols = cols([1:floor(N/2) end-floor(N/2):end],:);
+% cols(hdgs==0,:) = [0 0 0];
+
+% hdgcols = repmat(cols, size(condsTask,1)/size(cols,1), 1);
+
+% subplotInd = [1 3 4 5 6];
+subplotInd = [1 2 3];
+
+ls = '-';
+
+% relative subplot widths for alignments
+al_inds = 2:3;
+xlens = cellfun(@range,allUnitsTaskTR.times.xvec(al_inds));
+sprc(al_inds)  = xlens./sum(xlens);
+
+figure('position',[500 200 700 700],'color','w')
+
+for uc = 1:size(unqModCoh,1)
+
+    
+    axMain = subplot(3,1,subplotInd(uc));
+%     axMain = subplot(3,2,subplotInd(uc));
+    pos=get(axMain,'Position');
+
+    for iae=al_inds
+        
+        t = allUnitsTaskTR.times.xvec{iae};
+
+        if iae==al_inds(1), p1 = pos(1);
+        else, p1 = p1 + pos(3)*sprc(iae-1);
+        end
+        hh=subplot('position',[p1 pos(2)+0.05 pos(3)*sprc(iae)*0.95 pos(4)-0.05]); %axis off;
+        hold on;
+
+        %hh.XTick = [fliplr(-0.5:-0.5:t(1)) 0:0.5:t(end)];
+        hh.XTickLabelRotation = 0;
+
+        if uc==size(unqModCoh,1)
+            xlabel(hh,{'Time from', sprintf('%s [s]',eventInfoTR.alignEvent{iae}{1})},'fontsize',14)
+        end
+
+        if iae==al_inds(1)
+            if uc==2
+                %ylabel('Firing rate (sp/s)','fontsize',14)
+                ylabel('Normalized population activity','fontsize', 14)
+            end
+        else
+            hh.YAxis.Visible = 'off';
+        end
+        hh.XLim = t([1 end]);
+        hh.YLim = [-2 4];
+
+        nTrs_conds = allUnitsTaskTR.data.condntrs{iae}(ic==uc, :);
+        enough_trials = all(nTrs_conds>=3);
+
+        oevs = allUnitsTaskTR.times.evTimes_bySession{iae};
+        oevs = nanmean(nanmean(oevs(ic==uc, :, :), 3), 1);
+
+        % Plot the actual means
+        temp_psth = recoded_psths{iae}(ic==uc,:,selUnits & enough_trials);
+%         temp_psth = zscored_psths{iae}(ic==uc,:,selUnits);
+
+        temp_conds = condsTask(ic==uc,:);
+
+        for cc = 1:size(temp_psth, 1)
+            %if cc>9, ls = '-'; else, ls = ':'; end
+            %if ismember(cc,[1:3 7:9]), continue, end
+            %if cc<=9, continue, end
+            plot(t, nanmean(temp_psth(cc,:,:), 3), 'color', hdgcols(cc,:),'linew',1.5, 'linestyle',ls)
+        end
+        ylim = get(hh, 'ylim');
+
+        line([oevs; oevs],repmat(ylim', 1, length(oevs)),'color','k','linestyle','--')
+
+        for ioe = 1:length(oevs)
+            if oevs(ioe) > t(1) && oevs(ioe) < t(end)
+                text(oevs(ioe),ylim(2),eventInfoTR.otherEventnames{iae}{ioe},'verti','bottom','horizo','center')
+            end
+        end
+
+        plot([0 0],ylim,'k','linestyle','-','linewidth',2);
+        if iae==al_inds(1)
+%             if uc==2
+%             lh=legend('null-lo','null-hi','pref-lo','pref-hi');
+%             set(lh,'box','off')
+%             end
+        elseif iae==al_inds(end)
+            title(condnames{uc});
+        end
+    
+
+        changeAxesFontSize(gca,14,14);
+        set(gca,'tickdir','out')
+
+    end
+
+end
+
+%%
+fsz=12;
+hdgVec = hdgs;
+figure('position',[1000 100 600 600],'color','w')
+if max(hdgVec)==12
+    sc = 3; len = 3;
+elseif max(hdgVec)==90
+    sc=1; len = 3;
+end
+
+hdgXY = len .* [sind(hdgVec*sc); cosd(hdgVec*sc)];
+textVec = hdgXY .* [1.05; 1.1];
+startPoint = [0 0];
+% axis([-6 6 -6 6]);
+axis([-1 1 -1 1]*4); axis square
+hold on
+for h=1:length(hdgVec)
+    plot(startPoint(1)+[0; hdgXY(1,h)],startPoint(2)+[0; hdgXY(2,h)],'linew',2,'color',hdgcols(h,:));
+
+    [th,r] = cart2pol(startPoint(1)+textVec(1,:),startPoint(2)+textVec(2,:));
+    th = rad2deg(th);
+    if hdgVec(h)>0, ha = 'left'; ra = th(h); va = 'middle';
+    elseif hdgVec(h)<0, ha = 'right'; ra = th(h)-180; va = 'middle';
+    else , ha = 'center'; ra = 0; va = 'bottom';
+    end
+    if hdgVec(h)==0 || abs(hdgVec(h))>2
+        text(startPoint(1)+textVec(1,h),startPoint(2)+textVec(2,h),num2str(hdgVec(h)),'fontsize',fsz,'horizo',ha,'verti',va,'rotation',ra,'color',hdgcols(h,:),'fontweight','bold')
+    end
+end
+set(gca,'Visible','Off');
