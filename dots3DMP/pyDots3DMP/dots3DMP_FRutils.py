@@ -18,16 +18,16 @@ import pandas as pd
 import xarray as xr
 
 import matplotlib.pyplot as plt
-import matplotlib as mpl
+from matplotlib import cm
 import seaborn as sns
 
 import pdb
 
-from itertools import repeat, combinations
+# move corr functions to separate module
+
 from scipy.ndimage import convolve1d #, gaussian_filter1d
 from scipy.signal import gaussian
-from scipy.stats import pearsonr, zscore
-from scipy.special import comb
+
 
 # import matplotlib.pyplot as plt
 # import seaborn as sns
@@ -36,10 +36,8 @@ from scipy.special import comb
 
 # %% per-trial spike counts/firing rates
 
-
-def trial_psth(spiketimes, align_ev, trange=np.array([-1, 1]),
-               binsize=0.05, sm_params={'kind': 'boxcar', 'binsize': 0.05,
-                                        'width': 0.4, 'sigma': 0.25},
+def trial_psth(spiketimes, align_ev, trange,
+               binsize=0.05, sm_params={},
                all_trials=False, normalize=True):
 
     nTr = align_ev.shape[0]
@@ -77,7 +75,7 @@ def trial_psth(spiketimes, align_ev, trange=np.array([-1, 1]),
             tstart_new = np.min(tstarts_new)
             tend_new = trange[1]
             tends_new = tend_new.repeat(tstarts_new.shape[0])
-            # TODO can't we just use np.repeat here, rather than itertools
+            # TODO maybe just use np.repeat here, rather than itertools?
 
         elif which_ev == 0:
             tends_new = tr_ends - align_ev[:, 0]
@@ -100,6 +98,7 @@ def trial_psth(spiketimes, align_ev, trange=np.array([-1, 1]),
             fr_out = np.full(nTr, np.nan)
             x = durs
 
+        spktimes_aligned = []
         if spiketimes.any():
             itr_start, itr_end = 1, nTr
 
@@ -107,7 +106,6 @@ def trial_psth(spiketimes, align_ev, trange=np.array([-1, 1]),
                 itr_start = np.argmin(np.abs(tr_starts - spiketimes[0]))
                 itr_end = np.argmin(np.abs(tr_ends - spiketimes[-1]))
 
-            spktimes_aligned = []
             for itr in range(itr_start, itr_end+1):
                 spk_inds = np.logical_and(spiketimes >= tr_starts[itr],
                                           spiketimes <= tr_ends[itr])
@@ -174,18 +172,14 @@ def smooth_counts(raw_fr, params={'kind': 'boxcar', 'binsize': 0.05,
 
 # %% Extract firing rates for population
 
+# now defined as a method in Population dataclass
 
-def get_aligned_rates(popn, align=['stimOn'], trange=np.array([-2, 2]),
+def get_aligned_rates(popn, align=['stimOn'], trange=np.array([[-2, 3]]),
                       binsize=0.05, sm_params={'kind': 'boxcar',
                                                'binsize': 0.05,
                                                'width': 0.4, 'sigma': 0.25},
                       condlabels=['modality', 'coherence', 'heading'],
-                      clus_groups=[1, 2],
-                      return_as_Dataset=False):
-
-    # TODO somewhere need to get an update to tvec to be all relative to one event?
-    # or just conca
-    # so that we can plot on the same time axis if we want
+                      return_Dataset=False):
 
     good_trs = popn.events['goodtrial'].to_numpy(dtype='bool')
     condlist = popn.events[condlabels].loc[good_trs, :]
@@ -208,21 +202,19 @@ def get_aligned_rates(popn, align=['stimOn'], trange=np.array([-2, 2]),
         spike_counts, t_vec, _ = \
             zip(*[(trial_psth(unit.spiketimes, align_ev,
                               t_r, binsize, sm_params=sm_params))
-                  for unit in popn.units if unit.clus_group in clus_groups])
+                  for unit in popn.units])
 
         rates.append(np.asarray(spike_counts))
         tvecs.append(np.asarray(t_vec[0]))
         # previously tried dict with key as alignment event
 
-        align_lst.append(np.asarray(list(repeat(al, len(t_vec[0])))))
+        align_lst.append([al]*len(t_vec[0]))
 
     align_arr = np.concatenate(align_lst)
-    # unitlabels = np.array([u.clus_group for u in popn.units
-    #                        if u.clus_group in clus_groups])
-    # unit_ids  = np.array([u.clus_id for u in popn.units
-    #                        if u.clus_group in clus_groups])
+    unitlabels = np.array([u.clus_group for u in popn.units])
+    # unit_ids  = np.array([u.clus_id for u in popn.units])
 
-    if return_as_Dataset:
+    if return_Dataset:
         # now construct a dataset
         arr = xr.DataArray(np.concatenate(rates, axis=2),
                            coords=[unitlabels,
@@ -244,7 +236,7 @@ def get_aligned_rates(popn, align=['stimOn'], trange=np.array([-2, 2]),
 
     else:
         # return separate vars
-        return rates, tvecs, condlist
+        return rates, tvecs, condlist, align_lst
 
 
 def concat_aligned_rates(f_rates, tvecs=None):
@@ -264,15 +256,15 @@ def concat_aligned_rates(f_rates, tvecs=None):
     rates_cat : TYPE
         concatenated rates
     len_intervals : TYPE
-        array containing 
+        array containing the length of each interval, for future split
 
     """
 
     if tvecs is not None:
         # concatenate all different alignments...
         # but store the lens for later splits
-        len_intervals = [np.array(list(map(len, x)), dtype=int).cumsum()
-                         for x in tvecs]
+        len_intervals = [np.asarray(list(map(lambda x: x.size, t)),
+                         dtype='int').cumsum() for t in tvecs]
         rates_cat = list(map(lambda x: np.concatenate(x, axis=2), f_rates))
     else:
         # each 'interval' is length 1 if binsize was set to 0
@@ -289,6 +281,7 @@ def lowfr_units(f_rates, minfr=0):
 
     return lowfr_units
 
+    
 
 # %% trial condition helpers
 
@@ -335,100 +328,6 @@ def condition_averages(f_rates, condlist, cond_groups=None):
 
     return cond_fr, cond_sem, cond_groups
 
-# %% 
-
-
-def pearsonr_dropna(x, y):
-    nidx = np.logical_or(np.isnan(x), np.isnan(x))
-    corr, pvals = pearsonr(x[~nidx], y[~nidx])
-    return corr, pvals
-
-
-def zscore_bygroup(arr, grp, axis=None):
-
-    zscore_subarrs = []
-    for group in np.unique(grp):
-
-        sub_arr = np.compress(grp == group, arr, axis=axis)
-        z_arr = zscore(sub_arr, axis=axis)
-        zscore_subarrs.append(z_arr)
-
-    return np.concatenate(zscore_subarrs, axis=axis)
-
-
-def corr_popn(f_rates, condlist, cond_groups, cond_columns, rtype=''):
-    # pairwise correlations within a population (nChoose2 pairs)
-
-    cg = cond_groups[cond_columns[:-1]].drop_duplicates()
-    ic, nC, cg = condition_index(condlist[cond_columns[:-1]], cg)
-
-    pair_corrs = []
-    pair_pvals = []
-
-    for c in range(nC):
-        if np.sum(ic == c):
-            # currently f_rates must be units x trials (no time/interval axis)
-            # to be improved - so that we don't need a loop over third axis
-            # outside the function (i.e. so it can also operate on cat rates)
-            temp = f_rates[:, ic == c]
-
-            # zscore over trials for each unit and heading separately
-            if rtype == 'noise':
-                hdgs = condlist.loc[ic == c, cond_columns[-1]].to_numpy()
-
-                try:
-                    temp = zscore_bygroup(temp, hdgs, axis=1)
-                except ValueError:
-                    pdb.set_trace()
-
-            pairs = combinations(np.split(temp, temp.shape[0], axis=0), 2)
-
-            try:
-                corr, pval = zip(*[(pearsonr_dropna(pair[0][0], pair[1][0]))
-                                   for pair in pairs])
-            except ValueError:
-                corr = [np.nan]*int(comb(temp.shape[0], 2))
-                pval = [np.nan]*int(comb(temp.shape[0], 2))
-
-        else:
-            corr = [np.nan]*int(comb(f_rates.shape[0], 2))
-            pval = [np.nan]*int(comb(f_rates.shape[0], 2))
-        
-        pair_corrs.append(np.array(corr))
-        pair_pvals.append(np.array(pval))
-
-    return pair_corrs, pair_pvals, cg
-
-
-def corr_popn2(f_rates1, f_rates2, condlist, cond_groups, cond_columns, rtype=''):
-
-    # pairwise correlations across two populations (nxm pairs)
-    cg = cond_groups[cond_columns[:-1]].drop_duplicates()
-    ic, nC, cg = condition_index(condlist[cond_columns[:-1]], cg)
-    
-    nUnits = [f_rates1.shape[0], f_rates2.shape[0]]
-    pair_corrs = np.ndarray((nUnits[0], nUnits[1], nC))
-    pair_pvals = np.ndarray((nUnits[0], nUnits[1], nC))
-
-    for c in range(nC):
-        if np.sum(ic == c):
-            f1 = f_rates1[:, ic == c]
-            f2 = f_rates2[:, ic == c]
-
-            # zscore over trials for each unit and heading separately
-            if rtype == 'noise':
-                hdgs = condlist.loc[ic == c, cond_columns[-1]]
-                f1 = zscore_bygroup(f1, hdgs, axis=1)
-                f2 = zscore_bygroup(f2, hdgs, axis=1)
-
-            for i in range(nUnits[0]):
-                for j in range(nUnits[1]):
-                    corr, pval = pearsonr(f1[i, :], f2[j, :])
-
-                    pair_corrs[i, j, c] = corr
-                    pair_pvals[i, j, c] = pval
-
-    return pair_corrs, pair_pvals
 
 # %% plot functions
 
@@ -438,53 +337,55 @@ def corr_popn2(f_rates1, f_rates2, condlist, cond_groups, cond_columns, rtype=''
 # list of spikes can be multiple columns for multiple alignments
 # then should loop over these and put them on subplots within same subplot
 
-def plot_raster(df, row, col, hue, colors):
 
-    good_trs = events['goodtrial'].to_numpy(dtype='bool')
-    condlist = events.loc[good_trs, :]
+# align_ev = events.loc[good_trs, align_ev].to_numpy(dtype='float64')
 
-    align_ev = events.loc[good_trs, align_ev].to_numpy(dtype='float64')
+# fr, x, spks = trial_psth(spiketimes, align_ev, trange,
+#                          binsize, sm_params)
 
-    fr, x, spks = trial_psth(spiketimes, align_ev, trange,
-                             binsize, sm_params)
+# df = condlist[['modality','coherence','heading']]
+# df['spikes'] = spks
+
+# cmap = mpl.cm.get_cmap('PiYG')
+# cvals = cmap(list(np.around((hdgs/90+1)/2,2)))
+
+
+def spks_eventplot(df, row, col, hue):
 
     if row and col:
-        split_conds = (row, col)
+        split_conds = [row, col]
+        g = sns.FacetGrid(df, row=row, col=col, sharex=True)
     elif row:
         split_conds = row
+        g = sns.FacetGrid(df, row=row, sharex=True)
     else:
         split_conds = col
-        
+        g = sns.FacetGrid(df, col=col, sharey=True)
 
-    df = events[[row, col, hue]]
-    df['spikes'] = spks
+    for c, cond_df in df.groupby(split_conds):
 
-    g = sns.FacetGrid(df, row=row, col=col, sharex=True)
+        ax = g.axes_dict[c]
+        ic, nC, cond_groups = condition_index(cond_df[split_conds])
 
-    for (row, col), cond_df in df.groupby(split_cond):
-        ax = g.axes_dict[(row, col)]
-        ic, nC, cond_groups = condition_index(this_df.drop(['spikes'], axis=1))
-
-        spks_c = this_df['spikes'].to_numpy(dtype='object')
+        spks_c = cond_df['spikes'].to_numpy(dtype='object')
         ic2 = np.sort(ic)
         order = np.argsort(ic)
 
-        # time these two at some point
-        spks_c = list(spks_c[order])
-        # spks_c = [spks_c[i] for i in order]
+        # spks_c = list(spks_c[order])
 
-        # default is horizontal
-        colors = [cvals[i] for i in ic2]
-        ax.eventplot(spks_c, lineoffsets=list(range(len(spks_c))),
-                     colors=colors)
+        # colors = [palette[i] for i in ic2]
+        # ax.eventplot(spks_c, lineoffsets=list(range(len(spks_c))),
+        #              colors=colors)
+
+        ax.eventplot(spks_c, lineoffsets=list(order))
         ax.invert_yaxis()
-        #ax.eventplot(spks_c, lineoffsets=order, colors=colors)
-        
     plt.show()
 
-    return fr, x, spks
+    return g
 
-raster_plot(u.spiketimes, align[1], events, color_cond, split_cond)
+
+def plot_psth():
+    ...
 
 # plot psth (time-res)
 

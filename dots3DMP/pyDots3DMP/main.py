@@ -69,7 +69,7 @@ align = [['stimOn', 'stimOff']]
 trange = np.array([[0.5, -0.5]])
 
 # firing rate over time across units and trials, per session
-rates_tuning, tvecs, conds_tuning = \
+rates_tuning, tvecs, conds_tuning, _ = \
     zip(*data['Tuning'].apply(FRutils.get_aligned_rates,
                               args=(align, trange, binsize, sm_params,
                                     condlabels)))
@@ -79,7 +79,7 @@ align = [['fpOn', 'stimOn'],
 trange = np.array([[0, 0],
                    [0, 0]])
 
-rates_task, tvecs, conds_task = \
+rates_task, tvecs, conds_task, _ = \
     zip(*data['Task'].apply(FRutils.get_aligned_rates,
                             args=(align, trange, binsize, sm_params,
                                   condlabels)))
