@@ -8,10 +8,7 @@ RTtask = 1;
 subject = 'lucio';
 paradigm = 'dots3DMP';
 % dateRange = 20210315:20210805; % RT
-dateRange = 20220301:20221006;   % for SfN2022
-
-dateRange = 20220301:20230303;
-
+dateRange = 20220512:20230504;
 
 %%
 % folder = '/Users/chris/Documents/MATLAB/PLDAPS_data/';
@@ -23,9 +20,6 @@ load([folder file], 'data');
 try data = rmfield(data,'amountRewardLowConf'); catch, end
 try data = rmfield(data,'amountRewardHighConf'); catch, end
 try data = rmfield(data,'rewardGiven'); catch, end
-
-
-% load('/Users/chris/Downloads/lucio_20210315-20210707_clean.mat')
 
 %% temp: CF needs these for now
 for k = 1:length(data.filename)
@@ -98,8 +92,8 @@ end
 
 mods = unique(data.modality); 
 
-data.delta(data.delta==-2) = -3;
-data.delta(data.delta==2) = 3;
+data.delta(data.delta<0) = -3;
+data.delta(data.delta>0) = 3;
 deltas = unique(data.delta); % aka conflict angle
 
 % simplify cohs (collapse similar ones)
@@ -112,14 +106,21 @@ cohs = unique(data.coherence);
 data.coherence(data.modality==1) = cohs(1);
 
 data.heading(abs(data.heading)<0.01) = 0;
-% hdgs = unique(data.heading);
+hdgs = unique(data.heading);
 
-switch subject
-    case 'zarya'
-        hdgs = [-12 -6 -3 -1.5 0 1.5 3 6 12];
-    case 'lucio'
-        hdgs = [-12 -6 -3 -1.5 0 1.5 3 6 12];
-end
+% 05/2023
+hdg_ranges = [0 1 2 3 4 5 8 10 12];
+newhdgvals = [0 1.5 1.5 3 3 6 6 12 12]; % match length of hdg_ranges
+hdg_index = interp1(hdg_ranges, 1:numel(hdg_ranges), abs(data.heading), 'nearest');
+data.heading_recoded = newhdgvals(hdg_index)' .* sign(data.heading);
+
+% this is no longer good
+% switch subject
+%     case 'zarya'
+%         hdgs = [-12 -6 -3 -1.5 0 1.5 3 6 12];
+%     case 'lucio'
+%         hdgs = [-12 -6 -3 -1.5 0 1.5 3 6 12];
+% end
 
 % remove the rest
 removethese = ~ismember(data.heading,hdgs) | ~ismember(data.coherence,cohs);
@@ -129,15 +130,17 @@ end
 
 
 % fix data.correct (see function description for issue!)
-data.correct = dots3DMPCorrectTrials(data.choice,data.heading,data.delta);
+% irrelevant after 04/2022
+% data.correct = dots3DMPCorrectTrials(data.choice,data.heading,data.delta);
 
 % remove one target trials
+% leaving in, these can be removed for analysis later if desired
 % removethese = data.oneTargChoice | data.oneTargConf;
 % for F = 1:length(fnames)
 %     eval(['data.' fnames{F} '(removethese) = [];']);
 % end
 
-% try data = rmfield(data,'reward'); catch, end
+try data = rmfield(data,'reward'); catch, end
 % try data = rmfield(data,'subj'); catch, end
 % try data = rmfield(data,'oneTargChoice'); catch, end
 % try data = rmfield(data,'oneTargConf'); catch, end
@@ -145,7 +148,6 @@ try data = rmfield(data,'TargMissed'); catch, end
 try data = rmfield(data,'subjDate'); catch, end
 try data = rmfield(data,'insertTrial'); catch, end
 try data = rmfield(data,'confRT'); catch, end
-
 
 % sorted_fnames = {'filename','subj','date','heading','modality','coherence','delta','choice','RT','PDW','correct'};
 % data = orderfields(data,sorted_fnames);
@@ -167,32 +169,7 @@ end
 
 
 %% save it
-save(fullfile(folder,[file(1:end-4) '_clean.mat']),'data');
-
-
-% CF temp:
-% parsedData = dots3DMP_parseData(data,mods,cohs,deltas,hdgs,conftask,RTtask);
-
-%%
-% dots3DMP_plots_func_forAumena(parsedData,mods,cohs,deltas,hdgs,conftask,RTtask);
-
-%%
-% gfit = dots3DMP_fit_cgauss(data,mods,cohs,deltas,conftask,RTtask);
-
-%%
-% dots3DMP_plots_cgauss_func(gfit,parsedData,mods,cohs,deltas,hdgs,conftask,RTtask)
-% dots3DMP_plots_cgauss_byCoh(gfit,parsedData,mods,cohs,deltas,hdgs,conftask,RTtask)
-
-
-
-
-
-
-
-
-
-
-
+save(fullfile(folder,[file(1:end-4) '_clean.mat']),'data','nTrialsByDate','nTrialsByBlock');
 
 
 

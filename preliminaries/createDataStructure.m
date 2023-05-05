@@ -42,6 +42,8 @@ for d = 1:length(dateRange)
                                                                   % missing data (choice is a good marker for this)
                             T = T+1; % increment trial counter
 
+                            data.trialNum(T,1) = t;
+                            
                             data.filename{T,1} = allFiles(f).name(1:end-4);
                             dateStart = strfind(allFiles(f).name,'20');
                             if contains(subject,'human')
