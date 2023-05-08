@@ -17,68 +17,95 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-import matplotlib.pyplot as plt
-from matplotlib import cm
-import seaborn as sns
-
-import pdb
-
-# move corr functions to separate module
-
-from scipy.ndimage import convolve1d #, gaussian_filter1d
+from scipy.ndimage import convolve1d
 from scipy.signal import gaussian
 
-
-# import matplotlib.pyplot as plt
-# import seaborn as sns
 # custom_params = {"axes.spines.right": False, "axes.spines.top": False}
 # sns.set_theme(context="notebook", style="ticks", rc=custom_params)
 
+# in all functions,
+#    f_rates denotes a unit x trial x time numpy array of firing rates
+#    fr_list denotes a list of f_rates arrays, one per interval/alignment
+
 # %% per-trial spike counts/firing rates
 
-def trial_psth(spiketimes, align_ev, trange,
+
+def trial_psth(spiketimes, align, trange,
                binsize=0.05, sm_params={},
                all_trials=False, normalize=True):
+    """
+    Parameters
+    ----------
+    spiketimes : numpy array
+        1-D numpy array, containing the time of each spike for one unit.
+    align : numpy array
+        the times of the desired event(s) spikes should be aligned to,
+        1 row per trial. Units should match spiketimes
+        if 1-D, tstart and tend will be relative to the same event
+        if 2-D, tstart will be relative to the first event, tend to the second
+    trange : TYPE
+        2-length 1-D numpy array, specifying start and end time
+        relative to align_ev columns (again, units should be consistent)
+    binsize : FLOAT, optional
+        binsize for spike count histogram. The default is 0.05 (seconds).
+    sm_params : DICT, optional
+        DESCRIPTION. The default is {}.
+    all_trials : BOOLEAN, optional
+        DESCRIPTION. The default is False.
+    normalize : BOOLEAN, optional
+        normalize counts by time to obtain rate. The default is True.
 
-    nTr = align_ev.shape[0]
+    Returns
+    -------
+    fr_out : numpy array
+        if binsize>0, ntrials x numbins array containing spike count or rate
+        otherwise, 1-D array of total count or average rate on each trial
+    x : numpy array
+        if binsize>0, 1-D array containing the mid-time of each histogram bin
+        otherwise, 1-D array of total time duration of each trial interval
+    spktimes_aligned : list
+        list of numpy arrays, containing individual spike times on each trial,
+        relative to alignment event. Useful for plotting spike rasters
+
+    """
+
+    nTr = align.shape[0]
 
     if nTr == 0:
         return
     else:
-        if align_ev.ndim == 2:
-            align_ev = np.sort(align_ev, axis=1)
-            ev_order = np.argsort(align_ev, axis=1)
-            # assert check here that ev_order is consistent on every trial?
+        if align.ndim == 2:
+            align = np.sort(align, axis=1)
+            ev_order = np.argsort(align, axis=1)
+            # TODO assertion here that ev_order is consistent on every trial?
             which_ev = ev_order[0, 0]  # align to this event
-        else:  # only one event provided, duplicate it for below
-            align_ev = np.expand_dims(align_ev, axis=1)
-            align_ev = np.tile(align_ev, (1, 2))
+        else:  # only one event provided, tile it to standardize for later
+            align = np.expand_dims(align, axis=1)
+            align = np.tile(align, (1, 2))
             which_ev = 0
 
-        nantrs = np.any(np.isnan(align_ev), axis=1)
+        nantrs = np.any(np.isnan(align), axis=1)
 
         if np.sum(nantrs) > 0:
             print(f'Dropping {np.sum(nantrs)} trials with missing event (NaN)')
 
-        align_ev = align_ev[~nantrs, :]
+        align = align[~nantrs, :]
 
-        nTr = align_ev.shape[0]  # recalculate after bad trs removed
+        nTr = align.shape[0]  # recalculate after bad trs removed
 
-        tr_starts = align_ev[:, 0] + trange[0]
-        tr_ends = align_ev[:, 1] + trange[1]
+        tr_starts = align[:, 0] + trange[0]
+        tr_ends = align[:, 1] + trange[1]
         durs = tr_ends - tr_starts
 
         # compute 'corrected' tStart and tEnd based on align_ev input
-        # 'unified'
         if which_ev == 1:
-            tstarts_new = tr_starts - align_ev[:, 1]
+            tstarts_new = tr_starts - align[:, 1]
             tstart_new = np.min(tstarts_new)
             tend_new = trange[1]
             tends_new = tend_new.repeat(tstarts_new.shape[0])
-            # TODO maybe just use np.repeat here, rather than itertools?
 
         elif which_ev == 0:
-            tends_new = tr_ends - align_ev[:, 0]
+            tends_new = tr_ends - align[:, 0]
             tend_new = np.max(tends_new)
             tstart_new = trange[0]
             tstarts_new = tstart_new.repeat(tends_new.shape[0])
@@ -87,8 +114,8 @@ def trial_psth(spiketimes, align_ev, trange,
 
             if trange[0] < 0 and trange[1] > 0:
                 # ensure that time '0' is in between two bins exactly
-                x0 = np.arange(0, tstart_new-binsize, -binsize)
-                x1 = np.arange(0, tend_new+binsize, binsize)
+                x0 = np.arange(0, tstart_new-binsize-1e3, -binsize)
+                x1 = np.arange(0, tend_new+binsize+1e3, binsize)
                 x = np.hstack((x0[::-1, ], x1[1:, ]))
             else:
                 x = np.arange(tstart_new, tend_new+binsize, binsize)
@@ -114,7 +141,7 @@ def trial_psth(spiketimes, align_ev, trange,
                     fr_out[itr] = np.sum(spk_inds)
 
                 else:
-                    inds_t = spiketimes[spk_inds] - align_ev[itr, which_ev]
+                    inds_t = spiketimes[spk_inds] - align[itr, which_ev]
                     fr_out[itr, :], _ = np.histogram(inds_t, x)
 
                     spktimes_aligned.append(inds_t)
@@ -135,6 +162,7 @@ def trial_psth(spiketimes, align_ev, trange,
 
                 if normalize:
                     fr_out /= binsize
+
             elif binsize == 0:
                 if normalize:
                     fr_out /= x
@@ -142,16 +170,16 @@ def trial_psth(spiketimes, align_ev, trange,
         return fr_out, x, spktimes_aligned
 
 
-def smooth_counts(raw_fr, params={'kind': 'boxcar', 'binsize': 0.05,
-                                  'width': 0.4, 'sigma': 0.25}):
+def smooth_counts(raw_fr, params={'type': 'boxcar', 'binsize': 0.02,
+                                  'width': 0.2, 'sigma': 0.05}):
 
     N = int(np.ceil(params['width'] / params['binsize']))  # width, in bins
 
-    if params['kind'] == 'boxcar':
+    if params['type'] == 'boxcar':
 
         win = np.ones(N) / N
 
-    elif params['kind'] == 'gaussian':
+    elif params['type'] == 'gaussian':
 
         alpha = (N - 1) / (2 * (params['sigma'] / params['binsize']))
         win = gaussian(N, std=alpha)
@@ -159,7 +187,7 @@ def smooth_counts(raw_fr, params={'kind': 'boxcar', 'binsize': 0.05,
 
         # smoothed_fr = gaussian_filter1d(raw_fr, sigma=alpha)
 
-    elif params['kind'] == 'CHG':  # causal half-gaussian
+    elif params['type'] == 'CHG':  # causal half-gaussian
 
         alpha = (N - 1) / (2 * (params['sigma'] / params['binsize']))
         win = gaussian(N, std=alpha)
@@ -170,11 +198,99 @@ def smooth_counts(raw_fr, params={'kind': 'boxcar', 'binsize': 0.05,
     return smoothed_fr
 
 
+def concat_aligned_rates(fr_list, tvecs=None):
+
+    if tvecs is not None:
+        # concatenate all different alignments...
+        # but store the lens for later splits
+        len_intervals = [np.asarray(list(map(lambda x: x.size, t)),
+                         dtype='int').cumsum() for t in tvecs]
+        rates_cat = list(map(lambda x: np.concatenate(x, axis=2), fr_list))
+    else:
+        # each 'interval' is length 1 if binsize was set to 0
+        len_intervals = [np.ones(len(r), dtype=int).cumsum() for r in fr_list]
+        rates_cat = list(map(np.dstack, fr_list))
+
+    return rates_cat, len_intervals
+
+
+def lowfr_units(f_rates, minfr=0):
+
+    mean_fr = np.squeeze(np.mean(f_rates, axis=1))
+    lowfr_units = np.logical_or(np.isnan(mean_fr), mean_fr <= minfr)
+
+    return lowfr_units
+
+
+# %% trial condition helpers
+
+def condition_index(condlist, cond_groups=None):
+
+    assert isinstance(condlist, pd.DataFrame)
+
+    if cond_groups is None:
+        cond_groups, ic = np.unique(condlist.to_numpy('float64'), axis=0,
+                                    return_inverse=True)
+        cond_groups = pd.DataFrame(cond_groups, columns=condlist.columns)
+
+    else:
+        # cond_groups user-specified
+        assert isinstance(cond_groups, pd.DataFrame)
+        cond_groups = cond_groups.loc[:, condlist.columns]
+
+        # fill with nan?
+        ic = np.full(condlist.shape[0], fill_value=-1, dtype=int)
+        for i, cond in enumerate(cond_groups.values):
+            ic[(condlist == cond).all(axis=1)] = i
+
+    nC = len(cond_groups.index)
+    return ic, nC, cond_groups
+
+
+def condition_averages_ds(ds, *args):
+    # xarray groupby functions seem a bit clunky, this is low priority
+    ...
+
+
+def condition_averages(f_rates, condlist, cond_groups=None):
+
+    ic, nC, cond_groups = condition_index(condlist, cond_groups)
+
+    # condition-averaged arrays will have same number of units and time bins,
+    # so match dim 0 and 2
+    cond_fr = np.full((f_rates.shape[0], nC, f_rates.shape[2]), np.nan)
+    cond_sem = np.full((f_rates.shape[0], nC, f_rates.shape[2]), np.nan)
+
+    for c in range(nC):
+        if np.sum(ic == c):
+            cond_fr[:, c, :] = np.mean(f_rates[:, ic == c, :], axis=1)
+            cond_sem[:, c, :] = np.std(f_rates[:, ic == c, :],
+                                       axis=1) / np.sqrt(np.sum(ic == c))
+
+    return cond_fr, cond_sem, cond_groups
+
+
+    # if type == 'avg':
+    #     sns.lineplot(data=df,
+    #                  x='heading', y='spike counts',
+    #                  estimator='mean', errorbar='se', err_style='bars',
+    #                  hue=df[condlabels[:-1]].apply(tuple, axis=1))
+    # elif type == 'time':
+    #     g = sns.relplot(data=df,
+    #                     x='time', y='firing_rate',
+    #                     hue='heading', row='modality', col='align',
+    #                     palette=palette,
+    #                     facet_kws=dict(sharex=False),
+    #                     kind='line', aspect=.75)
+
 # %% Extract firing rates for population
 
-# now defined as a method in Population dataclass
+# this can be deprecated since it's now defined as a method for a
+# Population dataclass. we can get this functionality back by creating an
+# equivalent staticmethod
 
-def get_aligned_rates(popn, align=['stimOn'], trange=np.array([[-2, 3]]),
+
+def get_aligned_rates(popn, align_ev='stimOn', trange=np.array([[-2, 3]]),
                       binsize=0.05, sm_params={'kind': 'boxcar',
                                                'binsize': 0.05,
                                                'width': 0.4, 'sigma': 0.25},
@@ -188,19 +304,19 @@ def get_aligned_rates(popn, align=['stimOn'], trange=np.array([[-2, 3]]),
     tvecs = []
     align_lst = []
 
-    for al, t_r in zip(align, trange):
+    for al, t_r in zip(align_ev, trange):
 
         if popn.events.loc[good_trs, al].isna().all(axis=0).any():
             raise ValueError(al)
 
-        align_ev = popn.events.loc[good_trs, al].to_numpy(dtype='float64')
+        align = popn.events.loc[good_trs, al].to_numpy(dtype='float64')
 
         # get spike counts and relevant t_vec for each unit - thanks chatGPT!
         # trial_psth in list comprehesnsion is going to generate a list of
         # tuples, the zip(*iter) syntax allows us to unpack the tuples into
         # separate variables
         spike_counts, t_vec, _ = \
-            zip(*[(trial_psth(unit.spiketimes, align_ev,
+            zip(*[(trial_psth(unit.spiketimes, align,
                               t_r, binsize, sm_params=sm_params))
                   for unit in popn.units])
 
@@ -237,180 +353,3 @@ def get_aligned_rates(popn, align=['stimOn'], trange=np.array([[-2, 3]]),
     else:
         # return separate vars
         return rates, tvecs, condlist, align_lst
-
-
-def concat_aligned_rates(f_rates, tvecs=None):
-    """
-
-    Parameters
-    ----------
-    f_rates : list
-        list of firing rates, where each element is a different interval
-        containing units x trials or units x trials x binned time
-    tvecs : list or None
-        corresponding time vector (only for time-resolved f_rates)
-        default: None
-
-    Returns
-    -------
-    rates_cat : TYPE
-        concatenated rates
-    len_intervals : TYPE
-        array containing the length of each interval, for future split
-
-    """
-
-    if tvecs is not None:
-        # concatenate all different alignments...
-        # but store the lens for later splits
-        len_intervals = [np.asarray(list(map(lambda x: x.size, t)),
-                         dtype='int').cumsum() for t in tvecs]
-        rates_cat = list(map(lambda x: np.concatenate(x, axis=2), f_rates))
-    else:
-        # each 'interval' is length 1 if binsize was set to 0
-        len_intervals = [np.ones(len(r), dtype=int).cumsum() for r in f_rates]
-        rates_cat = list(map(np.dstack, f_rates))
-
-    return rates_cat, len_intervals
-
-
-def lowfr_units(f_rates, minfr=0):
-
-    mean_fr = np.squeeze(np.mean(f_rates, axis=1))
-    lowfr_units = np.logical_or(np.isnan(mean_fr), mean_fr <= minfr)
-
-    return lowfr_units
-
-    
-
-# %% trial condition helpers
-
-def condition_index(condlist, cond_groups=None):
-
-    assert isinstance(condlist, pd.DataFrame)
-
-    if cond_groups is None:
-        cond_groups, ic = np.unique(condlist.to_numpy('float64'), axis=0,
-                                    return_inverse=True)
-        cond_groups = pd.DataFrame(cond_groups, columns=condlist.columns)
-
-    else:
-        # cond_groups user-specified
-        assert isinstance(cond_groups, pd.DataFrame)
-        cond_groups = cond_groups.loc[:, condlist.columns]
-
-        # fill with nan?
-        ic = np.full(condlist.shape[0], fill_value=-1, dtype=int)
-        for i, cond in enumerate(cond_groups.values):
-            ic[(condlist == cond).all(axis=1)] = i
-
-    nC = len(cond_groups.index)
-    return ic, nC, cond_groups
-
-
-def condition_averages_ds(ds, *args):
-    # xarray groupby functions seem a bit clunky...
-    pass
-
-
-def condition_averages(f_rates, condlist, cond_groups=None):
-
-    ic, nC, cond_groups = condition_index(condlist, cond_groups)
-
-    cond_fr = np.full((f_rates.shape[0], nC, f_rates.shape[2]), np.nan)
-    cond_sem = np.full((f_rates.shape[0], nC, f_rates.shape[2]), np.nan)
-
-    for c in range(nC):
-        if np.sum(ic == c):
-            cond_fr[:, c, :] = np.mean(f_rates[:, ic == c, :], axis=1)
-            cond_sem[:, c, :] = np.std(f_rates[:, ic == c, :],
-                                       axis=1) / np.sqrt(np.sum(ic == c))
-
-    return cond_fr, cond_sem, cond_groups
-
-
-# %% plot functions
-
-
-# plot raster
-# dataframe containing conditions on each trial, and list of spikes on each trial
-# list of spikes can be multiple columns for multiple alignments
-# then should loop over these and put them on subplots within same subplot
-
-
-# align_ev = events.loc[good_trs, align_ev].to_numpy(dtype='float64')
-
-# fr, x, spks = trial_psth(spiketimes, align_ev, trange,
-#                          binsize, sm_params)
-
-# df = condlist[['modality','coherence','heading']]
-# df['spikes'] = spks
-
-# cmap = mpl.cm.get_cmap('PiYG')
-# cvals = cmap(list(np.around((hdgs/90+1)/2,2)))
-
-
-def spks_eventplot(df, row, col, hue):
-
-    if row and col:
-        split_conds = [row, col]
-        g = sns.FacetGrid(df, row=row, col=col, sharex=True)
-    elif row:
-        split_conds = row
-        g = sns.FacetGrid(df, row=row, sharex=True)
-    else:
-        split_conds = col
-        g = sns.FacetGrid(df, col=col, sharey=True)
-
-    for c, cond_df in df.groupby(split_conds):
-
-        ax = g.axes_dict[c]
-        ic, nC, cond_groups = condition_index(cond_df[split_conds])
-
-        spks_c = cond_df['spikes'].to_numpy(dtype='object')
-        ic2 = np.sort(ic)
-        order = np.argsort(ic)
-
-        # spks_c = list(spks_c[order])
-
-        # colors = [palette[i] for i in ic2]
-        # ax.eventplot(spks_c, lineoffsets=list(range(len(spks_c))),
-        #              colors=colors)
-
-        ax.eventplot(spks_c, lineoffsets=list(order))
-        ax.invert_yaxis()
-    plt.show()
-
-    return g
-
-
-def plot_psth():
-    ...
-
-# plot psth (time-res)
-
-# plot condition averages (non-time res, heading on x-axis)
-
-# plot tuning curves (with or without error bars/dots to show rsc)
-# plot noise correlation (rsc) scatter plot
-
-
-#def plot_psth(df, palette, type=1):
-
-    # TODO
-    # code for rasterized spike plots
-    # rescale x-axes according to length of time vector
-    # show coherences
-
-    # if type == 'avg':
-    #     sns.lineplot(data=df,
-    #                  x='heading', y='spike counts',
-    #                  estimator='mean', errorbar='se', err_style='bars',
-    #                  hue=df[condlabels[:-1]].apply(tuple, axis=1))
-    # elif type == 'time':
-    #     g = sns.relplot(data=df,
-    #                     x='time', y='firing_rate',
-    #                     hue='heading', row='modality', col='align',
-    #                     palette=palette,
-    #                     facet_kws=dict(sharex=False),
-    #                     kind='line', aspect=.75)

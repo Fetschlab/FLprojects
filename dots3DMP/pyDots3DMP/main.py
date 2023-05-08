@@ -56,36 +56,54 @@ tr_tab_task.columns = condlabels
 
 # aggregated spike rates in stimOn-stimOff interval
 # same for tuning and task for now
-binsize = 0
-sm_params = {}
+binsize = 0.001
+# sm_params = {'kind': 'boxcar', 'binsize': 0.05, 'width': 0.4}
+sm_params = {'type': 'gaussian', 'binsize': binsize,
+             'width': 0.3, 'sigma': 0.03}
 
-# %% trial firing rates, tuning/task
+# %% trial firing rates, tuning and task paradigms
 
 # get all unit firing rates across trials/conds, for tuning and task
 
-# TODO modify get_aligned rates to recalculate tstart and end using third arg (see MATLAB ver)
+# TODO add code to calc_firing_rates to recalculate tstart and end
+# using third arg (see MATLAB ver)
 
-align = [['stimOn', 'stimOff']]
+align_ev = [['stimOn', 'stimOff']]
 trange = np.array([[0.5, -0.5]])
 
 # firing rate over time across units and trials, per session
 rates_tuning, tvecs, conds_tuning, _ = \
-    zip(*data['Tuning'].apply(FRutils.get_aligned_rates,
-                              args=(align, trange, binsize, sm_params,
-                                    condlabels)))
+    zip(*data['Tuning'].apply(lambda x: x.calc_firing_rates(align_ev, trange,
+                                                            binsize, sm_params,
+                                                            condlabels)))
 
-align = [['fpOn', 'stimOn'],
-         ['stimOn', 'stimOff']]
+align_ev = [['fpOn', 'stimOn'],
+            ['stimOn', 'stimOff']]
 trange = np.array([[0, 0],
                    [0, 0]])
 
 rates_task, tvecs, conds_task, _ = \
-    zip(*data['Task'].apply(FRutils.get_aligned_rates,
-                            args=(align, trange, binsize, sm_params,
-                                  condlabels)))
+    zip(*data['Task'].apply(lambda x: x.calc_firing_rates(align_ev, trange,
+                                                          binsize, sm_params,
+                                                          condlabels)))
 
 rates_tuning_cat, _ = FRutils.concat_aligned_rates(rates_tuning)
 rates_task_cat, _ = FRutils.concat_aligned_rates(rates_task)
+
+
+# %% cond avg in task, PSTH plotting
+
+cond_frs, cond_groups = [], []
+for f_in, cond in zip(rates_task_cat, conds_task):
+
+    # avg firing rate over time across units, each cond, per session
+    f_out, _, cg = FRutils.condition_averages(f_in, cond,
+                                              cond_groups=tr_tab_task)
+    cond_frs.append(f_out)
+    cond_groups.append(cg)
+
+# stack 'em up. all units x conditions x time
+cond_frs_stacked = np.vstack(cond_frs)
 
 # %% cond avg + hdg tuning, in TUNING paradigm
 

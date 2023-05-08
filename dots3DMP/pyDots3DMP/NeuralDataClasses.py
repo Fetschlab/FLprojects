@@ -10,12 +10,15 @@ import numpy as np
 import xarray as xr
 
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+import seaborn as sns
 from datetime import date
 
 from dataclasses import dataclass, field
-from dots3DMP_FRutils import trial_psth, spks_eventplot
+import dots3DMP_FRutils as FRutils
 
 # %%
+
 
 @dataclass
 class Unit:
@@ -86,29 +89,116 @@ class ksUnit(Unit):
 
     # TODO
     # add contam pct?
-    # def isi(self, binsize=0.01, max=0.2, plot=False):
-    # return isi hist, violations count
-    # def corr(self, binsize=0.01, max=0.2, plot=False):
-    # def ifr(self, binsize=0.1, plot=False)
-    # def plot_waveforms(self):
-    # def wf_width(self):
 
-    def raster_plot(self, condlist, row, col,
-                    align_ev, trange=np.array([-2, 3])):
+    # TODO
+    # allow this to plot multiple alignments?
+    def plot_raster(self, align, condlist, col, hue, titles,
+                    trange=np.array([-2, 3]),
+                    palette=None, hue_norm=(-12, 12),
+                    binsize=0.05, sm_params={}):
+
+        # TODO make color prefs extra kwargs e.g palette
+        # TODO add psth plotting to this, as a second row in facetgrid
 
         # condlist should be pandas df with conditions
         # align_ev should be np array of same length as condlist
 
-        # good_trs = events['goodtrial'].to_numpy(dtype='bool')
-        # condlist = events.loc[good_trs, :]
-        # df = condlist[['modality', 'coherence', 'heading']]
-        # align_ev = events.loc[good_trs, align_ev].to_numpy(dtype='float64')
+        df = condlist[col]
+        df[hue] = condlist[hue]
+        fr, x, spks = FRutils.trial_psth(self.spiketimes, align, trange,
+                                         binsize=binsize, sm_params=sm_params)
 
-        df = condlist
-        _, _, df['spks'] = trial_psth(self.spiketimes,
-                                      align_ev, trange)
+        # if col is a list (i.e. 1 or more conditions), create a new grouping
+        # column with unique condition groups. otherwise, just use that column
+        if isinstance(col, list):
+            ic, nC, cond_groups = FRutils.condition_index(df[col])
+            df['grp'] = ic
+        else:
+            nC = len(np.unique(df[col]))
+            df['grp'] = df[col]
 
-        return spks_eventplot(df, row, col, condlist.iloc[:, -1])
+        assert len(titles) == nC
+
+        # df['fr'] = fr.tolist()
+        # df['time'] = [x] * len(df.index)
+        # fr_df = df.explode(['fr', 'time'])
+        # fr_df = fr_df.reset_index()
+
+        # fr_df[['fr', 'time']] = fr_df[['fr', 'time']].astype('float')
+        df['spks'] = spks
+
+        fig, axs = plt.subplots(nrows=2, ncols=nC, figsize=(20, 6))
+
+        # set hue colormap
+        uhue = np.unique(df[hue])
+        if palette is None:
+            palette = sns.diverging_palette(240, 10, n=100, as_cmap=True)
+
+        if isinstance(hue_norm, tuple):
+            hue_norm = mcolors.Normalize(vmin=hue_norm[0], vmax=hue_norm[1])
+
+        for c, cond_df in df.groupby('grp'):
+
+            # this time, create groupings based on hue, within cond_df
+            ic, nC, cond_groups = FRutils.condition_index(cond_df[[hue]])
+
+            # need to call argsort twice!
+            # https://stackoverflow.com/questions/31910407/numpy-argsort-cant-see-whats-wrong !!!
+            order = np.argsort(np.argsort(ic)).tolist()
+
+            # TODO further sort within condition by user-specified input e.g. RT
+
+            # get color for each trial, based on heading, convert to list
+            colors = palette(hue_norm(cond_df[hue]).data.astype('float'))
+            colors = np.split(colors, colors.shape[0], axis=0)
+
+            # ==== raster plot ====
+            # no need to re-order all the lists, just use order for lineoffsets
+            ax = axs[0, c]
+            ax.eventplot(cond_df['spks'], lineoffsets=order, color=colors)
+            ax.set_ylim(-0.5, len(cond_df['spks'])+0.5)
+            ax.invert_yaxis()
+            ax.set_xlim(trange[0], trange[1])
+            ax.set_title(titles[c])
+
+            if c == 0:
+                ax.set_ylabel('trial')
+            else:
+                ax.set_yticklabels([])
+
+            # ==== PSTH plot ====
+            
+            # change this to use matplotlib...
+
+            # c_df = fr_df.loc[fr_df['grp'] == c, :].dropna(axis=0)
+            # hue_group, _, _ = FRutils.condition_index(c_df[[hue]], cond_groups)
+
+            # # set colors for unique headings, with same mapping as raster
+            # colors = palette(hue_norm(np.unique(c_df[hue])).data.astype('float'))
+            # colors = np.split(colors, colors.shape[0], axis=0)
+
+            # ax = axs[1, c]
+            # sns.lineplot(x=c_df['time'], y=c_df['fr'],
+            #              hue=hue_group, palette=colors,
+            #              ax=ax, legend=False, errorbar=None)
+            # ax.set_xlim(trange[0], trange[1])
+
+            # if c == 0:
+            #     ax.set_ylabel('spikes/sec')
+            # else:
+            #     ax.set_yticklabels([])
+            #     ax.set_ylabel('')
+
+        sm = plt.cm.ScalarMappable(cmap=palette, norm=hue_norm)
+        sm.set_array([])
+        # cbar_ax = fig.add_axes([0.1, 0.1, 0.05, 0.8])
+        cbar = plt.colorbar(sm, ticks=list(uhue))
+        cbar.set_label(hue)
+        sns.despine()
+
+        plt.show()
+
+        return fig, axs
 
 
 @dataclass
@@ -127,7 +217,7 @@ class Population:
     rec_set: int = 1
     probe_num: int = 1
     device: str = ''
-    
+
     pen_num: int = 1
     grid_xy: tuple[int] = field(default=(np.nan, np.nan))
     grid_type: str = ''
@@ -140,38 +230,10 @@ class Population:
     units: list = field(default_factory=list, repr=False)
     events: dict = field(default_factory=dict, repr=False)
 
-    def calc_firing_rates(self, align=['stimOn'], trange=np.array([[-2, 3]]),
+    def calc_firing_rates(self, align_ev='stimOn', trange=np.array([[-2, 3]]),
                           binsize=0.05, sm_params={},
                           condlabels=['modality', 'coherence', 'heading'],
                           return_Dataset=False):
-        """
-
-        Parameters
-        ----------
-        align : nested lists, optional
-            DESCRIPTION. The default is ['stimOn'].
-        trange : nested lists, optional
-            DESCRIPTION. The default is np.array([[-2, 2]]).
-        binsize : FLOAT, optional
-            DESCRIPTION. The default is 0.05.
-        sm_params : DICT, optional
-            DESCRIPTION. The default is {}
-        condlabels : LIST, optional
-            DESCRIPTION. The default is ['modality', 'coherence', 'heading'].
-        return_Dataset : BOOL, optional
-            DESCRIPTION. The default is False.
-
-        Raises
-        ------
-        ValueError
-            If there are no 'good trials'
-
-        Returns
-        -------
-        TYPE
-            DESCRIPTION.
-
-        """
 
         good_trs = self.events['goodtrial'].to_numpy(dtype='bool')
         condlist = self.events[condlabels].loc[good_trs, :]
@@ -180,34 +242,36 @@ class Population:
         tvecs = []
         align_lst = []
 
-        for al, t_r in zip(align, trange):
+        for al, t_r in zip(align_ev, trange):
 
             if self.events.loc[good_trs, al].isna().all(axis=0).any():
                 raise ValueError(al)
 
-            align_ev = self.events.loc[good_trs, al].to_numpy(dtype='float64')
+            align = self.events.loc[good_trs, al].to_numpy(dtype='float64')
 
-            # get spike counts and relevant t_vec for each unit - thanks chatGPT!
-            # trial_psth in list comprehesnsion is going to generate a list of
-            # tuples, the zip(*iter) syntax allows us to unpack the tuples into
+            # get spike counts and relevant t_vec for each unit
+            # trial_psth in list comp is going to generate a list of tuples
+            # the zip(*iter) syntax allows us to unpack the tuples into the
             # separate variables
             spike_counts, t_vec, _ = \
-                zip(*[(trial_psth(unit.spiketimes, align_ev, t_r,
-                                  binsize, sm_params))
+                zip(*[(FRutils.trial_psth(unit.spiketimes, align, t_r,
+                                          binsize, sm_params))
                       for unit in self.units])
 
             rates.append(np.asarray(spike_counts))
             tvecs.append(np.asarray(t_vec[0]))
 
-            # previously wanted dict with key as alignment event, but al[0]
+            # considered dict align_lst with key as alignment event, but al[0]
             # might not be unique!
 
             align_lst.append([al]*len(t_vec[0]))
 
         align_arr = np.concatenate(align_lst)
 
+        unitlabels = np.array([u.clus_group for u in self.units])
+        # unit_ids  = np.array([u.clus_id for u in popn.units])
+
         if return_Dataset:
-            # now construct a dataset
             arr = xr.DataArray(np.concatenate(rates, axis=2),
                                coords=[unitlabels,
                                        condlist.index,
@@ -243,9 +307,5 @@ class Population:
             align_ev = self.events.loc[good_trs, aev].to_numpy(dtype='float64')
             other_ev = self.events.loc[good_trs, oev].to_numpy(dtype='float64')
             reltimes[aev] = other_ev - align_ev[:, np.newaxis]
-        
+
         return reltimes
-
-# %% functions to run on an individual class instance 
-# (in essence class methods, so make them so)
-
