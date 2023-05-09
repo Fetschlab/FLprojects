@@ -57,7 +57,7 @@ tr_tab_task.columns = condlabels
 # aggregated spike rates in stimOn-stimOff interval
 # same for tuning and task for now
 binsize = 0.001
-# sm_params = {'kind': 'boxcar', 'binsize': 0.05, 'width': 0.4}
+# sm_params = {'type': 'boxcar', 'binsize': 0.05, 'width': 0.4}
 sm_params = {'type': 'gaussian', 'binsize': binsize,
              'width': 0.3, 'sigma': 0.03}
 

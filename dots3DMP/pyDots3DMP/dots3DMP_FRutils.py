@@ -114,8 +114,8 @@ def trial_psth(spiketimes, align, trange,
 
             if trange[0] < 0 and trange[1] > 0:
                 # ensure that time '0' is in between two bins exactly
-                x0 = np.arange(0, tstart_new-binsize-1e3, -binsize)
-                x1 = np.arange(0, tend_new+binsize+1e3, binsize)
+                x0 = np.arange(0, tstart_new-binsize-1e-3, -binsize)
+                x1 = np.arange(0, tend_new+binsize+1e-3, binsize)
                 x = np.hstack((x0[::-1, ], x1[1:, ]))
             else:
                 x = np.arange(tstart_new, tend_new+binsize, binsize)
