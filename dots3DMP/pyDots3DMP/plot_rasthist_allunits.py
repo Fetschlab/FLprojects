@@ -6,8 +6,6 @@ Created on Sat May  6 18:39:16 2023
 @author: stevenjerjian
 """
 
-# plot psths for all units
-
 import numpy as np
 from pathlib import PurePath
 import pandas as pd
@@ -22,13 +20,12 @@ filename = PurePath(data_folder, 'lucio_neuro_datasets',
                     'lucio_20220512-20230411_neuralData.pkl')
 
 with open(filename, 'rb') as file:
-    # this_df = pkl.load(file)
-    this_df = pd.read_pickle(file)
+    data = pd.read_pickle(file)
 
 par = ['Tuning', 'Task']
-data = this_df[this_df[par].notna().all(axis=1)][par]
+data = data[data[par].notna().all(axis=1)][par]
 
-# %%
+# %% set trial table
 
 condlabels = ['modality', 'coherenceInd', 'heading', 'delta']
 mods = np.array([1, 2, 3])
@@ -45,22 +42,22 @@ tr_tab.columns = condlabels
 # %% example raster and psth
 
 sess, unit = 0, 0  # session, unit
+align_ev = 'stimOn'
 
 events = data['Task'][sess].events
 good_trs = events['goodtrial'].to_numpy(dtype='bool')
 condlist = events[condlabels].loc[good_trs, :]
 
-align_ev = 'stimOn'
 align = events.loc[good_trs, align_ev].to_numpy(dtype='float64')
-
 
 titles = ['Ves', 'Vis L', 'Vis H', 'Comb L', 'Comb H']
 
-data['Task'][sess].units[unit].plot_raster(align, condlist,
-                                     ['modality', 'coherenceInd'], 'heading',
-                                     titles,
-                                     trange=np.array([-2, 3]),
-                                     binsize=0.05, sm_params={})
+binsize = 0.05
+sm_params = {'type': 'boxcar', 'binsize': binsize, 'width': 0.4}
+
+rh_fig, rh_ax = data['Task'][sess].units[unit].plot_raster(
+    align, condlist, ['modality', 'coherenceInd'], 'heading', titles,
+    'stimOn', trange=np.array([-3, 5]), binsize=binsize, sm_params=sm_params)
 
 # %% trial firing rates
 

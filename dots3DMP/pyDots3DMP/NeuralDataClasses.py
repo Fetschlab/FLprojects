@@ -10,7 +10,7 @@ import numpy as np
 import xarray as xr
 
 import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
+import matplotlib as mpl
 import seaborn as sns
 from datetime import date
 
@@ -87,26 +87,28 @@ class ksUnit(Unit):
         self.unique_id = \
             int(f"{self.rec_date}{self.rec_set:02d}{self.clus_id:03d}")
 
-    # TODO
-    # add contam pct?
+    # TODO add contam pct
+    # TODO allow this to plot multiple alignments?
 
-    # TODO
-    # allow this to plot multiple alignments?
     def plot_raster(self, align, condlist, col, hue, titles,
+                    align_label, other_evs=[], other_ev_labels=[],
                     trange=np.array([-2, 3]),
-                    palette=None, hue_norm=(-12, 12),
+                    cmap=None, hue_norm=(-12, 12),
                     binsize=0.05, sm_params={}):
-
-        # TODO make color prefs extra kwargs e.g palette
-        # TODO add psth plotting to this, as a second row in facetgrid
 
         # condlist should be pandas df with conditions
         # align_ev should be np array of same length as condlist
 
         df = condlist[col]
-        df[hue] = condlist[hue]
-        fr, x, spks = FRutils.trial_psth(self.spiketimes, align, trange,
-                                         binsize=binsize, sm_params=sm_params)
+        df[hue] = condlist.loc[:, hue].copy()
+
+        # stimOn update to motionOn, time of actual true motion
+        if align_label == 'stimOn':
+            align += 0.3
+
+        fr, x, df['spks'] = FRutils.trial_psth(self.spiketimes, align, trange,
+                                               binsize=binsize,
+                                               sm_params=sm_params)
 
         # if col is a list (i.e. 1 or more conditions), create a new grouping
         # column with unique condition groups. otherwise, just use that column
@@ -119,23 +121,22 @@ class ksUnit(Unit):
 
         assert len(titles) == nC
 
-        # df['fr'] = fr.tolist()
-        # df['time'] = [x] * len(df.index)
-        # fr_df = df.explode(['fr', 'time'])
-        # fr_df = fr_df.reset_index()
-
-        # fr_df[['fr', 'time']] = fr_df[['fr', 'time']].astype('float')
-        df['spks'] = spks
-
         fig, axs = plt.subplots(nrows=2, ncols=nC, figsize=(20, 6))
+        fig.supxlabel(f'Time relative to {align_label} [s]')
 
         # set hue colormap
         uhue = np.unique(df[hue])
-        if palette is None:
-            palette = sns.diverging_palette(240, 10, n=100, as_cmap=True)
+        if cmap is None:
+            if hue == 'heading':
+                cmap = 'RdYlBu'
+            elif hue == 'choice_wager':
+                cmap = 'Paired'
+            cmap = mpl.colormaps[cmap]
 
         if isinstance(hue_norm, tuple):
-            hue_norm = mcolors.Normalize(vmin=hue_norm[0], vmax=hue_norm[1])
+            # hue_norm = mpl.colors.Normalize(vmin=hue_norm[0],
+            #                                 vmax=hue_norm[1])
+            hue_norm = mpl.colors.BoundaryNorm(uhue, cmap.N, extend='both')
 
         for c, cond_df in df.groupby('grp'):
 
@@ -143,13 +144,13 @@ class ksUnit(Unit):
             ic, nC, cond_groups = FRutils.condition_index(cond_df[[hue]])
 
             # need to call argsort twice!
-            # https://stackoverflow.com/questions/31910407/numpy-argsort-cant-see-whats-wrong !!!
+            # https://stackoverflow.com/questions/31910407/
             order = np.argsort(np.argsort(ic)).tolist()
 
-            # TODO further sort within condition by user-specified input e.g. RT
+            # TODO further sort within cond by user input e.g. RT
 
             # get color for each trial, based on heading, convert to list
-            colors = palette(hue_norm(cond_df[hue]).data.astype('float'))
+            colors = cmap(hue_norm(cond_df[hue]).data.astype('float'))
             colors = np.split(colors, colors.shape[0], axis=0)
 
             # ==== raster plot ====
@@ -167,32 +168,44 @@ class ksUnit(Unit):
                 ax.set_yticklabels([])
 
             # ==== PSTH plot ====
-            
-            # change this to use matplotlib...
+            ax = axs[1, c]
 
-            # c_df = fr_df.loc[fr_df['grp'] == c, :].dropna(axis=0)
-            # hue_group, _, _ = FRutils.condition_index(c_df[[hue]], cond_groups)
+            # get the time-res fr for this condition too
+            cond_fr = fr[df['grp'] == c, :]
 
+            cond_colors = cmap(hue_norm(
+                cond_groups.loc[:, hue]).data.astype('float'))
+
+            cond_mean_fr = np.full([nC, cond_fr.shape[1]], np.nan)
+            cond_sem_fr = np.full([nC, cond_fr.shape[1]], np.nan)
+
+            for hc in range(nC):
+                cond_mean_fr[hc, :] = cond_fr[ic == hc, :].mean(axis=0)
+                cond_sem_fr[hc, :] = \
+                    cond_fr[ic == hc, :].std(axis=0) / np.sum(ic == hc)
+
+                ax.plot(x, cond_mean_fr[hc, :], color=cond_colors[hc, :])
+
+            # for seaborn use
             # # set colors for unique headings, with same mapping as raster
-            # colors = palette(hue_norm(np.unique(c_df[hue])).data.astype('float'))
+            # colors = cmap(hue_norm(np.unique(c_df[hue])).data.astype('float'))
             # colors = np.split(colors, colors.shape[0], axis=0)
-
-            # ax = axs[1, c]
             # sns.lineplot(x=c_df['time'], y=c_df['fr'],
             #              hue=hue_group, palette=colors,
             #              ax=ax, legend=False, errorbar=None)
-            # ax.set_xlim(trange[0], trange[1])
 
-            # if c == 0:
-            #     ax.set_ylabel('spikes/sec')
-            # else:
-            #     ax.set_yticklabels([])
-            #     ax.set_ylabel('')
+            ax.set_xlim(trange[0], trange[1])
+            if c == 0:
+                ax.set_ylabel('spikes/sec')
+            else:
+                ax.set_yticklabels([])
+                ax.set_ylabel('')
 
-        sm = plt.cm.ScalarMappable(cmap=palette, norm=hue_norm)
-        sm.set_array([])
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=hue_norm)
+        # sm.set_array([])
         # cbar_ax = fig.add_axes([0.1, 0.1, 0.05, 0.8])
-        cbar = plt.colorbar(sm, ticks=list(uhue))
+        # cbar = plt.colorbar(sm, ticks=list(uhue))
+        cbar = plt.colobar(sm)
         cbar.set_label(hue)
         sns.despine()
 
