@@ -1,11 +1,25 @@
 # %%
 
 # TODO
-# function for extracting behavior from neural recording dataset
+# functions for:
+# 1. extracting behavior from neural recording dataset
+# 2. RT quantiles, plot vs confidence/accuracy
+# 3. correct vs error metrics
+# 4. decorator to loop any function over a grouping variable (i.e. day/block)
+# 5. 
 
-
+# regression analyses
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+# import seaborn.objects as so
+import glob
+
+import statsmodels.api as sm
+from scipy.optimize import curve_fit
+# from sklearn.linear_model import LogisticRegression
+
+# %% helper functions
 
 
 def prop_se(x):
@@ -17,28 +31,35 @@ def cont_se(x):
 
 
 def gaus(x, ampl, mu, sigma, bsln):
-    """
-
-    Parameters
-    ----------
-    x : TYPE
-        DESCRIPTION.
-    ampl : TYPE
-        DESCRIPTION.
-    mu : TYPE
-        DESCRIPTION.
-    sigma : TYPE
-        DESCRIPTION.
-    bsln : TYPE
-        DESCRIPTION.
-
-    Returns
-    -------
-    TYPE
-        DESCRIPTION.
-
-    """
     return ampl * np.exp(-(x-mu)**2 / (2*sigma**2)) + bsln
+
+
+def clean_behavior_df(df):
+
+    # clean up dataframe columns and types
+    df = df.loc[:, ~df.columns.str.startswith('Unnamed')]
+
+    # convert datetime to actual pandas datetime
+    df['datetime'] = pd.to_datetime(
+        df.loc[:, 'datetime'], infer_datetime_format=True)
+
+    df['modality'] = df.loc[:, 'modality'].astype('category')
+
+    if np.max(df['choice']) == 2:
+        # to make 0..1 again, like PDW - more convenient for calculations
+        df['choice'] -= 1
+
+    # remove one-target choice
+    df = df.loc[df['oneTargChoice'] == 0]
+
+    # note we leave oneTargConf in, as this might be useful for some analyses
+    # and can be removed easily later if desired
+    
+    # remove outlier RTs
+    # hard limits, or based on things beyond percentile/SDs from mean range
+    
+
+    return df
 
 # %%
 
@@ -83,20 +104,6 @@ def behavior_means(df, conftask=2, RTtask=True,
 
         grp_list.append('PDW')
 
-    # clean up dataframe columns and types
-    df = df.loc[:, ~df.columns.str.startswith('Unnamed')]
-    df['datetime'] = pd.to_datetime(
-        df.loc[:, 'datetime'], infer_datetime_format=True)
-
-    df['modality'] = df.loc[:, 'modality'].astype('category')
-
-    if np.max(df['choice']) == 2:
-        # to make 0..1 again, like PDW - more convenient for mean calculations
-        df['choice'] -= 1
-
-    # remove one-target choice
-    df = df.loc[df['oneTargChoice'] == 0]
-
     # remove cue conflict trials if by_delta is False
     if by_delta is False:
         df = df.loc[df['delta'] == 0]
@@ -104,15 +111,16 @@ def behavior_means(df, conftask=2, RTtask=True,
     # for pHigh calculations, remove one-target confidence trials
     df_noOneTarg = df.loc[df['oneTargConf'] == 0]
 
+    # pHigh calculation
+    pHigh = None
     if conftask == 1:
         pHigh = df_noOneTarg.groupby(by=grp_list)['conf'].agg(
             [np.mean, cont_se]).dropna(axis=0).reset_index()
     elif conftask == 2:
         pHigh = df_noOneTarg.groupby(by=grp_list)['PDW'].agg(
             [np.mean, prop_se]).dropna(axis=0).reset_index()
-    else:
-        pHigh = None
 
+    # pRight calculation
     pRight = df.groupby(by=grp_list)['choice'].agg(
         [np.mean, prop_se]).dropna(axis=0).reset_index()
 
@@ -121,42 +129,23 @@ def behavior_means(df, conftask=2, RTtask=True,
     #       index=['modality','coherence'], columns='heading',
     #       aggfunc=(np.mean,prop_se)).stack().reset_index()
 
+    # meanRT calculation
+    meanRT = None
     if RTtask is True:
         meanRT = df.groupby(by=grp_list)['RT'].agg(
             [np.mean, cont_se]).dropna(axis=0).reset_index()
-    else:
-        meanRT = None
 
     return pRight, pHigh, meanRT
 
-# %% descriptive fit (none, logistic, or gaussian)
+# %% descriptive fit to basic curves (none, logistic, or gaussian)
 
 
-def behavior_fit(df, fitType='logistic', numhdgs=200):
-    """
-    
+def behavior_fit(df, fitType='logistic', by=None, numhdgs=200):
 
-    Parameters
-    ----------
-    df : TYPE
-        DESCRIPTION.
-    fitType : TYPE, optional
-        DESCRIPTION. The default is 'logistic'.
-    numhdgs : TYPE, optional
-        DESCRIPTION. The default is 200.
-
-    Returns
-    -------
-    xhdgs : TYPE
-        DESCRIPTION.
-    fit_results : TYPE
-        DESCRIPTION.
-
-    """
-
-    import statsmodels.api as sm
-    import scipy
-    # from sklearn.linear_model import LogisticRegression
+    # TODO implement by parameter
+    # if by == 'correct', fit PDW and RT separately for correct/error trials
+    # if by == 'PDW', fit choice and RT separatley for different wagers
+    #                                        (high, low, one-targ)
 
     if np.max(df['choice']) == 2:
         df['choice'] -= 1
@@ -171,6 +160,8 @@ def behavior_fit(df, fitType='logistic', numhdgs=200):
                                               [attr_dict for m in modnames]))
                                      for outcome in outlist]))
 
+
+    # always do fits separately for each mod/coh
     for modality in pRight['modality'].unique():
         for c, coh in enumerate(df['coherence'].unique()):
 
@@ -199,28 +190,23 @@ def behavior_fit(df, fitType='logistic', numhdgs=200):
 
                 probreg = sm.Probit(X['choice'], sm.add_constant(X['heading'])).fit()
                 yhat = probreg.predict(sm.add_constant(xhdgs))
-                coef_, intercept_ = probreg.params['heading'],probreg.params['const']
+                coef_, intercept_ = probreg.params['heading'], probreg.params['const']
 
                 # fits for PDW and RT
-                popt_PDW, _ = scipy.optimize.curve_fit(gaus,
-                                                       xdata=X['heading'],
-                                                       ydata=1-X['PDW'],
-                                                       p0=[0.1, 0, 3, 0.5])
+                popt_PDW, _ = curve_fit(gaus, xdata=X['heading'],
+                                        ydata=1-X['PDW'], p0=[0.1, 0, 3, 0.5])
 
-                popt_RT, _ = scipy.optimize.curve_fit(gaus,
-                                                      xdata=X['heading'],
-                                                      ydata=X['RT'],
-                                                      p0=[0.1, 0, 3, 0.5])
+                popt_RT, _ = curve_fit(gaus, xdata=X['heading'],
+                                       ydata=X['RT'], p0=[0.1, 0, 3, 0.5])
 
                 fitPDW = 1 - gaus(xhdgs, *popt_PDW)
                 fitRT = gaus(xhdgs, *popt_RT)
 
                 fit_results['PDW'][modnames[modality-1]]['prediction'].append(fitPDW)
-                fit_results['PDW'][modnames[modality-1]]['popt_'].append(popt_PDW)
-
+                fit_results['PDW'][modnames[modality-1]]['coef_'].append(popt_PDW)
 
                 fit_results['RT'][modnames[modality-1]]['prediction'].append(fitRT)
-                fit_results['RT'][modnames[modality-1]]['popt_'].append(popt_RT)
+                fit_results['RT'][modnames[modality-1]]['coef_'].append(popt_RT)
 
             fit_results['pRight'][modnames[modality-1]]['prediction'].append(yhat)
             fit_results['pRight'][modnames[modality-1]]['intercept_'].append(intercept_)
@@ -230,9 +216,23 @@ def behavior_fit(df, fitType='logistic', numhdgs=200):
 
 # %%
 
+
+def cue_weighting(fit_results):
+
+    wves_emp = wves_pred = None
+
+    for res in fit_results.keys():
+        ...
+        # TODO calculate wves pred and wves emp for each of pRight, PDW, RT
+        # TODO first fix the behavior_fit function to do by_delta as well...
+    return wves_emp, wves_pred
+
+# %%
+
+
 def plot_behavior_means(pRight, pHigh, meanRT):
     """
-    
+
 
     Parameters
     ----------
@@ -249,20 +249,14 @@ def plot_behavior_means(pRight, pHigh, meanRT):
 
     """
 
-    # import seaborn.objects as so
     # (
     #     so.Plot(pRight, x='heading',y='mean', color='modality')
     #     .facet('coherence')
     #     .add(so.Line())
     # )
 
-    import matplotlib.pyplot as plt
-
     condcols = ['k', 'r', 'b']
     fig, ax = plt.subplots(3, 2, figsize=(8, 12))
-
-    def plot_fcn(data, mods, cohs):  # to apply a function instead of loop
-        pass
 
     for modality in pRight['modality'].unique():
 
@@ -296,6 +290,28 @@ def plot_behavior_means(pRight, pHigh, meanRT):
             ax[2][c].set_xticks(choice_mc['heading'])
     plt.show()
 
+# %%
+
+
+def RTquantiles(df, nq=5, cond_columns=['modality', 'coherence', 'heading'],
+                depvar='PDW'):
+
+    df['RTq'] = df.groupby(cond_columns)['RT'].transform(
+        lambda x: pd.qcut(x, nq, labels=False))
+
+    # find a way to return the RT (mean/median) of each quantile
+    quantile_vals = df.groupby(cond_columns)['RT'].transform(
+        lambda x: pd.qcut(x, nq))
+
+    result = df.groupby(cond_columns + ['RTq'])[depvar].mean().reset_index()
+
+    return result
+
+
+
+
+# %% define trial list
+
 
 def dots3DMP_create_trial_list(hdgs, mods, cohs, deltas, nreps, shuff=True):
 
@@ -306,9 +322,7 @@ def dots3DMP_create_trial_list(hdgs, mods, cohs, deltas, nreps, shuff=True):
         any([3 in mods]) * len(cohs) * len(deltas)
     hdg = np.tile(hdgs, num_hdg_groups)
 
-    coh = np.empty_like(hdg)
-    delta = np.empty_like(hdg)
-    modality = np.empty_like(hdg)
+    coh = delta = modality = np.empty_like(hdg)
 
     if 1 in mods:
         coh[:len(hdgs)] = cohs[0]
@@ -345,6 +359,7 @@ def dots3DMP_create_trial_list(hdgs, mods, cohs, deltas, nreps, shuff=True):
     if shuff:
         trial_table = trial_table[np.random.permutation(ntrials)]
 
+    # TODO check this
     trial_table = np.stack(trial_table.T, axis=1)
     trial_table = pd.DataFrame(trial_table[:, [1, 2, 0, 3]],
                                columns=['modality', 'coherence',
@@ -353,24 +368,23 @@ def dots3DMP_create_trial_list(hdgs, mods, cohs, deltas, nreps, shuff=True):
     return trial_table, ntrials
 
 
-if __name__ == "__main__":
+# %% main
 
-    import glob
-    import pandas as pd
+if __name__ == "__main__":
 
     subject = 'lucio'
     folder = '/Users/stevenjerjian/Desktop/FetschLab/PLDAPS_data/dataStructs/'
     files = glob.glob(f'{folder}*.csv')
     df = pd.read_csv(files[0])
-
+    # TODO probably just specify the file...
+    
+    df = clean_behavior_df(df)
+    
     pRight, pHigh, meanRT = behavior_means(
         df, conftask=2, RTtask=True, by_delta=False, splitPDW=False)
-    
+
     # plot_behavior_means(pRight, pHigh, meanRT)
     xhdgs, fit_results = behavior_fit(df, fitType='gaussian')
-    
-    
-    
 
     # mods = np.array([1, 2, 3])
     # cohs = np.array([1, 2])
