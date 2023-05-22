@@ -83,15 +83,16 @@ class ksUnit(Unit):
     depth: int = field(default=0, metadata={'unit': 'mm'})
     rec_set: int = 1
 
-    def __post_init__(self):
-        self.unique_id = \
-            int(f"{self.rec_date}{self.rec_set:02d}{self.clus_id:03d}")
+    # something about this doesn't work, doesn't recognize as attribute
+    # def __post_init__(self):
+    #     self.unique_id = \
+    #         int(f"{self.rec_date}{self.rec_set:02d}{self.clus_id:03d}")
 
     # TODO add contam pct
     # TODO allow this to plot multiple alignments?
 
-    def plot_raster(self, align, condlist, col, hue, titles,
-                    align_label, other_evs=[], other_ev_labels=[],
+    def plot_raster(self, align, condlist, col, hue, titles, suptitle='',
+                    align_label='', other_evs=[], other_ev_labels=[],
                     trange=np.array([-2, 3]),
                     cmap=None, hue_norm=(-12, 12),
                     binsize=0.05, sm_params={}):
@@ -99,8 +100,8 @@ class ksUnit(Unit):
         # condlist should be pandas df with conditions
         # align_ev should be np array of same length as condlist
 
-        df = condlist[col]
-        df[hue] = condlist.loc[:, hue].copy()
+        df = condlist[col].copy()
+        df[hue] = condlist.loc[:, hue]
 
         # stimOn update to motionOn, time of actual true motion
         if align_label == 'stimOn':
@@ -122,6 +123,7 @@ class ksUnit(Unit):
         assert len(titles) == nC
 
         fig, axs = plt.subplots(nrows=2, ncols=nC, figsize=(20, 6))
+        fig.suptitle(suptitle)
         fig.supxlabel(f'Time relative to {align_label} [s]')
 
         # set hue colormap
@@ -134,9 +136,10 @@ class ksUnit(Unit):
             cmap = mpl.colormaps[cmap]
 
         if isinstance(hue_norm, tuple):
-            # hue_norm = mpl.colors.Normalize(vmin=hue_norm[0],
-            #                                 vmax=hue_norm[1])
-            hue_norm = mpl.colors.BoundaryNorm(uhue, cmap.N, extend='both')
+            hue_norm = mpl.colors.Normalize(vmin=hue_norm[0],
+                                            vmax=hue_norm[1])
+            # hue_norm = mpl.colors.BoundaryNorm(uhue, cmap.N, extend='both')
+        # this doesn't work with cmap selection below yet...
 
         for c, cond_df in df.groupby('grp'):
 
@@ -205,9 +208,8 @@ class ksUnit(Unit):
         # sm.set_array([])
         # cbar_ax = fig.add_axes([0.1, 0.1, 0.05, 0.8])
         # cbar = plt.colorbar(sm, ticks=list(uhue))
-        cbar = plt.colobar(sm)
+        cbar = plt.colorbar(sm)
         cbar.set_label(hue)
-        sns.despine()
 
         plt.show()
 

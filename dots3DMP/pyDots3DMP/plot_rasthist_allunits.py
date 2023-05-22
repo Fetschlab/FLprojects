@@ -10,6 +10,8 @@ import numpy as np
 from pathlib import PurePath
 import pandas as pd
 
+from matplotlib.backends.backend_pdf import PdfPages
+
 # custom imports
 from NeuralDataClasses import Population, ksUnit, Unit
 from dots3DMP_behavior import dots3DMP_create_trial_list
@@ -23,7 +25,7 @@ with open(filename, 'rb') as file:
     data = pd.read_pickle(file)
 
 par = ['Tuning', 'Task']
-data = data[data[par].notna().all(axis=1)][par]
+data = data[data[par].notna().all(axis=1)][par]  # drop sessions without par
 
 # %% set trial table
 
@@ -57,7 +59,44 @@ sm_params = {'type': 'boxcar', 'binsize': binsize, 'width': 0.4}
 
 rh_fig, rh_ax = data['Task'][sess].units[unit].plot_raster(
     align, condlist, ['modality', 'coherenceInd'], 'heading', titles,
-    'stimOn', trange=np.array([-3, 5]), binsize=binsize, sm_params=sm_params)
+    align_ev, trange=np.array([-3, 5]), binsize=binsize, sm_params=sm_params)
+
+# %% all rh plots
+
+
+align_ev = 'stimOn'
+thisPar = 'Task'
+
+this_par_data = data[thisPar]
+this_par_data = this_par_data.iloc[0:2]
+
+titles = ['Ves', 'Vis L', 'Vis H', 'Comb L', 'Comb H']
+
+binsize = 0.05
+sm_params = {'type': 'boxcar', 'binsize': binsize, 'width': 0.4}
+
+with PdfPages('allunits_rasterhist.pdf') as pdf_file:
+
+    for sess in this_par_data:
+        good_trs = sess.events['goodtrial'].to_numpy(dtype='bool')
+        condlist = sess.events[condlabels].loc[good_trs, :]
+
+        align = sess.events.loc[good_trs, align_ev].to_numpy(dtype='float64')
+
+        for unit in sess.units:
+            unit_title = f'{unit.rec_date}, set={unit.rec_set}, id={unit.clus_id}, group={unit.clus_group}'
+
+            rh_fig, rh_ax = unit.plot_raster(align, condlist,
+                                             ['modality', 'coherenceInd'],
+                                             'heading', titles, unit_title,
+                                             align_ev,
+                                             trange=np.array([-3, 5]),
+                                             binsize=binsize,
+                                             sm_params=sm_params)
+
+            pdf_file.savefig(rh_fig)
+
+
 
 # %% trial firing rates
 
