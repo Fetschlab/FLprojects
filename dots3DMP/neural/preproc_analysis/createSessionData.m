@@ -262,7 +262,7 @@ for n = 1:length(currentFolderList)
             dataStruct(sess(s)).data.(paradigms{par}).units.cluster_id = cids;
             dataStruct(sess(s)).data.(paradigms{par}).units.cluster_type = cgs;
 
-            dataStruct(sess(s)).data.(paradigms{par}).units.cluster_labels = labels(cgs);
+            dataStruct(sess(s)).data.(paradigms{par}).units.cluster_label = labels(cgs);
 
         end
 
