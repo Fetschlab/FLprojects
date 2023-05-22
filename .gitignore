@@ -9,3 +9,5 @@ dots3DMP/pyDots3DMP/__pycache__/
 *.yml
 
 dots3DMP/pyDots3DMP/__pycache__/
+
+*.pdf
