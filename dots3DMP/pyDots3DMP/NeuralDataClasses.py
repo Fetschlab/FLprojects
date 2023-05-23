@@ -9,6 +9,8 @@ Created on Thu Apr 13 08:37:40 2023
 import numpy as np
 import xarray as xr
 
+import pdb
+
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import seaborn as sns
@@ -91,7 +93,7 @@ class ksUnit(Unit):
     # TODO add contam pct
     # TODO allow this to plot multiple alignments?
 
-    def plot_raster(self, align, condlist, col, hue, titles, suptitle='',
+    def plot_raster(self, align, condlist, col, hue, titles=None, suptitle='',
                     align_label='', other_evs=[], other_ev_labels=[],
                     trange=np.array([-2, 3]),
                     cmap=None, hue_norm=(-12, 12),
@@ -120,7 +122,6 @@ class ksUnit(Unit):
             nC = len(np.unique(df[col]))
             df['grp'] = df[col]
 
-        assert len(titles) == nC
 
         fig, axs = plt.subplots(nrows=2, ncols=nC, figsize=(20, 6))
         fig.suptitle(suptitle)
@@ -130,7 +131,7 @@ class ksUnit(Unit):
         uhue = np.unique(df[hue])
         if cmap is None:
             if hue == 'heading':
-                cmap = 'RdYlBu'
+                cmap = 'RdBu'
             elif hue == 'choice_wager':
                 cmap = 'Paired'
             cmap = mpl.colormaps[cmap]
@@ -142,6 +143,10 @@ class ksUnit(Unit):
         # this doesn't work with cmap selection below yet...
 
         for c, cond_df in df.groupby('grp'):
+
+            ctitle = cond_groups.iloc[c, :]
+            ctitle = ', '.join([f'{t}={v:.0f}' for t, v in
+                               zip(ctitle.index, ctitle.values)])
 
             # this time, create groupings based on hue, within cond_df
             ic, nC, cond_groups = FRutils.condition_index(cond_df[[hue]])
@@ -163,7 +168,11 @@ class ksUnit(Unit):
             ax.set_ylim(-0.5, len(cond_df['spks'])+0.5)
             ax.invert_yaxis()
             ax.set_xlim(trange[0], trange[1])
-            ax.set_title(titles[c])
+
+            if titles is None:
+                ax.set_title(ctitle)
+            else:
+                ax.set_title(titles[c])
 
             if c == 0:
                 ax.set_ylabel('trial')
@@ -211,7 +220,7 @@ class ksUnit(Unit):
         cbar = plt.colorbar(sm)
         cbar.set_label(hue)
 
-        plt.show()
+        # plt.show()
 
         return fig, axs
 

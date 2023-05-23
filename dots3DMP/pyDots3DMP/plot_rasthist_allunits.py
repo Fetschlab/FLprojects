@@ -10,6 +10,7 @@ import numpy as np
 from pathlib import PurePath
 import pandas as pd
 
+import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
 # custom imports
@@ -68,13 +69,12 @@ align_ev = 'stimOn'
 thisPar = 'Task'
 
 this_par_data = data[thisPar]
-this_par_data = this_par_data.iloc[0:2]
-
-titles = ['Ves', 'Vis L', 'Vis H', 'Comb L', 'Comb H']
+this_par_data = this_par_data[1:]
 
 binsize = 0.05
 sm_params = {'type': 'boxcar', 'binsize': binsize, 'width': 0.4}
 
+plt.ioff()
 with PdfPages('allunits_rasterhist.pdf') as pdf_file:
 
     for sess in this_par_data:
@@ -86,15 +86,15 @@ with PdfPages('allunits_rasterhist.pdf') as pdf_file:
         for unit in sess.units:
             unit_title = f'{unit.rec_date}, set={unit.rec_set}, id={unit.clus_id}, group={unit.clus_group}'
 
-            rh_fig, rh_ax = unit.plot_raster(align, condlist,
-                                             ['modality', 'coherenceInd'],
-                                             'heading', titles, unit_title,
-                                             align_ev,
-                                             trange=np.array([-3, 5]),
-                                             binsize=binsize,
-                                             sm_params=sm_params)
-
-            pdf_file.savefig(rh_fig)
+            if len(unit):
+                rh_fig, rh_ax = unit.plot_raster(align, condlist,
+                                                 ['modality', 'coherenceInd'],
+                                                 'heading', unit_title,
+                                                 align_ev,
+                                                 trange=np.array([-3, 5]),
+                                                 binsize=binsize,
+                                                 sm_params=sm_params)
+                pdf_file.savefig(rh_fig)
 
 
 
