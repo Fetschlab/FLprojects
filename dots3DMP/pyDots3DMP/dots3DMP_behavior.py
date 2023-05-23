@@ -12,9 +12,10 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 # import seaborn.objects as so
-import glob
+from pathlib import PurePath
 
 import statsmodels.api as sm
+import statsmodels.formula.api as smf
 from scipy.optimize import curve_fit
 # from sklearn.linear_model import LogisticRegression
 
@@ -33,26 +34,26 @@ def gaus(x, ampl, mu, sigma, bsln):
     return ampl * np.exp(-(x-mu)**2 / (2*sigma**2)) + bsln
 
 
-def clean_behavior_df(df):
+def clean_behavior_df(bhv_df):
 
     # TODO add trialNum from new version of Matlab preproc
 
     # clean up dataframe columns and types
-    df = df.loc[:, ~df.columns.str.startswith('Unnamed')]
+    bhv_df = bhv_df.loc[:, ~bhv_df.columns.str.startswith('Unnamed')]
 
     # convert datetime to actual pandas datetime
     # TODO this seems to be missing time...
-    df['datetime'] = pd.to_datetime(
-        df['datetime'], infer_datetime_format=True)
+    bhv_df['datetime'] = pd.to_datetime(
+        bhv_df['datetime'], infer_datetime_format=True)
 
-    df['modality'] = df['modality'].astype('category')
+    bhv_df['modality'] = bhv_df['modality'].astype('category')
 
-    if np.max(df['choice']) == 2:
+    if np.max(bhv_df['choice']) == 2:
         # to make 0..1, like PDW - more convenient for calculations
-        df['choice'] -= 1
+        bhv_df['choice'] -= 1
 
     # remove one-target choice
-    df = df.loc[df['oneTargChoice'] == 0]
+    bhv_df = bhv_df.loc[bhv_df['oneTargChoice'] == 0]
 
     # leaving oneTargConf in, as this might be useful for some analyses
     # and can be removed easily later if desired
@@ -60,22 +61,22 @@ def clean_behavior_df(df):
     # TODO remove outlier RTs
     # hard limits, or based on things beyond percentile/SDs from mean range
 
-    return df
+    return bhv_df
 
 # %%
 
 
-def behavior_means(df, conftask=2, by_conds=['modality', 'coherence',
+def behavior_means(bhv_df, conftask=2, by_conds=['modality', 'coherence',
                                              'heading']):
     """
 
     Parameters
     ----------
-    df : TYPE
+    bhv_df : TYPE
         DESCRIPTION.
     conftask : TYPE, optional
         DESCRIPTION. The default is 2.
- 
+
     Returns
     -------
     pRight : TYPE
@@ -89,31 +90,31 @@ def behavior_means(df, conftask=2, by_conds=['modality', 'coherence',
 
     # if conftask is 1, we need a 'PDW' proxy for splitting by confidence
     # if conftask == 1:
-    #    df['PDW'] = df['conftask'] > 0.5
+    #    bhv_df['PDW'] = bhv_df['conftask'] > 0.5
 
     # for confidence means, remove one-target confidence trials
-    df_noOneTarg = df.loc[df['oneTargConf'] == 0]
+    bhv_df_noOneTarg = bhv_df.loc[bhv_df['oneTargConf'] == 0]
 
     # pRight calculation
-    pRight = df.groupby(by=by_conds)['choice'].agg(
+    pRight = bhv_df.groupby(by=by_conds)['choice'].agg(
         [np.mean, prop_se]).dropna(axis=0).reset_index()
 
     # pHigh calculation
     pHigh = None
     if conftask == 1:
-        pHigh = df_noOneTarg.groupby(by=by_conds)['conf'].agg(
+        pHigh = bhv_df_noOneTarg.groupby(by=by_conds)['conf'].agg(
             [np.mean, cont_se]).dropna(axis=0).reset_index()
     elif conftask == 2:
-        pHigh = df_noOneTarg.groupby(by=by_conds)['PDW'].agg(
+        pHigh = bhv_df_noOneTarg.groupby(by=by_conds)['PDW'].agg(
             [np.mean, prop_se]).dropna(axis=0).reset_index()
 
     # this effectively achieves the same thing
-    # pRight = pd.pivot_table(df, values='choice',
+    # pRight = pd.pivot_table(bhv_df, values='choice',
     #       index=['modality','coherence'], columns='heading',
     #       aggfunc=(np.mean,prop_se)).stack().reset_index()
 
     # meanRT calculation
-    meanRT = df.groupby(by=by_conds)['RT'].agg(
+    meanRT = bhv_df.groupby(by=by_conds)['RT'].agg(
         [np.mean, cont_se]).dropna(axis=0).reset_index()
 
     return pRight, pHigh, meanRT
@@ -121,69 +122,75 @@ def behavior_means(df, conftask=2, by_conds=['modality', 'coherence',
 # %% descriptive fit to basic curves (none, logistic, or gaussian)
 
 
-def choice_logit_fit(df, numhdgs=200):
+def choice_logit_fit(bhv_df, numhdgs=200):
 
-    hdgs = np.unique(df['heading']).reshape(-1, 1)
+    hdgs = np.unique(bhv_df['heading']).reshape(-1, 1)
     xhdgs = np.linspace(np.min(hdgs), np.max(hdgs), numhdgs).reshape(-1, 1)
 
-    logreg = sm.Logit(df['choice'], sm.add_constant(df['heading'])).fit()
+    # logreg = smf.logit("choice ~ heading", data=bhv_df).fit()
+    logreg = sm.Logit(bhv_df['choice'], sm.add_constant(bhv_df['heading'])).fit()
     yhat = logreg.predict(sm.add_constant(xhdgs))
     params = logreg.params['heading'], logreg.params['const']
 
     # using sklearn
     # logreg = LogisticRegression().fit(
-    #               df['heading'].to_numpy().reshape(-1, 1),
-    #               df['choice'].to_numpy())
+    #               bhv_df['heading'].to_numpy().reshape(-1, 1),
+    #               bhv_df['choice'].to_numpy())
     # yhat = logreg.predict_proba(xhdgs)[:, 1]
 
     return pd.Series({'yhat': yhat, 'params': params})
 
 
-def gauss_fit(df, y='choice', p0=[0.1, 0, 3, 0.5], numhdgs=200):
+def gauss_fit(bhv_df, y='choice', p0=[0.1, 0, 3, 0.5], numhdgs=200):
 
-    hdgs = np.unique(df['heading']).reshape(-1, 1)
+    hdgs = np.unique(bhv_df['heading']).reshape(-1, 1)
     xhdgs = np.linspace(np.min(hdgs), np.max(hdgs), numhdgs).reshape(-1, 1)
 
     if y == 'choice':
 
-        probreg = sm.Probit(df['choice'], sm.add_constant(df['heading'])).fit(
+        probreg = sm.Probit(bhv_df['choice'], sm.add_constant(bhv_df['heading'])).fit(
             start_params=p0)
         yhat = probreg.predict(sm.add_constant(xhdgs))
         params = probreg.params['heading'], probreg.params['const']
 
     elif y == 'PDW':
         params, _ = curve_fit(gaus,
-                              xdata=df['heading'], ydata=1-df['PDW'], p0=p0)
+                              xdata=bhv_df['heading'], ydata=1-bhv_df['PDW'], p0=p0)
         yhat = 1 - gaus(xhdgs, *params)
 
     elif y == 'RT':
         params, _ = curve_fit(gaus,
-                              xdata=df['heading'], ydata=df['RT'], p0=p0)
+                              xdata=bhv_df['heading'], ydata=bhv_df['RT'], p0=p0)
         yhat = gaus(xhdgs, *params)
 
     return pd.Series({'yhat': yhat, 'params': params})
 
 
-def bhv_summary_fits(df, by_conds=['modality', 'coherence']):
+def bhv_summary_fits(bhv_df, by_conds=['modality', 'coherence']):
 
-    grp_df = df.groupby(by=by_conds)
+    # TODO allow p0 to be passed in
 
-    fit_pRight = grp_df.apply(gauss_fit, 'choice', [0, 3]).reset_index()
-    fit_PDW = grp_df.apply(gauss_fit, 'PDW', [0.1, 0, 3, 0.5]
-                           ).reset_index()
-    fit_RT = grp_df.apply(gauss_fit, 'RT', [0.1, 0, 3, 0.5]
-                          ).reset_index()
+    grp_bhv_df = bhv_df.groupby(by=by_conds)
+
+    fit_pRight = grp_bhv_df.apply(gauss_fit, 'choice', [0, 3]
+                              ).dropna(axis=0).reset_index()
+
+    fit_PDW = grp_bhv_df.apply(gauss_fit, 'PDW', [0.1, 0, 3, 0.5]
+                           ).dropna(axis=0).reset_index()
+
+    fit_RT = grp_bhv_df.apply(gauss_fit, 'RT', [0.1, 0, 3, 0.5]
+                          ).dropna(axis=0).reset_index()
 
     return fit_pRight, fit_PDW, fit_RT
 
 
 
-# def behavior_fit(df, fitType='logistic', numhdgs=200):
+# def behavior_fit(bhv_df, fitType='logistic', numhdgs=200):
 
-#     if np.max(df['choice']) == 2:
-#         df['choice'] -= 1
+#     if np.max(bhv_df['choice']) == 2:
+#         bhv_df['choice'] -= 1
 
-#     hdgs = np.unique(df['heading']).reshape(-1, 1)
+#     hdgs = np.unique(bhv_df['heading']).reshape(-1, 1)
 #     xhdgs = np.linspace(np.min(hdgs), np.max(hdgs), numhdgs).reshape(-1, 1)
 
 #     outlist = ['pRight', 'PDW', 'RT']
@@ -196,14 +203,14 @@ def bhv_summary_fits(df, by_conds=['modality', 'coherence']):
 
 #     # always do fits separately for each mod/coh
 #     for modality in pRight['modality'].unique():
-#         for c, coh in enumerate(df['coherence'].unique()):
+#         for c, coh in enumerate(bhv_df['coherence'].unique()):
 
 #             if modality == 1:
-#                 X = df.loc[df['modality'] == modality,
+#                 X = bhv_df.loc[bhv_df['modality'] == modality,
 #                            ['heading', 'choice', 'PDW', 'RT']]
 #             else:
-#                 X = df.loc[(df['modality'] == modality) &
-#                            (df['coherence'] == coh),
+#                 X = bhv_df.loc[(bhv_df['modality'] == modality) &
+#                            (bhv_df['coherence'] == coh),
 #                            ['heading', 'choice', 'PDW', 'RT']]
 
 #             if fitType == 'logistic':
@@ -249,7 +256,6 @@ def bhv_summary_fits(df, by_conds=['modality', 'coherence']):
 
 # %%
 
-
 def cue_weighting(fit_results):
 
     wves_emp = wves_pred = None
@@ -264,7 +270,6 @@ def cue_weighting(fit_results):
 
 
 def plot_behavior_means(pRight, pHigh=None, meanRT=None):
- 
 
     # (
     #     so.Plot(pRight, x='heading',y='mean', color='modality')
@@ -310,19 +315,19 @@ def plot_behavior_means(pRight, pHigh=None, meanRT=None):
 # %%
 
 
-def RTquantiles(df, nq=5, cond_columns=['modality', 'coherence', 'heading'],
+def RTquantiles(bhv_df, nq=5, by_conds=['modality', 'coherence', 'heading'],
                 depvar='PDW'):
 
     # TODO check this works and results make sense / compare with by hand calcs
 
-    df['RTq'] = df.groupby(cond_columns)['RT'].transform(
+    bhv_df['RTq'] = bhv_df.groupby(by_conds)['RT'].transform(
         lambda x: pd.qcut(x, nq, labels=False))
 
     # we also want to keep the RT (mean/median) of each quantile, for plotting
-    quantile_vals = df.groupby(cond_columns)['RT'].transform(
+    quantile_vals = bhv_df.groupby(by_conds)['RT'].transform(
         lambda x: pd.qcut(x, nq))
 
-    result = df.groupby(cond_columns + ['RTq'])[depvar].mean().reset_index()
+    result = bhv_df.groupby(by_conds + ['RTq'])[depvar].mean().reset_index()
 
     return result
 
@@ -390,23 +395,32 @@ if __name__ == "__main__":
 
     subject = 'lucio'
     folder = '/Users/stevenjerjian/Desktop/FetschLab/PLDAPS_data/dataStructs/'
-    files = glob.glob(f'{folder}*.csv')
-    df = pd.read_csv(files[0])
-    # TODO change to specify file and path using pathlib
 
-    df = clean_behavior_df(df)
+    filename = PurePath(folder, 'lucio_20220512-20230222_clean.csv')
+    bhv_df = pd.read_csv(filename)
+    bhv_df = clean_behavior_df(bhv_df)
 
     # single PDW var, with oneTarg coded as 2
-    df['PDW_1targ'] = df['PDW']
-    df.loc[df['oneTargConf'] == 1, 'PDW_1targ'] = 2
+    bhv_df['PDW_1targ'] = bhv_df['PDW']
+    bhv_df.loc[bhv_df['oneTargConf'] == 1, 'PDW_1targ'] = 2
 
     # drop delta trials if not using!
 
     split_by = ['modality', 'coherence', 'heading', 'PDW_1targ']
-    pRight, pHigh, meanRT = behavior_means(df, conftask=2, by_conds=split_by)
+    pRight, pHigh, meanRT = behavior_means(bhv_df, conftask=2, by_conds=split_by)
 
     split_by = ['modality', 'coherence', 'PDW_1targ']
-    fit_pRight, fit_PDW, fit_RT = bhv_summary_fits(df, by_conds=split_by)
+    fit_pRight, fit_PDW, fit_RT = bhv_summary_fits(bhv_df, by_conds=split_by)
+
+    formula = 'choice ~ heading + C(modality) + heading*C(modality)'
+    fit_acc = smf.logit(formula, data=bhv_df).fit()
+    print(fit_acc.summary())
+
+    formula = 'correct ~ PDW'
+    fit_p = smf.logit(formula, data=bhv_df).fit()
+    print(fit_p.summary())
+    
+    
 
 
     # mods = np.array([1, 2, 3])
