@@ -127,11 +127,14 @@ def trial_psth(spiketimes, align, trange,
 
         spktimes_aligned = []
         if spiketimes.any():
-            itr_start, itr_end = 1, nTr
+            itr_start, itr_end = 0, nTr
 
             if not all_trials:
                 itr_start = np.argmin(np.abs(tr_starts - spiketimes[0]))
                 itr_end = np.argmin(np.abs(tr_ends - spiketimes[-1]))
+
+            for itr in range(0, itr_start):
+                spktimes_aligned.append(np.empty(1))
 
             for itr in range(itr_start, itr_end+1):
                 spk_inds = np.logical_and(spiketimes >= tr_starts[itr],
@@ -153,6 +156,9 @@ def trial_psth(spiketimes, align, trange,
                     elif which_ev == 1:
                         start_pos = np.argmin(abs(x - tstarts_new[itr]))
                         fr_out[itr, :start_pos] = np.nan
+
+            for itr in range(itr_end+1, nTr):
+                spktimes_aligned.append(np.empty(1))
 
             if binsize > 0:
                 x = x[:-1] + np.diff(x)/2  # shift x values to bin centers
