@@ -15,7 +15,7 @@ from pathlib import PurePath
 import pickle as pkl
 
 # custom imports
-from NeuralDataClasses import Population, ksUnit, Unit
+from NeuralDataClasses import Population, ksUnit, Unit, PseudoPop
 from dots3DMP_behavior import dots3DMP_create_trial_list
 import dots3DMP_FRutils as FRutils
 import tuning_utils as tuning
@@ -28,7 +28,6 @@ filename = PurePath(data_folder, 'lucio_neuro_datasets',
 
 with open(filename, 'rb') as file:
     this_df = pkl.load(file)
-
 
 par = ['Tuning', 'Task']
 data = this_df[this_df[par].notna().all(axis=1)][par]
@@ -54,12 +53,12 @@ tr_tab_task, _ = dots3DMP_create_trial_list(hdgs_task, mods, cohs,
 tr_tab_task.columns = condlabels
 
 
-# aggregated spike rates in stimOn-stimOff interval
-# same for tuning and task for now
-binsize = 0.001
-# sm_params = {'type': 'boxcar', 'binsize': 0.05, 'width': 0.4}
+# set binsize = 0 for gross average/count in each interval
+binsize = 0.01
+
+# sm_params = {'type': 'boxcar', 'binsize': binsize, 'width': 0.4}
 sm_params = {'type': 'gaussian', 'binsize': binsize,
-             'width': 0.3, 'sigma': 0.03}
+             'width': 0.4, 'sigma': 0.05}
 
 # %% trial firing rates, tuning and task paradigms
 
@@ -72,21 +71,25 @@ align_ev = [['stimOn', 'stimOff']]
 trange = np.array([[0.5, -0.5]])
 
 # firing rate over time across units and trials, per session
-rates_tuning, tvecs, conds_tuning, _ = \
+rates_tuning, units_tuning, conds_tuning, tvecs_tuning, _ = \
     zip(*data['Tuning'].apply(lambda x: x.calc_firing_rates(align_ev, trange,
                                                             binsize, sm_params,
                                                             condlabels)))
 
-align_ev = [['fpOn', 'stimOn'],
-            ['stimOn', 'stimOff']]
-trange = np.array([[0, 0],
-                   [0, 0]])
+align_ev = ['stimOn']
+trange = np.array([[-0.5, 1.5]])
 
-rates_task, tvecs, conds_task, _ = \
+# align_ev = [['fpOn', 'stimOn'], ['stimOn', 'stimOff']]
+# trange = np.array([[0, 0], [0, 0]])
+
+rates_task, units_task, conds_task, tvecs_task, _ = \
     zip(*data['Task'].apply(lambda x: x.calc_firing_rates(align_ev, trange,
                                                           binsize, sm_params,
                                                           condlabels)))
 
+rel_event_times = data['Task'].apply(lambda x: x.rel_event_times())
+
+# concatenate all intervals
 rates_tuning_cat, _ = FRutils.concat_aligned_rates(rates_tuning)
 rates_task_cat, _ = FRutils.concat_aligned_rates(rates_task)
 
@@ -104,6 +107,13 @@ for f_in, cond in zip(rates_task_cat, conds_task):
 
 # stack 'em up. all units x conditions x time
 cond_frs_stacked = np.vstack(cond_frs)
+
+
+# %% build pseudopop
+
+
+
+
 
 # %% cond avg + hdg tuning, in TUNING paradigm
 
