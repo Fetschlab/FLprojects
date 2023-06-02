@@ -32,7 +32,7 @@ if conftask==1
     confdata = data.conf;
     errfun   = @(x,n) std(x) / sqrt(n);
     yLab = 'confidence';
-    yL = [0.25 0.85];
+    yL = [0 1];
     nbins = 3; % number of RT quantiles
     xRange = [0.4 2.2];  % assume human for RT purposes
 elseif conftask==2 
@@ -200,7 +200,9 @@ for c = 1:size(ucond,1) % the extra one is for all conditions pooled
         
         if c==1
 %             plot(xRange(1)*1.1+[0.08 0.15],0.55-0.08*h*ones(1,2),'color',cmap(h,:),'linewidth',3);
-            text(xRange(1)*1.1+0.4,0.55-0.08*h,sprintf('%.2g%s',uhdg(h),char(176)),'color',cmap(h,:),'fontsize',15,'fontweight','bold','horizo','center');
+            text(xRange(1)*1.1+0.4,0.55,'|hdg|','color',cmap(end,:),'fontsize',14,'horizo','center','fontweight','bold');
+
+            text(xRange(1)*1.1+0.4,0.55-0.14*h,sprintf('%.2g%s',uhdg(h),char(176)),'color',cmap(h,:),'fontsize',15,'fontweight','bold','horizo','center');
         end
        
     end
@@ -208,9 +210,7 @@ for c = 1:size(ucond,1) % the extra one is for all conditions pooled
 
     xlim(xRange);
     ylim(yL)
-    if c==2, xlabel('response time (s)'); end
- 
-%     text(xRange(2)*0.8+0.25,0.75,'|hdg|','color',cmap(end,:),'fontsize',14,'horizo','center','fontweight','bold');
+    if c==2, xlabel('Reaction time (s)'); end
 
     if c>1
         set(gca,'yticklabel',[]);

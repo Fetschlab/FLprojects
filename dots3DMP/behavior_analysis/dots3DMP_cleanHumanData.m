@@ -29,10 +29,11 @@ RTtask = 1;
 
 if ~RTtask,  dateRange = 20190625:20191231; % non-RT
 % else,        dateRange = 20200213:20220317; % RT 2
-else,        dateRange = 20200213:20211020; % RT 1
-% else,          dateRange = 20200213:20210526; % RT 0
+% else,        dateRange = 20200213:20211020; % RT 1
+else,          dateRange = 20200213:20210526; % RT 0
 
 end
+
 
 folder = '/Users/stevenjerjian/Desktop/FetschLab/PLDAPS_data/dataStructs/';
 file = [subject '_' num2str(dateRange(1)) '-' num2str(dateRange(end)) '.mat'];
@@ -116,6 +117,7 @@ end
 % some pre-RT data has 0 coh (?), and 1 or 3 cohs within a 'good' data
 % block
 
+%{
 % save original 'raw' coherences
 data.cohRaw = data.coherence;
 data.coherence = nan(size(data.coherence));
@@ -139,6 +141,10 @@ for b=1:length(blocks)
     data.coherence(blockTrials) = inds;
 
 end
+%}
+
+data.coherence(data.coherence<0.5) = 0.4;
+data.coherence(data.coherence>=0.5)= 0.7;
 
 %{
 % SJ 03-2023 this is only for a certain file
