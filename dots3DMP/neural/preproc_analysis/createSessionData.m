@@ -224,8 +224,8 @@ for n = 1:length(currentFolderList)
                 end
 
 
-                dataStruct(sess(s)).data.(paradigms{par}).units.depth = ch_depth;
-                dataStruct(sess(s)).data.(paradigms{par}).units.ch    = depth;
+                dataStruct(sess(s)).data.(paradigms{par}).units.depth = ch_depth(inds);
+                dataStruct(sess(s)).data.(paradigms{par}).units.ch    = depth(inds);
 
                 inds = inds & ismember(ch+1, dataStruct(sess(s)).chs);
 
@@ -236,6 +236,7 @@ for n = 1:length(currentFolderList)
                 dataStruct(sess(s)).data.(paradigms{par}).units.cluster_type = cgs;
 
                 dataStruct(sess(s)).data.(paradigms{par}).units.cluster_labels = clus_labels(cgs);
+                dataStruct(sess(s)).data.(paradigms{par}).units.npks = nspks(inds);
 
                 if any(cgs==3)
                     fprintf('Adding %d SU, %d MU, %d unsorted\n\n',sum(cgs==2),sum(cgs==1),sum(cgs==3|cgs==0))
@@ -243,7 +244,7 @@ for n = 1:length(currentFolderList)
                     fprintf('Adding %d SU, %d MU\n\n',sum(cgs==2),sum(cgs==1))
                 end
 
-                % add each unit's spikes to an entry in spiketimes cell
+                % finally, add each unit's spikes to an entry in spiketimes cell
                 for unit=1:sum(inds)
                     theseSpikes = sp.clu==cids(unit) & thisParSpikes;
                     %                 theseSpikes = sp.clu==cids(unit);
