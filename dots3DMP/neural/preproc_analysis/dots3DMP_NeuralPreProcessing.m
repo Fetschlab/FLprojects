@@ -68,7 +68,7 @@ keepMU = 1;           % include all SU and MU, by default, do it, can always rem
 useSCP = 1; 
 useVPN = 0;
 overwriteLocalFiles = 0; % set to 1 to always use the server copy
-% overwriteEventSets = 0; % obsolete for now
+% overwriteEventSets = 0; % obsolete for now, to be removed
 
 
 %%
