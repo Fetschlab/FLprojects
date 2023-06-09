@@ -8,12 +8,13 @@ function logOddsCorrMap = images_dtb_calcLPOandPlot(R,P)
 
 % CF started it circa 2018
 % SJ modified 02-2023 to remove reassigning logOdds map to P inside function
+% SJ 06-2023 re-implemented 2-D drift rate (i.e. for time-varying drift)
 
 I = mean(R.drift,2)>=0; % In case drift is signed, calculate only for positives,
                 % then the kluge with separate marginals (Pxt's) can be done elsewhere
 % unlike 1D code, here we'll marginalize over drift in one step               
-odds = (squeeze(sum(P.up.distr_loser(I,:,:),1)) / length(R.drift(I))) ./ ...
-       (squeeze(sum(P.lo.distr_loser(I,:,:),1)) / length(R.drift(I)));
+odds = (squeeze(sum(P.up.distr_loser(I,:,:),1)) ./ size(R.drift(I),1)) ./ ...
+       (squeeze(sum(P.lo.distr_loser(I,:,:),1)) ./ size(R.drift(I),1));
 odds(odds<1) = 1; % fix some stray negatives/zeros (what about infs?)
 odds(isinf(odds)) = nan;
 logOddsCorrMap = log(odds)';
@@ -22,15 +23,15 @@ if R.plotflag
 
     % (1) plot choice and RT
     figure(111); set(gcf,'Color',[1 1 1],'Position',[600 600 450 700],'PaperPositionMode','auto'); clf;
-    subplot(3,1,1); plot(R.drift,P.up.p,'o-'); title('Prob correct bound crossed before tmax') % meaningless w signed drift
-    subplot(3,1,2); plot(R.drift,P.up.p./(P.up.p+P.lo.p),'o-'); title('Relative prob of corr vs. incorr bound crossed (Pcorr)'); % actually pRight with signed drift
-    subplot(3,1,3); plot(R.drift,P.up.mean_t,'o-'); title('mean RT'); xlabel('drift rate');
+    subplot(3,1,1); plot(mean(R.drift,2),P.up.p,'o-'); title('Prob correct bound crossed before tmax') % meaningless w signed drift
+    subplot(3,1,2); plot(mean(R.drift,2),P.up.p./(P.up.p+P.lo.p),'o-'); title('Relative prob of corr vs. incorr bound crossed (Pcorr)'); % actually pRight with signed drift
+    subplot(3,1,3); plot(mean(R.drift,2),P.up.mean_t,'o-'); title('mean RT'); xlabel('drift rate');
 
     % remake Fig. 5c-d of Kiani et al 2014 (steps analogous to makeLogOddsCorrMap_*)
     n = 100; % set n to 100+ for smooth plots, lower for faster plotting
     
     % (2) first an example PDF
-    c = round(length(R.drift(I))/2) - 1 + sum(I==0); % pick an intermediate drift rate, or make a loop to see all of them
+    c = round(size(R.drift(I),1)/2) - 1 + sum(I==0); % pick an intermediate drift rate, or make a loop to see all of them
     q = 30; % exponent for log cutoff (redefine zero as 10^-q, for better plots)
     Pmap = squeeze(P.up.distr_loser(c,:,:))';
     Pmap(Pmap<10^-q) = 10^-q;
