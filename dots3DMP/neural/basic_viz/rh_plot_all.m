@@ -5,7 +5,7 @@
 clear;clc
 
 subject   = 'lucio';
-dateRange = 20220512:20230411;
+dateRange = 20220512:20230602;
 
 dataPath = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/data/lucio_neuro_datasets';
 dataFileName = sprintf('%s_%d-%d_neuralData.mat',subject,dateRange(1),dateRange(end));
@@ -14,7 +14,7 @@ load(fullfile(dataPath,dataFileName));
 
 %%
 
-par = 'dots3DMPtuning';
+par = 'dots3DMP';
 unitStruct = unitStruct_from_dataStruct(dataStruct, par);
 
 mods = [1 2 3];
@@ -25,10 +25,14 @@ deltas = 0;
 % use actual headings vector, and then remove/ignore NaNs
 % should get this vector from matching behavioral dataset eventually
 % or generate behavioral dataset from neural dataStruct
-hdgs = [-90 -60 -45 -25 -22.5 -12 0 12 22.5 25 45 60 90];
-hdgs([1 end]) = []; % drop +/- 90, weird platform motion
 
-%hdgs = [-12 -6 -3 -1.5 0 1.5 3 6 12];
+switch par
+    case 'dots3DMPtuning'
+        hdgs = [-90 -60 -45 -25 -22.5 -12 0 12 22.5 25 45 60 90];
+        hdgs([1 end]) = []; % drop +/- 90, weird platform motion
+    case 'dots3DMP'
+    hdgs = [-12 -6 -3 -1.5 0 1.5 3 6 12];
+end
 
 N    = length(hdgs);
 splitcols = cbrewer('div','RdBu',N*2);
@@ -89,7 +93,7 @@ for u = 1:length(unitStruct)
     
     unitcols = splitcols(ismember(hdgs,unique(condsUnit(:,hdgCol))),:);
 
-    % this is not right for multiple alignEvents...
+    % this won't work for multiple alignEvents...
 
     for iae=1:length(alignEvent)
         otherevs = cell(1,length(otherEvents{iae}));
@@ -127,8 +131,9 @@ for u = 1:length(unitStruct)
             end
 
             [~,~,hhist(uc),hrast] = rh_plot(spktimes,align(I),'tmin',tmin(iae),'tmax',tmax(iae),...
-                'histmethod','boxcar','bin',0.05,'hist_smbins',5,'plotsingletrialevents',1,...
-                'split',condsUnit(I,hdgCol),'splitcolors',unitcols,'otherevents',oe,'eventsnames',eventsnames,'title',condtitles{uc});
+                'ratprc', 0.6, 'histmethod','boxcar','bin',0.05,'hist_smbins',5,'plotsingletrialevents',0,...
+                'split',condsUnit(I,hdgCol),'splitcolors',unitcols,'otherevents',oe,'eventsnames',eventsnames,...
+                'title',condtitles{uc});
                             
             ym(uc) = hhist(uc).YLim(2);
 
@@ -139,7 +144,9 @@ for u = 1:length(unitStruct)
 
         for s = 1:length(hhist)
             try
-                hhist(s).YLim(2) = nanmax(ym);
+                hhist(s).YLim(2) = max(nanmax(ym), 10);
+            catch
+                disp('couldnt adjust y-axis height')
             end
         end
 
@@ -148,7 +155,7 @@ for u = 1:length(unitStruct)
     if save_plots
 
         subplot(p(1),p(2),p(1)*p(2))
-        sc = 1; len = 3;
+        sc = 3; len = 3;
 
         hdgVec = hdgs;
         hdgXY = len .* [sind(hdgVec.*sc); cosd(hdgVec.*sc)];
@@ -174,7 +181,7 @@ for u = 1:length(unitStruct)
         plot(startPoint(1)+[0; 0],startPoint(2)+[0; len],'k--')
         set(gca,'Visible','Off');
 
-        printfig(f,'allUnitsTuning_rh_20230522','ps',[],1);
+        printfig(f,sprintf('au_rh_%s_%s',par,datestr(now,'mm-dd-yyyy')),'ps',[],1);
 
     end
 

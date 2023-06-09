@@ -62,7 +62,7 @@ clear;clc
 paradigms = {'dots3DMPtuning','dots3DMP','RFMapping','VesMapping'};
 
 subject = 'lucio';
-dateRange = 20220512:20230411;
+dateRange = 20220512:20230602;
 
 keepMU = 1;           % include all SU and MU, by default, do it, can always remove them later
 useSCP = 1; 

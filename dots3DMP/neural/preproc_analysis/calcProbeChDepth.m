@@ -2,13 +2,22 @@ function real_depths = calcProbeChDepth(ch_depths,probe_info)
 
 switch num2str(probe_info.probe_id)
     case '10034'
-        distance_to_first_contact = 750;
+        distance_to_first_contact = 250; %?
 
     case '30227'
-        distance_to_first_contact = 750;
+        distance_to_first_contact = 250;
 
     case '10225'
-        distance_to_first_contact = 750;
+        distance_to_first_contact = 250;
+
+    case '40479'
+        distance_to_first_contact = 500;
+        
+    case '40482'
+        distance_to_first_contact = 500; %?
+
+    otherwise
+        distance_to_first_contact = 500;
 
 end
 
