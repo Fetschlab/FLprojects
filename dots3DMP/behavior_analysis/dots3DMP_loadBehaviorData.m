@@ -43,7 +43,7 @@ switch subject
         end
 
     case 'simul'
-        error('No simulation dataStruct chosen')
+        filename = 'sim_sepConfMaps_humanSaccEP.mat';
 end
 
 try

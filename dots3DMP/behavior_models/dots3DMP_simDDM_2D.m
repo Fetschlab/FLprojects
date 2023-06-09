@@ -20,7 +20,7 @@ clear; close all
 datafolder = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/data/dots3DMP_DDM';
 codefolder = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/FLprojects/dots3DMP/behav_models';
 
-savefilename = 'tempsim_sepConfMaps_1000reps';
+savefilename = 'sim_sepConfMaps_humanSaccEP';
 
 %% MODEL SPECIFICATIONS and CONDITIONS
 
@@ -30,14 +30,16 @@ modelID = 1; % 1 will be 2Dacc model ('Candidate model' against which others are
 
 % task type
 RTtask   = 1;
-conftask = 2; % 1 - sacc endpoint, 2 - PDW
+conftask = 1; % 1 - sacc endpoint, 2 - PDW
 
-nreps = 1000; % number of repetitions of each unique trial type % (ntrials depends on num unique trial types)
+nreps = 500; % number of repetitions of each unique trial type % (ntrials depends on num unique trial types)
 
 % stimulus conditions
 mods  = [1 2 3];        % stimulus modalities: ves, vis, comb
 cohs  = [0.4 0.8];      % visual coherence levels (these are really just labels, since k's are set manually)
 hdgs  = [-12 -6 -3 -1.5 0 1.5 3 6 12];
+
+hdgs = [-10 -3.5 -1.25 1.25 3.5 10];
 % deltas = [-3 0 3];    % conflict angle; positive means vis to the right
 deltas  = 0;
 
@@ -77,7 +79,7 @@ alpha       = 0.03;             % base rate of low bets (offset to PDW curve, as
 % Tconf       = 0;              % (ms), delay between choice and conf report, unused for now
 
  % Tnd = non-decision time (ms), to account for sensory/motor latencies
-TndMean     = [300 300 300];    % must have different Tnds for [ves, vis, comb]
+TndMean     = [600 800 700];    % must have different Tnds for [ves, vis, comb]
 TndSD       = [0 0 0];          % 50-100 works well; set to 0 for fixed Tnd 
 TndMin      = TndMean/2;        % need to truncate the Tnd dist
 TndMax      = TndMean+TndMin;
