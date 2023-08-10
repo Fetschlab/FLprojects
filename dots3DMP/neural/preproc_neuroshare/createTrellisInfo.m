@@ -1,4 +1,18 @@
-% generate .mat file with recording info
+% NEURAL DATA PRE-PROCESSING
+%
+% This is the top-level script to run immediately after recording.
+%
+% 1. create info metadata file for recording session (useful for later)
+% 2. create nsEvents file containing event timings (extracting from dig in)
+% 3. create binary file of ns5 broadband data for kilosort)
+
+% STEPS AS SOON AS RECORDING IS OVER
+%
+% 1. move recording files from dataFiles folder into folder created by Trellis
+% 2. copy folder to <subject>_neuro folder on NAS
+% 3. input notes from day's recording into a new cell in this script (see previous examples for templates)
+% 4. run cell to create info file, and run processTrellisData, which creates binary files for KS, and nsEvents struct of task events
+% 5. run kilosort on binary file (see main_kilosort_SJ.m)
 
 clear info
 createBinFile = 1; % set to 0 to skip (just create nsEvents)
@@ -6,29 +20,503 @@ createBinFile = 1; % set to 0 to skip (just create nsEvents)
 addpath('C:\Program Files (x86)\Ripple\Trellis\Tools\neuroshare');
 addpath(genpath('C:\Users\fetschlab\Documents\MATLAB\dots3DMP'));
 
-%% run all
-subject = 'lucio';
-folder = ['\\172.30.3.33\homes\fetschlab\data\' subject '\' subject '_neuro\'];
-files  = dir(folder);
+%% ########## (re-)run all (SKIP TO BELOW UNLESS YOU WANT TO RE-GENERATE INFO, EVENTS AND BINARY FILES FOR ALL SESSIONS ###########
 
-for f = 13:length(files)
-    clear info
-    if strcmp(files(f).name(1:2),'20') && files(f).isdir
-        info_filename = [subject files(f).name 'dots3DMP_info.mat'];
+% subject = 'lucio';
+% folder = ['\\172.30.3.33\homes\fetschlab\data\' subject '\' subject '_neuro\'];
+% files  = dir(folder);
+% 
+% for f = 3:length(files)
+%     clear info
+%     if strcmp(files(f).name(1:2),'20') && files(f).isdir
+%         info_filename = [subject files(f).name 'dots3DMP_info.mat'];
+% 
+%         try
+%             load(fullfile(folder,files(f).name,info_filename));
+%         catch
+%             continue
+%         end
+%         if length(info.chanlist)==32
+%             processTrellisData(info,1,0,0);
+%         end
+%     end
+% end
 
-        try
-            load(fullfile(folder,files(f).name,info_filename));
-        catch
-            continue
-        end
-        if length(info.chanlist)==32
-            processTrellisData(info,1,0,0);
-        end
-    end
-end
-
-%% START ACTUAL OFFLINE PROCESSING HERE
+%% ########## START ACTUAL OFFLINE PROCESSING HERE ########## 
 % one cell per recording date (penetration)
+
+%% 2023-06-01, pen 74
+
+% 1 value, fixed across session
+info.subject     = 'lucio';
+info.date        = 20230601;
+info.pen         = 74;
+info.gridtype    = 'original';
+
+info.filepath = ['\\172.30.3.33\homes\fetschlab\data\' info.subject '\' info.subject '_neuro\' num2str(info.date) '\']; % save directly to NAS
+
+% >=1 value, fixed across session
+info.probe_type          = {'DBC D-A 32ch','DBC D-A 32ch'};
+info.probe_ID            = {'10034_32ch_65um_80mm','40479_32ch_65um_80mm'};
+info.gridxy              = {[3, 7],[3 1]};
+info.chanlist            = 1:64; 
+
+% >=1 value, fixed across probes (task info)
+info.pldaps_filetimes    = [1452 1457 1511 1602 1720];
+info.trellis_filenums    = [1 1 1 1 1];
+info.par                 = {'VesMapping','RFmapping','dots3DMPtuning','dots3DMP','dots3DMP'};
+info.rec_group           = [1 1 1 1 1];
+info.comments            = {'','','','',''};
+
+% >=1 value, different across probes (recording info)
+info.depths              = {9700*ones(size(info.rec_group)),9600*ones(size(info.rec_group))}; % MDI depth
+info.cellcomments        = {{'','','','',''},{'','','','',''}};
+
+savefilename = sprintf('%s%ddots3DMP_info.mat',info.subject,info.date);
+save([info.filepath savefilename],'info','-mat')
+processTrellisData(info,1);
+
+
+%% 2023-05-25, pen 73
+
+% 1 value, fixed across session
+info.subject     = 'lucio';
+info.date        = 20230525;
+info.pen         = 73;
+info.gridtype    = 'original';
+
+info.filepath = ['\\172.30.3.33\homes\fetschlab\data\' info.subject '\' info.subject '_neuro\' num2str(info.date) '\']; % save directly to NAS
+
+% >=1 value, fixed across session
+info.probe_type          = {'DBC D-A 32ch','DBC D-A 32ch'};
+info.probe_ID            = {'10034_32ch_65um_80mm','40479_32ch_65um_80mm'};
+info.gridxy              = {[4, 6],[3 1]};
+info.chanlist            = 1:64; 
+
+% >=1 value, fixed across probes (task info)
+info.pldaps_filetimes    = [1339 1345 1357 1418 1514 1530 1625];
+info.trellis_filenums    = [1 1 1 1 1 1 1];
+info.par                 = {'VesMapping','RFmapping','dots3DMPtuning','dots3DMP','dots3DMP','dots3DMP','dots3DMP'};
+info.rec_group           = [1 1 1 1 1 1 1];
+info.comments            = {'','','','v few low bets on vis coh 0.2 zero hdg','1+2 only','cue conflict','more cue conflict, shorter block'};
+
+% >=1 value, different across probes (recording info)
+info.depths              = {7250*ones(size(info.rec_group)),8600*ones(size(info.rec_group))}; % MDI depth
+info.cellcomments        = {{'','','','','','',''},{'','','','','','',''}};
+
+savefilename = sprintf('%s%ddots3DMP_info.mat',info.subject,info.date);
+save([info.filepath savefilename],'info','-mat')
+processTrellisData(info,1);
+
+%% 2023-05-22, pen 72
+
+% 1 value, fixed across session
+info.subject     = 'lucio';
+info.date        = 20230522;
+info.pen         = 72;
+info.gridtype    = 'original';
+
+info.filepath = ['\\172.30.3.33\homes\fetschlab\data\' info.subject '\' info.subject '_neuro\' num2str(info.date) '\']; % save directly to NAS
+
+% >=1 value, fixed across session
+info.probe_type          = {'DBC D-A 32ch','DBC D-A 32ch'};
+info.probe_ID            = {'10034_32ch_65um_80mm','40479_32ch_65um_80mm'};
+info.gridxy              = {[2, 7],[3 2]};
+info.chanlist            = 1:64; 
+
+% >=1 value, fixed across probes (task info)
+info.pldaps_filetimes    = [1544 1554 1615 1746 1835];
+info.trellis_filenums    = [1 1 1 1 1];
+info.par                 = {'RFmapping','dots3DMPtuning','dots3DMP','dots3DMP','VesMapping'};
+info.rec_group           = [1 1 1 1 1];
+info.comments            = {'','','slight R bias on vis, but otherwise good!','cue conflict, slight R bias but good!',''};
+
+% >=1 value, different across probes (recording info)
+info.depths              = {10500*ones(size(info.rec_group)),10000*ones(size(info.rec_group))}; % MDI depth
+info.cellcomments        = {{'','','','',''},{'','','','',''}};
+
+savefilename = sprintf('%s%ddots3DMP_info.mat',info.subject,info.date);
+save([info.filepath savefilename],'info','-mat')
+processTrellisData(info,1);
+
+%% 2023-05-09, pen 71
+
+% 1 value, fixed across session
+info.subject     = 'lucio';
+info.date        = 20230509;
+info.pen         = 71;
+info.gridtype    = 'original';
+
+info.filepath = ['\\172.30.3.33\homes\fetschlab\data\' info.subject '\' info.subject '_neuro\' num2str(info.date) '\']; % save directly to NAS
+
+% >=1 value, fixed across session
+info.probe_type          = {'DBC D-A 32ch','DBC D-A 32ch'};
+info.probe_ID            = {'10034_32ch_65um_80mm','40479_32ch_65um_80mm'};
+info.gridxy              = {[2, 7],[3 1]};
+info.chanlist            = 1:64; 
+
+% >=1 value, fixed across probes (task info)
+info.pldaps_filetimes    = [1152 1206 1234 1358 1409 1419 1532];
+info.trellis_filenums    = [1 1 1 1 1 1 1];
+info.par                 = {'RFmapping','dots3DMPtuning','dots3DMP','dots3DMP','dots3DMP','dots3DMP','VesMapping'};
+info.rec_group           = [1 1 1 1 1 1 1];
+info.comments            = {'','','','cue conflict, bets drifting high','still mostly high','good!',''};
+
+% >=1 value, different across probes (recording info)
+info.depths              = {10450*ones(size(info.rec_group)),9600*ones(size(info.rec_group))}; % MDI depth
+info.cellcomments        = {{'','','','','','',''},{'','','','','','',''}};
+
+savefilename = sprintf('%s%ddots3DMP_info.mat',info.subject,info.date);
+save([info.filepath savefilename],'info','-mat')
+processTrellisData(info,1);
+
+%% 2023-05-04, pen 70
+
+% 1 value, fixed across session
+info.subject     = 'lucio';
+info.date        = 20230504;
+info.pen         = 70;
+info.gridtype    = 'original';
+
+info.filepath = ['\\172.30.3.33\homes\fetschlab\data\' info.subject '\' info.subject '_neuro\' num2str(info.date) '\']; % save directly to NAS
+
+% >=1 value, fixed across session
+info.probe_type          = {'DBC D-A 32ch','DBC D-A 32ch'};
+info.probe_ID            = {'10034_32ch_65um_80mm','40479_32ch_65um_80mm'};
+info.gridxy              = {[3, 6],[2 0]};
+info.chanlist            = 1:64; 
+
+% >=1 value, fixed across probes (task info)
+info.pldaps_filetimes    = [1434 1446 1455 1517 1549 1602 1625 1709];
+info.trellis_filenums    = [1 1 1 1 1 1 1 1];
+info.par                 = {'RFmapping','VesMapping','dots3DMPtuning','dots3DMP','dots3DMP','dots3DMP','dots3DMP','dots3DMP'};
+info.rec_group           = [1 1 1 1 1 1 1 1];
+info.comments            = {'','','','all low bets for Ves','','ves only','vis+comb only','cue conflict. PDW has not been great today'};
+
+% >=1 value, different across probes (recording info)
+info.depths              = {9700*ones(size(info.rec_group)),7900*ones(size(info.rec_group))}; % MDI depth
+info.cellcomments        = {{'','','','','','','','units started drifting here...stopped early'},{'','','','','','','',''}};
+
+savefilename = sprintf('%s%ddots3DMP_info.mat',info.subject,info.date);
+save([info.filepath savefilename],'info','-mat')
+processTrellisData(info,1);
+
+%% 2023-05-02, pen 69
+
+% 1 value, fixed across session
+info.subject     = 'lucio';
+info.date        = 20230502;
+info.pen         = 69;
+info.gridtype    = 'original';
+
+info.filepath = ['\\172.30.3.33\homes\fetschlab\data\' info.subject '\' info.subject '_neuro\' num2str(info.date) '\']; % save directly to NAS
+
+% >=1 value, fixed across session
+info.probe_type          = {'DBC D-A 32ch','DBC D-A 32ch'};
+info.probe_ID            = {'10034_32ch_65um_80mm','40479_32ch_65um_80mm'};
+info.gridxy              = {[2, 7],[1 -1]};
+info.chanlist            = 1:64; 
+
+% >=1 value, fixed across probes (task info)
+info.pldaps_filetimes    = [1515 1550 1643 1740];
+info.trellis_filenums    = [1 1 1 1];
+info.par                 = {'dots3DMPtuning','dots3DMP','dots3DMP','dots3DMPtuning'};
+info.rec_group           = [1 1 1 1];
+info.comments            = {'0.2, 0.7 coh','','cue conflict',''};
+
+% >=1 value, different across probes (recording info)
+info.depths              = {[10750 10750 10750 10750],[5500 5500 5500 5500]}; % MDI depth
+info.cellcomments        = {{'','probe drifting','',''},{'','','',''}};
+
+savefilename = sprintf('%s%ddots3DMP_info.mat',info.subject,info.date);
+save([info.filepath savefilename],'info','-mat')
+processTrellisData(info,1);
+
+%% 2023-04-11, pen 68
+
+% 1 value, fixed across session
+info.subject     = 'lucio';
+info.date        = 20230411;
+info.pen         = 68;
+info.gridtype    = 'original';
+
+info.filepath = ['\\172.30.3.33\homes\fetschlab\data\' info.subject '\' info.subject '_neuro\' num2str(info.date) '\']; % save directly to NAS
+
+% >=1 value, fixed across session
+info.probe_type          = {'DBC D-A 32ch','DBC D-A 32ch'};
+info.probe_ID            = {'10034_32ch_65um_80mm','10225_32ch_65um_80mm'};
+info.gridxy              = {[2, 7],[2 -1]};
+info.chanlist            = 1:64; 
+
+% >=1 value, fixed across probes (task info)
+info.pldaps_filetimes    = [1343 1353 1401 1425 1543 1643];
+info.trellis_filenums    = [1 1 1 1 1 1];
+info.par                 = {'RFmapping','VesMapping','dots3DMPtuning','dots3DMP','dots3DMP','dots3DMPtuning'};
+info.rec_group           = [1 1 1 1 1 1];
+info.comments            = {'','','','0.1,0.7 coh','cue conflict, [1.5 10 3 0] hdgs',''};
+
+% >=1 value, different across probes (recording info)
+info.depths              = {[11000 11000 11000 11000 11000 11000],[7520 7520 7520 7520 7520 7520]}; % MDI depth
+info.cellcomments        = {{'','','','16, 24 huge','','24 now on 22 (23 before)'},{'','','','','',''}};
+
+savefilename = sprintf('%s%ddots3DMP_info.mat',info.subject,info.date);
+save([info.filepath savefilename],'info','-mat')
+processTrellisData(info,1);
+
+%% 2023-03-31, pen 67
+
+% 1 value, fixed across session
+info.subject     = 'lucio';
+info.date        = 20230331;
+info.pen         = 67;
+info.gridtype    = 'original';
+
+info.filepath = ['\\172.30.3.33\homes\fetschlab\data\' info.subject '\' info.subject '_neuro\' num2str(info.date) '\']; % save directly to NAS
+
+% >=1 value, fixed across session
+info.probe_type          = {'DBC D-A 32ch','DBC D-A 32ch'};
+info.probe_ID            = {'10034_32ch_65um_80mm','10225_32ch_65um_80mm'};
+info.gridxy              = {[2, 7],[2 0]};
+info.chanlist            = 1:64; 
+
+% >=1 value, fixed across probes (task info)
+info.pldaps_filetimes    = [1455 1501 1513 1535 1617 1629 1744];
+info.trellis_filenums    = [1 1 1 1 1 1 1];
+info.par                 = {'VesMapping','RFmapping','dots3DMPtuning','dots3DMP','dots3DMP','dots3DMP','dots3DMPtuning'};
+info.rec_group           = [1 1 1 1 1 1 1];
+info.comments            = {'3 reps per cond','','','8 per cond','+/-3, 0 delta, short','cue conflict again',''};
+
+% >=1 value, different across probes (recording info)
+info.depths              = {[11000 11000 11000 11000 11000 11000 11000],[9030 9030 9030 9030 9030 9030 9030]}; % MDI depth
+info.cellcomments        = {{'','','','','','',''},{'','','','','','',''}};
+
+savefilename = sprintf('%s%ddots3DMP_info.mat',info.subject,info.date);
+save([info.filepath savefilename],'info','-mat')
+processTrellisData(info,1);
+
+%% 2023-03-30, pen 66
+
+% 1 value, fixed across session
+info.subject     = 'lucio';
+info.date        = 20230330;
+info.pen         = 66;
+info.gridtype    = 'original';
+
+info.filepath = ['\\172.30.3.33\homes\fetschlab\data\' info.subject '\' info.subject '_neuro\' num2str(info.date) '\']; % save directly to NAS
+
+% >=1 value, fixed across session
+info.probe_type          = {'DBC D-A 32ch'};
+info.probe_ID            = {'10034_32ch_65um_80mm'};
+info.gridxy              = {[3, 7]};
+info.chanlist            = [1:32]; 
+
+% >=1 value, fixed across probes (task info)
+info.pldaps_filetimes    = [1458 1519 1734 1752];
+info.trellis_filenums    = [1 1 1 1];
+info.par                 = {'dots3DMPtuning','dots3DMP','dots3DMPtuning','VesMapping'};
+info.rec_group           = [1 1 1 1];
+info.comments            = {'','','',''};
+
+% >=1 value, different across probes (recording info)
+info.depths              = {[11100 11100 11100 11100]}; % MDI depth
+info.cellcomments        = {{'','drifting','',''}};
+
+savefilename = sprintf('%s%ddots3DMP_info.mat',info.subject,info.date);
+save([info.filepath savefilename],'info','-mat')
+processTrellisData(info,1);
+
+%% 2023-03-28, pen 65
+
+% 1 value, fixed across session
+info.subject     = 'lucio';
+info.date        = 20230328;
+info.pen         = 65;
+info.gridtype    = 'original';
+
+info.filepath = ['\\172.30.3.33\homes\fetschlab\data\' info.subject '\' info.subject '_neuro\' num2str(info.date) '\']; % save directly to NAS
+
+% >=1 value, fixed across session
+info.probe_type          = {'DBC D-A 32ch'};
+info.probe_ID            = {'10034_32ch_65um_80mm'};
+info.gridxy              = {[3, 6]};
+info.chanlist            = [1:32]; 
+
+
+% >=1 value, fixed across probes (task info)
+info.pldaps_filetimes    = [1341 1353 1420 1451 1515 1724];
+info.trellis_filenums    = [1 1 1 2 2 2];
+info.par                 = {'VesMapping','dots3DMPtuning','dots3DMP','dots3DMPtuning','dots3DMP','VesMapping'};
+info.rec_group           = [1 1 1 2 2 2];
+info.comments            = {'','','low bet bias','','start with R bias, got better',''};
+info.chanInterest        = {[],[],[],[],[],[]};        % chans of interest for online thresholded spikes, not really using this anymore since can't reliably keep track of discrim quality with many chs
+
+% >=1 value, different across probes (recording info)
+info.depths              = {[9650 9650 9650 10500 10500 10500]}; % MDI depth
+info.cellcomments        = {{'','','cells drifting a lot, stopped early','','',''}};
+
+savefilename = sprintf('%s%ddots3DMP_info.mat',info.subject,info.date);
+save([info.filepath savefilename],'info','-mat')
+processTrellisData(info,1);
+
+%% 2023-03-16, pen 64
+
+% 1 value, fixed across session
+info.subject     = 'lucio';
+info.date        = 20230316;
+info.pen         = 64;
+info.gridtype    = 'original';
+
+info.filepath = ['\\172.30.3.33\homes\fetschlab\data\' info.subject '\' info.subject '_neuro\' num2str(info.date) '\']; % save directly to NAS
+
+% >=1 value, fixed across session
+info.probe_type          = {'DBC D-A 32ch'};
+info.probe_ID            = {'10034_32ch_65um_80mm'};
+info.gridxy              = {[3, 5]};
+info.chanlist            = [1:32]; 
+
+% >=1 value, fixed across probes (task info)
+info.pldaps_filetimes    = [1542 1550 1623 1806];
+info.trellis_filenums    = [1 1 1 1];
+info.par                 = {'VesMapping','dots3DMPtuning','dots3DMP','dots3DMPtuning'};
+info.rec_group           = [1 1 1 1];
+info.comments            = {'','','some R/L bias for vis/ves respectively...','re-rec for shifted units, just 5 trs per cond'};
+info.chanInterest        = {[],[],[],[]};        % chans of interest for online thresholded spikes, not really using this anymore since can't reliably keep track of discrim quality with many chs
+
+% >=1 value, different across probes (recording info)
+info.depths              = {[10400 10400 10400 10400]}; % MDI depth
+info.cellcomments        = {{'','','','good cell from 7 now on 6!'}};
+
+savefilename = sprintf('%s%ddots3DMP_info.mat',info.subject,info.date);
+save([info.filepath savefilename],'info','-mat')
+processTrellisData(info,1);
+
+%% 2023-03-14, pen 63
+
+% 1 value, fixed across session
+info.subject     = 'lucio';
+info.date        = 20230314;
+info.pen         = 63;
+info.gridtype    = 'original';
+
+info.filepath = ['\\172.30.3.33\homes\fetschlab\data\' info.subject '\' info.subject '_neuro\' num2str(info.date) '\']; % save directly to NAS
+
+% >=1 value, fixed across session
+info.probe_type          = {'DBC D-A 32ch'};
+info.probe_ID            = {'10034_32ch_65um_80mm'};
+info.gridxy              = {[2, 6]};
+info.chanlist            = [1:32]; 
+
+% >=1 value, fixed across probes (task info)
+info.pldaps_filetimes    = [1344 1425 NaN 1500 1622];
+info.trellis_filenums    = [1 1 1 1 1];
+info.par                 = {'dots3DMPtuning','dots3DMP','dots3DMP','dots3DMP','dots3DMP'};
+info.rec_group           = [1 1 1 1 1];
+info.comments            = {'','lots of low bets','ignore','pretty good','cue conflict!'};
+info.chanInterest        = {[],[],[],[],[]};        % chans of interest for online thresholded spikes, not really using this anymore since can't reliably keep track of discrim quality with many chs
+
+% >=1 value, different across probes (recording info)
+info.depths              = {[11000 11000 11000 11000 11000]}; % MDI depth
+info.cellcomments        = {{'more drift than I would like...','','','cells drifting',''}};
+
+savefilename = sprintf('%s%ddots3DMP_info.mat',info.subject,info.date);
+save([info.filepath savefilename],'info','-mat')
+processTrellisData(info,1);
+
+%% 2023-02-23, pen 61
+
+% 1 value, fixed across session
+info.subject     = 'lucio';
+info.date        = 20230223;
+info.pen         = 61;
+info.gridtype    = 'AP15_angled';
+
+info.filepath = ['\\172.30.3.33\homes\fetschlab\data\' info.subject '\' info.subject '_neuro\' num2str(info.date) '\']; % save directly to NAS
+
+% >=1 value, fixed across session
+info.probe_type          = {'DBC D-A 32ch'};
+info.probe_ID            = {'30227_32ch_65um_80mm'};
+info.gridxy              = {[4, 3]};
+info.chanlist            = [1:32]; 
+
+% >=1 value, fixed across probes (task info)
+info.pldaps_filetimes    = [1358 1418 1452 1535 1552 1627 NaN 1749 1829];
+info.trellis_filenums    = [1 1 1 2 2 2 2 2 2];
+info.par                 = {'VesMapping','dots3DMPtuning','dots3DMP','VesMapping','dots3DMPtuning','dots3DMP','dots3DMP','dots3DMP','dots3DMPtuning'};
+info.rec_group           = [1 1 1 2 2 2 2 2 2];
+info.comments            = {'no FP','0.2/0.6','trellis quit somehow! decided to move and start again','4 reps per cond, no FP','','some choice bias (ves left, vis right)','PDW drifting high','PDW drifting low after changes','6 reps per cond'};
+info.chanInterest        = {[],[],[],[],[],[],[],[]};        % chans of interest for online thresholded spikes, not really using this anymore since can't reliably keep track of discrim quality with many chs
+
+% >=1 value, different across probes (recording info)
+info.depths              = {[11520 11520 11520 12700 12700 12700 12700 12700 12700]}; % MDI depth
+info.cellcomments        = {{'14,29 large, 14 got smaller','','','seems more ves? two regions?','','6 got smaller, 29 bigger now','','','re-recording mainly for 29, some other units drifted'}};
+
+savefilename = sprintf('%s%ddots3DMP_info.mat',info.subject,info.date);
+save([info.filepath savefilename],'info','-mat')
+processTrellisData(info,1);
+
+%% 2023-02-21, pen 60
+
+% 1 value, fixed across session
+info.subject     = 'lucio';
+info.date        = 20230221;
+info.pen         = 60;
+info.gridtype    = 'AP15_angled';
+
+info.filepath = ['\\172.30.3.33\homes\fetschlab\data\' info.subject '\' info.subject '_neuro\' num2str(info.date) '\']; % save directly to NAS
+
+% >=1 value, fixed across session
+info.probe_type          = {'DBC D-A 32ch'};
+info.probe_ID            = {'30227_32ch_65um_80mm'};
+info.gridxy              = {[2, 3]};
+info.chanlist            = [1:32]; 
+
+% >=1 value, fixed across probes (task info)
+info.pldaps_filetimes    = [1551 1613 1701 1723 1745 1754];
+info.trellis_filenums    = [1 1 1 1 1 1];
+info.par                 = {'VesMapping','dots3DMPtuning','dots3DMP','dots3DMP','dots3DMP','dots3DMP'};
+info.rec_group           = [1 1 1 1 1 1];
+info.comments            = {'2 amp/freq. no FP','0.2/0.6 coh. eyelink kept jumping, lots of brfix','poor start on ves again, RTs weird','ves still a bit weird','','behavior like normal again...cohs were 0.2 and 0.7'};
+info.chanInterest        = {[],[],[],[],[],[]};        % chans of interest for online thresholded spikes, not really using this anymore since can't reliably keep track of discrim quality with many chs
+
+% >=1 value, different across probes (recording info)
+info.depths              = {[10300 10300 10300 10300 10300 10300]}; % MDI depth
+info.cellcomments        = {{'','','','maybe lost unit on 5','units on 16 and elsewhere still good I think',''}};
+
+savefilename = sprintf('%s%ddots3DMP_info.mat',info.subject,info.date);
+save([info.filepath savefilename],'info','-mat')
+processTrellisData(info,1);
+
+%% 2023-02-20, pen 59
+
+% 1 value, fixed across session
+info.subject     = 'lucio';
+info.date        = 20230220;
+info.pen         = 59;
+info.gridtype    = 'AP15_angled';
+
+info.filepath = ['\\172.30.3.33\homes\fetschlab\data\' info.subject '\' info.subject '_neuro\' num2str(info.date) '\']; % save directly to NAS
+
+% >=1 value, fixed across session
+info.probe_type          = {'DBC D-A 32ch'};
+info.probe_ID            = {'10034_32ch_65um_80mm'};
+info.gridxy              = {[3, 2]};
+info.chanlist            = [1:32]; 
+
+% >=1 value, fixed across probes (task info)
+info.pldaps_filetimes    = [1308 1329 1402 1438 1510];
+info.trellis_filenums    = [1 1 1 1 1];
+info.par                 = {'VesMapping','dots3DMPtuning','dots3DMP','dots3DMP','dots3DMP'};
+info.rec_group           = [1 1 1 1 1];
+info.comments            = {'2 amp/freq. no FP','','poor start on ves','0.1/0.6 coh, ves RTs still slower than usual','more typical performance'};
+info.chanInterest        = {[],[],[],[],[]};        % chans of interest for online thresholded spikes, not really using this anymore since can't reliably keep track of discrim quality with many chs
+
+% >=1 value, different across probes (recording info)
+info.depths              = {[10200 10200 10200 10200 10200]}; % MDI depth
+info.cellcomments        = {{'','','rec seems stable, good units on 5,7,9,15-18','',''}};
+
+savefilename = sprintf('%s%ddots3DMP_info.mat',info.subject,info.date);
+save([info.filepath savefilename],'info','-mat')
+processTrellisData(info,1);
 
 %% 2023-01-31, pen 58
 

@@ -1,8 +1,7 @@
 %{
 SJ 04/2022
 updated 06/2022
-Notes on the neural data processing pipeline for the Ripple Grapevine/MP
-rig, explaining the logic and workflow.
+Notes on the logic and workflow of neural data processing pipeline for the Ripple/MP rig.
 
 %============
 1. RECORDING AND RAW DATA
@@ -20,18 +19,22 @@ is complete. Note that time starts at zero at the start of each Trellis recordin
 %============
 2. PRE-PROCESSING
 
-1) input recording notes into a cell block within createTrellisInfo.m for
+1) createTrellisInfo.m
+input recording notes into a cell block for
 the given recording day (see template), and run the cell. This will create and save an info
 struct containing all the header info/metadata for the day's session.
 
-2) processTrellisData will then be run using this info file, to create an
+2) processTrellisData
+createTrellisInfo calls this function, to create an
 nsEvents struct (saved in [subject][date]dots3DMP[filenum]_RippleEvents.mat), and a binary int16 file for
 Kilosort (saved as [subject][date]_[recording set number] (if createBinaryFiles == 1)
-This will create one binary file per recording 'set'/block (from one or more Ripple Events files), so that
+This will create one binary file per recording 'set'/group (from one or more Ripple Events files), so that
 waveforms from the same recording depth across different PLDAPS experiments
 can be sorted together, saved as _1, _2 etc. See *SPIKE SORTING* note
 below. It is therefore important that rec_group is correctly specified in
-info file so that pipeline knows which files belong together.
+info file so that pipeline knows which files belong together. Note that
+a single rec_group can have 1 or more PLDAPS files and one or more Trellis
+files.
 
 Notes on nsEvents (saved in *_RippleEvents.mat file)
 - contains trial condition and outcome information, and timing of key

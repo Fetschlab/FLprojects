@@ -1,20 +1,45 @@
 function nsEvents = createEventStruct_dots3DMP_NS_multiPDS(filename,paradigms,pldaps_filenames,filepath)
-%
-% spawned and adapted from createEventStruct_dots3DMP_NS, 04-2022
+% nsEvents = createEventStruct_dots3DMP_NS_multiPDS(filename,paradigms,pldaps_filenames,filepath)
 % 
+% WHAT THIS CODE DOES:
 % extract the timing of key task events from .nev files
 % timings are in 'Trellis' time, i.e. synced with recording of neural signals
-% creates data structure, with trial info, outcomes, key event times,
-% this is now agnostic to paradigm and number of PDS files, so multiple PDS files can be recorded
-% within the same trellis file!
-
+% returns data structure, with trial info, outcomes, key event times.
+% It will create one nsEvents for one trellis .nev file, and can handle multiple PLDAPS files within the same trellis file!
+% (i.e. if you start and stop experiment computer, but do not start a fresh
+% recording - which is advisable for spike sorting purposes)
+%
+% spawned and adapted from createEventStruct_dots3DMP_NS, 04-2022
+% this now supersedes that version, which was limited to a 1-1 match
+% between PDS and Trellis (createEventStruct_dots3DMP_NS is deprecated and no longer maintained)
+%
 % INPUTS:
 % filename - trellis filename
 % paradigms - list of paradigms associated with this filename
 % pldaps_filenames - pldaps filenames matching paradigms above
 % filepath 
+%
+% OUTPUT:
+% 
+% nsEvents struct
+%   fields - events, pldaps, hdr
+%
+%   EVENTS - contains one field per task event, (mostly) ntrials x 1
+%   - fields are either event times e.g. fpOn - time of fixation point on
+%   - or trial condition e.g. modality
+%   - all event times are in seconds, from the start of the recording file
+%
+%   PLDAPS - also ntrials x 1 fields, containing PDS associated information
+%    iTrial, unique_trial_number, paradigm and block number 
+%
+%   HDR - metadata on filenames and filepath
+%
+% code dependencies: NeuroShare toolbox and getdata_NS function
+%
+%
+% Created by Steven Jerjian, April 2022
 
-% PRE-REQUISITES: NeuroShare toolbox and getdata_NS function
+%%
 
 completeFilePath = fullfile(filepath,filename);
 
@@ -27,7 +52,7 @@ filedate = filename(6:13); % SJ 03/2022
 dataType    = 'Digital';
 dataChannel = 'parallel';  
 
-% parNums sent from PLDAPS are 1-4 as follows
+% parNums sent from PLDAPS are 1-4 as follows. HARD-CODED
 parOptions = {'dots3DMP','dots3DMPtuning','RFMapping','VesMapping'};
 
 % grab the raw NS data
@@ -35,6 +60,7 @@ parOptions = {'dots3DMP','dots3DMPtuning','RFMapping','VesMapping'};
 
 if strcmp(hdr.Ripple_filename,'lucio20220314dots3DMP0002.nev')
     % forgot to stop the Trellis recording again! doh
+    % just get rid of some extra data
     nsEvents.data(1722:end) = [];
     nsEvents.time(1722:end) = [];
     nsEvents.sz(1722:end) = [];
@@ -42,17 +68,27 @@ elseif strcmp(hdr.Ripple_filename,'lucio20220401dots3DMP0001.nev')
     nsEvents.data(1204:end) = [];
     nsEvents.time(1204:end) = [];
     nsEvents.sz(1204:end) = [];
-
 end
+
+%% create pldaps fields
+
+% sending bit information about trial events to Grapevine leverages high
+% and low words to distinguish binary signals for task conditions vs
+% information on event times. 
+% in PLDAPS codes, I send clocktime information as the delimiter for a
+% trial, with a high word of 2^9. Clocktime is also used as the
+% unique_trial_number in PDS, so doubles as a useful way to match PDS and
+% Trellis files.
+
 tr_start = strfind(nsEvents.data>=2^9,[1 1 1 1 1 1 1]); % find clocktime for trial delimiter
 tr_end   = [tr_start(2:end)-1 length(nsEvents.data)];
 ntrs     = length(tr_start);
 
-% these can be easily outside the loop... 05-2022
+% these used to be inside the trial loop, but moved here 05-2022
 % just need the indices relative to tr_start in strobe sequence, and
 % subtract the appropriate highwords used for strobing
 clockinds = bsxfun(@plus,tr_start',0:5);
-unique_trial_number = nsEvents.data(clockinds)-2^9;
+unique_trial_number = nsEvents.data(clockinds)-2^9; 
 % unique_trial_number = mat2cell(unique_trial_number,ones(size(unique_trial_number,1),1));
 
 iTrial = nsEvents.data(tr_start+6)-(2^9+2^8);
@@ -63,14 +99,15 @@ else
     parNum = nan(1,ntrs);
 end
 
-% set paradigm number and trials to keep based on pldaps times 
-% this way, discard any trials we don't want based on pldaps times in info
+% here we set which paradigm number and trials to keep, based on pldaps times 
+% this way, discard any trials we don't want based on pldaps times in
+% info.m
 % (e.g. if we aborted a recording, or don't want to include a certain
-% pldaps file, we will only keep trials pertaining to pldaps files listed
-% in pldaps_filetimes
+% pldaps file, we will keep trials pertaining to pldaps files listed in pldaps_filetimes
 
 blockNum = nan(1,ntrs);
 keeptrs = false(ntrs,1);
+[firstTrial, lastTrial] = deal(nan(size(pldaps_filenames)));
 
 for p=1:length(pldaps_filenames)
     hhmm = pldaps_filenames{p}(end-3:end);
@@ -79,7 +116,7 @@ for p=1:length(pldaps_filenames)
     % before Trellis recording, although this should be avoided if possible!)
     
     try
-    firstTrial(p) = find( unique_trial_number(:,4)>=str2double(hhmm(1:2)) & unique_trial_number(:,5)>=str2double(hhmm(3:4)) & diff([Inf iTrial]')<=0,1);
+        firstTrial(p) = find( unique_trial_number(:,4)>=str2double(hhmm(1:2)) & unique_trial_number(:,5)>=str2double(hhmm(3:4)) & diff([Inf iTrial]')<=0,1);
 %     firstTrial(p) = find( unique_trial_number(:,4)>=str2double(hhmm(1:2)) & unique_trial_number(:,5)>=str2double(hhmm(3:4)) & iTrial==1,1);
     catch
         disp('couldn''t find the relevant trials...check that pldaps_filenames are inputted correctly!')
@@ -92,13 +129,14 @@ for p=1:length(pldaps_filenames)
     end
     keeptrs(firstTrial(p):lastTrial(p)) = 1;
 
-    % set parNum based on par list, if it wasn't sent explicitly from PLDAPS
+    % set parNum based on par list - parnum wasn't sent explicitly from PLDAPS before 20220504
     if str2double(filedate)<=20220504% || ~strcmp(paradigms(p),'dots3DMP')
         parNum(firstTrial(p):lastTrial(p)) = find(strcmpi(parOptions,paradigms(p)));
     end
     blockNum(firstTrial(p):lastTrial(p)) = p;
 end
 
+% Now only keep the trials within the PDS blocks that we want
 tr_start = tr_start(keeptrs);
 tr_end = tr_end(keeptrs);
 
@@ -109,12 +147,13 @@ nsEvents.pldaps.iTrial = iTrial(keeptrs);
 nsEvents.pldaps.parNum = parNum(keeptrs);
 nsEvents.pldaps.blockNum = blockNum(keeptrs);
 
+% add paradigm name as field
 nsEvents.pldaps.parName = parOptions(nsEvents.pldaps.parNum);
 
 % covers all paradigms
 hdr.infolabels = {'headingInd','modality','coherenceInd','deltaInd','choice','correct','PDW','numDirs','nr','apertureDiam','targetR','targetTheta'};
 
-%%
+%% events field - trial conditions and associated key event timestamps
 
 % pre-allocate
 
@@ -145,6 +184,7 @@ for i=1:length(hdr.infolabels)
 end
 
 %%
+
 for t=1:ntrs
     
     % extract one trial's data
@@ -158,19 +198,19 @@ for t=1:ntrs
     % on date of recording
     if strcmp(nsEvents.pldaps.parName{t},'RFMapping')
         
-        % before ... wasn't sending dot coh and numDirs, just the
+        % before 20220301, we weren't sending dot coh and numDirs, just the
         % individual dot presentation order
         if str2double(filedate)<=20220301 
             numDirs = length(tr_info);
-            try nsEvents.Events.dotOrder{t} = tr_info(1:numDirs); end
+            try nsEvents.Events.dotOrder{t} = tr_info(1:numDirs); catch, end
         else
             numDirs = tr_info(end);
 %             nsEvents.Events.dotOrder{t} = nan(numDirs,1);
 
 
-            % SJ revised, 08-05-2022, brfixes were causing an issue as not all
+            % SJ revised, 08-05-2022, brfixes were causing an issue with the dotOrder as not all
             % the dotOrder indices were being sent!
-            % could fix this on the PLDAPS end too...
+            % could eventually deal with this on the PLDAPS end too...
             if str2double(filedate)>=20220610
                 numDotsShown = length(tr_info)-4;
             elseif length(tr_info)==2 
@@ -206,7 +246,7 @@ for t=1:ntrs
         nsEvents.Events.dotOrder{t}=NaN;
     end
 
-    % assigned outside of the loop now SJ 04-2022
+    % assigned outside of the loop now SJ 04-2022, this can be removed
 %     nsEvents.pldaps.unique_trial_number(t,:) = tr_events(1:6)-(2^9); % clocktime
 %     nsEvents.pldaps.iTrial(t) = tr_events(7)-(2^9+2^8);
 
@@ -259,13 +299,14 @@ for t=1:ntrs
     end
 
     % store EventTimes
+    % the corresponding numbers for events are set in defaultBitNames_Ripple on PLDAPS computer, just need to know what they are
     try nsEvents.Events.trStart(t)   	= tr_times(find(tr_events==1,1)); catch; end
 %     if sum(tr_events==1)==2
 %         try nsEvents.Events.trEnd(t)        = tr_times(find(tr_events==1,1,'last'));  catch; end
 %     end
     if sum(tr_events==1)>2
+        warning('more than 2 trial start/end events in trial %d...\n',t);
         keyboard
-        warning('more than 2 trial start/end events in trial %d...\n',t)
     end
 
     try nsEvents.Events.fpOn(t)         = tr_times(tr_events==2);           catch; end 
@@ -284,12 +325,13 @@ for t=1:ntrs
     % reaches 1/100th of peak acceleration (which occurs some time after
     % the 'stimulus'/motion period begins. So to match the RTs returned by
     % PLDAPS here, we want to use stimOff - 'motionOn'
-    % motionOn is a new field added as of 0 
+    % motionOn added as its own field in early 2023, so 2022 files won't have it
     if sum(tr_events==5)==3 %&& sum(tr_events==6)==1
         ev5 = find(tr_events==5);
         try nsEvents.Events.motionOn(t) = tr_times(ev5(2));   catch; end
     end
 
+    % deal with multiple 'stimOn's per trial for mapping paradigms
     switch nsEvents.pldaps.parName{t}
         case 'RFMapping' % should be numDirs*2 motion events
             try
@@ -298,7 +340,7 @@ for t=1:ntrs
                 nsEvents.Events.stimOff_all{t} = stimOnOff(2:2:end);
             catch
                 fprintf('trial %d (RFMapping) did not have expected number of stim on-offs\n',t)
-                % currently if numDirs doesn't match with the number of stimOnOffs, then they will all be left as NaN. this is probably fine,
+                % it's possible that if numDirs doesn't match with the number of stimOnOffs, then all entries will be left as NaN. this is probably fine,
                 % the only way this happens is breakfix or expt was ended mid-trial, either way we would exclude these trials
             end
 
@@ -311,26 +353,30 @@ for t=1:ntrs
             nsEvents.Events.stimOff_all{t} = nsEvents.Events.stimOff(t);
     end
     
+    % post-stimulus events
     try nsEvents.Events.saccOnset(t)    = tr_times(tr_events==6);  catch; end % RT
     try nsEvents.Events.targHold(t)    	= tr_times(tr_events==7);  catch; end
     try nsEvents.Events.postTargHold(t) = tr_times(tr_events==8);  catch; end % PDW
     try nsEvents.Events.reward(t)       = tr_times(tr_events==9);  catch; end
     try nsEvents.Events.breakfix(t)     = tr_times(tr_events==10);  catch; end
 
+    % nexonar
     if sum(tr_events==12)==2
         try nsEvents.Events.nexStart(t)     = tr_times(find(tr_events==12,1));   catch; end
         try nsEvents.Events.nexEnd(t)       = tr_times(find(tr_events==12,1,'last'));   catch; end
     end 
 
+    % in case we want to see where platform return is happening
     try nsEvents.Events.return(t)     = tr_times(tr_events==13);  catch; end % 08-30-2022
 
 end
 
-% changed from reward, because reward time will be NaN on error trials, we want 'good trials' just to denote non-brfix (i.e. completed) trials
-% in any case, this likely gets overwritten in the offline processing (see nsEventsConditions.m)
+% store a boolean indicator of good trial
+% not using reward, because reward time will be NaN on error trials, we want 'good trials' just to denote non-brfix (i.e. completed) trials
+% in any case, it's possible for this to be overwritten in the offline processing using PDS file information (see nsEventsConditions.m)
 nsEvents.Events.goodtrial = isnan(nsEvents.Events.breakfix);
 
-% store header info
+% store useful metadata
 nsEvents.hdr = hdr;
 
 % 01/2022, clear these raw data fields, they are obsolete now
