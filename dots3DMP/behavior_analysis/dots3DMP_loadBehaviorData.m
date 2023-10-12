@@ -22,11 +22,11 @@ switch subject
 
     case 'lucio'
 %         filename = 'lucio_20220301-20221006_clean.mat'; % recent lucio data, PDW + RT (SfN 2022)
-        filename = 'lucio_20220301-20230303_clean.mat'; 
+        filename = 'lucio_20220512-20230605_clean.mat'; 
 
 
     case 'zarya'
-        filename = 'zarya_20220301-20220920_clean.mat';
+        filename = 'zarya_20221201-20230928_clean.mat';
 
     case 'human'
 

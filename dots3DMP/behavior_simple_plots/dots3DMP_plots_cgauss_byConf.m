@@ -98,8 +98,8 @@ for c=1:length(cohs)
         if conftask==1
             ylim([0.8 2]);
         else   
-            if mods(m)==2, ylim([0.7 1.1])
-            else, ylim([0.5 0.85]); end
+            if mods(m)==2, ylim([0.5 1.2])
+            else, ylim([0.5 1.2]); end
         end
         if m>1
             ht=title([modlabels{m} ', coh = ' num2str(cohs(c))]); set(ht,'color',clr{1}{m}(1)); 

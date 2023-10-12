@@ -5,10 +5,14 @@ clear all; close all
 conftask = 2;
 RTtask = 1;
 
-subject = 'lucio';
+subject = 'zarya';
 paradigm = 'dots3DMP';
 % dateRange = 20210315:20210805; % RT
-dateRange = 20220512:20230504;
+% dateRange = 20220512:20230605;
+dateRange = 20221201:20230928;
+
+
+recode_headings = 0;
 
 %%
 % folder = '/Users/chris/Documents/MATLAB/PLDAPS_data/';
@@ -61,7 +65,7 @@ removethese = isnan(data.choice) | isnan(data.RT) | isinf(data.RT) | isnan(data.
 removethese = removethese | ismember(data.filename,excludes_filename) | ismember(data.date,excludes_date);
 fnames = fieldnames(data);
 for F = 1:length(fnames)
-    eval(['data.' fnames{F} '(removethese) = [];']);
+    data.(fnames{F})(removethese) = [];
 end
 
 % should do the trial number based exclusion here, once brfixes are removed
@@ -77,7 +81,7 @@ end
 N = 50;
 removethese = ismember(data.filename,blocks(nTrialsByBlock<N));
 for F = 1:length(fnames)
-    eval(['data.' fnames{F} '(removethese) = [];']);
+    data.(fnames{F})(removethese) = [];
 end
 
 % quick look at blocks again
@@ -108,25 +112,42 @@ data.coherence(data.modality==1) = cohs(1);
 data.heading(abs(data.heading)<0.01) = 0;
 hdgs = unique(data.heading);
 
-% 05/2023
-hdg_ranges = [0 1 2 3 4 5 8 10 12];
-newhdgvals = [0 1.5 1.5 3 3 6 6 12 12]; % match length of hdg_ranges
-hdg_index = interp1(hdg_ranges, 1:numel(hdg_ranges), abs(data.heading), 'nearest');
-data.heading_recoded = newhdgvals(hdg_index)' .* sign(data.heading);
 
-% this is no longer good
-% switch subject
-%     case 'zarya'
-%         hdgs = [-12 -6 -3 -1.5 0 1.5 3 6 12];
-%     case 'lucio'
-%         hdgs = [-12 -6 -3 -1.5 0 1.5 3 6 12];
-% end
+% 05/2023
+% re-assign the slightly different headings from cue conflict blocks
+% (because I switched from 9 headings overall to 7...)
+
+fnames = fieldnames(data);
+if strcmp(subject, 'zarya')
+    removethese = abs(data.heading) > 4.5 & abs(data.heading) < 8;
+    for F = 1:length(fnames)
+        data.(fnames{F})(removethese) = [];
+    end
+end
+
+%%
+% keep the raw heading values
+data.heading_original = data.heading;
+
+switch subject
+    case 'lucio'
+        hdg_ranges = [0 1 2 3 4 5 8 10 12];
+        newhdgvals = [0 1.5 1.5 3 3 6 6 12 12]; % match length of hdg_ranges
+
+    case 'zarya'
+        hdg_ranges = [0 1.5 3.873 10 30];
+        newhdgvals = [0 1.5 3.873 10 10]; % match length of hdg_ranges
+end
+
+hdg_index = interp1(hdg_ranges, 1:numel(hdg_ranges), abs(data.heading), 'nearest');
+data.heading = newhdgvals(hdg_index)' .* sign(data.heading);
+
 
 % remove the rest
-removethese = ~ismember(data.heading,hdgs) | ~ismember(data.coherence,cohs);
-for F = 1:length(fnames)
-    eval(['data.' fnames{F} '(removethese) = [];']);
-end
+% removethese = ~ismember(data.heading,hdgs) | ~ismember(data.coherence,cohs);
+% for F = 1:length(fnames)
+%     eval(['data.' fnames{F} '(removethese) = [];']);
+% end
 
 
 % fix data.correct (see function description for issue!)

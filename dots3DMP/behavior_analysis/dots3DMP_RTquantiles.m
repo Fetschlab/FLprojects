@@ -1,4 +1,4 @@
-function [fh]=dots3DMP_RTquantiles(data,conftask,plotOption)
+function [fh]=dots3DMP_RTquantiles(data,conftask,nbins, plotOption)
 
 % SJ 03-2023 need to make a much nicer version of this...
 
@@ -33,14 +33,12 @@ if conftask==1
     errfun   = @(x,n) std(x) / sqrt(n);
     yLab = 'confidence';
     yL = [0 1];
-    nbins = 3; % number of RT quantiles
     xRange = [0.4 2.2];  % assume human for RT purposes
 elseif conftask==2 
     confdata = data.PDW;
     errfun   = @(x,n) sqrt( (mean(x).*(1-mean(x))) ./ n);
     yLab = 'P(High Bet)';
     yL = [0 1];
-    nbins = 5;
     xRange = [0.35 1.5];
 end
 
@@ -138,7 +136,6 @@ end
     
 %% plot conf vs RT, for correct / error trials
 
-
 % subplotInd = [2 3 4 5 6 1];
 % mcols = {'Greys','Reds','Reds','Blues','Blues','Purples'};
 
@@ -227,23 +224,30 @@ for c = 1:size(ucond,1) % the extra one is for all conditions pooled
     end
     title(titles{c});
 end
+sh=suptitle('Confidence-RT'); set(sh,'fontsize',fsz,'fontweight','bold');
 
-
-
-
-% sh=suptitle('Confidence-RT'); set(sh,'fontsize',fsz,'fontweight','bold');
-
-%{
 %% repeat for accuracy vs RT, for high / low bets
 
-fh(2)=figure(17);
-set(gcf,'Color',[1 1 1],'Position',[200 200 950 950],'PaperPositionMode','auto');
+subplotInd = [1 2 3];
+% mcols = {'Greys','Reds','Blues','Purples'};
+mcols = {'Greys','Greys','Greys','Purples'};
 
-for c = 1:size(ucond,1)+1 % the extra one is for all conditions pooled
-    
-    cmap = cbrewer('seq',mcols{c},length(uhdg)*2);
+sp = numSubplots(numel(subplotInd));
+fsz = 14;
+scaling = 8;
+
+fh(1)=figure(17);
+set(gcf,'Color',[1 1 1],'Position',[200 200 650 200],'PaperPositionMode','auto');
+
+for c = 1:size(ucond,1) % the extra one is for all conditions pooled
+
+    try
+        cmap = cbrewer('seq',mcols{c},length(uhdg)*2);
+    catch
+        cmap = cbrewer2('seq',mcols{c},length(uhdg)*2);
+    end
     cmap = cmap(length(uhdg)+1:end,:);
-    subplot(3,2,subplotInd(c));
+    subplot(sp(1),sp(2),subplotInd(c)); hold on;
     
     clear g L
     for h = 1:length(uhdg)      
@@ -299,5 +303,4 @@ for c = 1:size(ucond,1)+1 % the extra one is for all conditions pooled
     end
     title(titles{c});
 end
-% sh=suptitle('Accuracy-RT'); set(sh,'fontsize',fsz,'fontweight','bold');
-%}
+sh=suptitle('Accuracy-RT'); set(sh,'fontsize',fsz,'fontweight','bold');

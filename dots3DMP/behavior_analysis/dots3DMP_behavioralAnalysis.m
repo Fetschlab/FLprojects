@@ -17,7 +17,7 @@ clear; clc; close all
 %% select subject, load the data
 
 datapath = '/Users/stevenjerjian/Desktop/FetschLab/PLDAPS_data/dataStructs';
-subject = 'lucio';
+subject = 'zarya';
 export_figs = 0;
 
 fig_folder = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/figs';
@@ -66,6 +66,13 @@ deltas = unique(data.delta);
 % deltas = [-3 3];
 deltas = 0;
 hdgs   = unique(data.heading);
+
+%% Zarya, remove older data
+
+removethese = data.date >= 20230901;
+for f=1:length(fnames)
+    data.(fnames{f})(removethese) = [];
+end
 
 %% basic parsing and plot of logistic fits
 
@@ -122,7 +129,7 @@ end
 % plotOption == 1 - plot correct/high bet only
 % plotOption == 2 - plot correct/error or high/low bet separately
 % plotOption == -1 - plot all trials
-RTquant_fh = dots3DMP_RTquantiles(data,conftask,2);
+RTquant_fh = dots3DMP_RTquantiles(data,conftask,4,-1);
 
 if export_figs
     exportgraphics(RTquant_fh(1),'RTquantiles.pdf','Resolution',300,'append',1);
