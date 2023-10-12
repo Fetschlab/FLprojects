@@ -101,6 +101,7 @@ getNeuralEventsInfo;
 
 %% create the dataStruct
 
+sess_info_file = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/info/RecSessionInfo.xlsx';
 createSessionData;   
 
 %% create one .mat file containing concatenated events from all paradigms for a given set

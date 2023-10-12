@@ -15,15 +15,18 @@ load(fullfile(dataPath,dataFileName));
 %%
 
 par = 'dots3DMP';
+
+% to make it simpler to plot each unit's raster-histogram, reformat
+% dataStruct to have one row per unit
 unitStruct = unitStruct_from_dataStruct(dataStruct, par);
 
 mods = [1 2 3];
 % cohs = [0.2 0.6];
-cohs = [1 2]; % use inds instead, real-val cohs were sometimes different
+cohs = [1 2]; % use inds instead, real-val cohs were not always the same
 deltas = 0;
 
 % use actual headings vector, and then remove/ignore NaNs
-% should get this vector from matching behavioral dataset eventually
+% should get this vector from matching behavioral dataset eventually?
 % or generate behavioral dataset from neural dataStruct
 
 switch par
@@ -45,6 +48,8 @@ condsTuning = [modality,coh,hdg];
 condlabels  = {'modality','coherenceInd','heading'}; % must be consistent order with conds lists below
 
 
+% 08-2023 as of now the code below will only work for a single alignment
+% event...
 alignEvent = {'stimOn'};
 % otherEvents = {{'fpOn','fixation','stimOff'}};
 otherEvents = {{'fpOn','fixation','stimOff','postTargHold'}};
@@ -93,7 +98,8 @@ for u = 1:length(unitStruct)
     
     unitcols = splitcols(ismember(hdgs,unique(condsUnit(:,hdgCol))),:);
 
-    % this won't work for multiple alignEvents...
+    % this won't work for multiple alignEvents (because of the subplot
+    % positioning)
 
     for iae=1:length(alignEvent)
         otherevs = cell(1,length(otherEvents{iae}));
@@ -142,12 +148,11 @@ for u = 1:length(unitStruct)
         ht=suptitle(tt);
         ht.FontSize = 16;
 
-        for s = 1:length(hhist)
-            try
-                hhist(s).YLim(2) = max(nanmax(ym), 10);
-            catch
-                disp('couldnt adjust y-axis height')
-            end
+        ish = find(isgraphics(hhist));
+
+        for s = 1:length(ish)
+            hhist(ish(s)).YLim(2) = max(nanmax(ym), 10);
+      
         end
 
     end
@@ -181,7 +186,7 @@ for u = 1:length(unitStruct)
         plot(startPoint(1)+[0; 0],startPoint(2)+[0; len],'k--')
         set(gca,'Visible','Off');
 
-        printfig(f,sprintf('au_rh_%s_%s',par,datestr(now,'mm-dd-yyyy')),'ps',[],1);
+        printfig(f,sprintf('au_rh_%s_%s',par,datestr(now,'mm-dd-yyyy')),'pdf',[],1);
 
     end
 

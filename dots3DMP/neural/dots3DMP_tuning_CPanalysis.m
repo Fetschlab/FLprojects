@@ -1,10 +1,12 @@
 % class 'tuned' neurons during dots3DMPtuning paradigm
 % e.g. so that we can reference CPs to preference during tuning task
 
+clear; clc
+
 %% Load data
 
 subject   = 'lucio';
-dateRange = 20220512:20230411;
+dateRange = 20220512:20230602;
 
 dataPath = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/data/lucio_neuro_datasets';
 dataFileName = sprintf('%s_%d-%d_neuralData.mat',subject,dateRange(1),dateRange(end));
@@ -577,7 +579,6 @@ condTasklabels = {'modality','coherenceInd','heading','choice','PDW','oneTargCon
 condsTask(:,2) = [];
 condTasklabels(2) = [];
 
-
 % optsTR.collapse_conds = [0 1 1 0 0 0]; % collapse across hdgs
 optsTR.collapse_conds = [0 1 0 0 0];
 
@@ -596,7 +597,7 @@ condTasklabels = {'modality','coherenceInd','heading','correct'};
 condsTask(:,2) = [];
 condTasklabels(2) = [];
 
-%optsTR.collapse_conds = [0 0 0];
+optsTR.collapse_conds = [0 0 0];
 
 
 %%
@@ -684,22 +685,22 @@ end
 % add relevant 'otherevents' to plots
 % somehow flip sign of all neurons so that prefDir is always rightward?
 
+ymax = 3.5;
 condnames = {'Ves','Vis','Comb'};
 
-
 areaSel = strcmp(allUnitsTaskTR.hdr.area, 'MSTd');
-%areaSel = strcmp(allUnitsTaskTR.hdr.area, 'PIVC');
+% areaSel = strcmp(allUnitsTaskTR.hdr.area, 'PIVC');
 
 % sigTuned = any(p_bslnStimXhdgs(:,:,2)<0.05,1); % any cond significant
 % sigTuned = all(p_bslnStimXhdgs(:,:,2)<0.05,1); % all conds sig
-% sigTuned = true(size(areaSel)); % ignore tuning sig
+sigTuned = true(size(areaSel)); % ignore tuning sig
 
 % sigTuned = p_bslnStimXhdgs(1,:,2)<0.05 & p_bslnStimXhdgs(2,:,2)>0.05; % ves-tuned but NOT vis-tuned
 % sigTuned = p_bslnStimXhdgs(1,:,2)>0.05 & p_bslnStimXhdgs(2,:,2)<0.05; % vis-tuned but NOT ves-tuned
 % sigTuned = p_bslnStimXhdgs(1,:,2)<0.05 & p_bslnStimXhdgs(2,:,2)<0.05; % ves- and vis-tuned
 
 inds = [1 2 3];
-sigTuned = any(p_bslnStimXhdgs(inds,:,2)<0.05);
+% sigTuned = any(p_bslnStimXhdgs(inds,:,2)<0.05);
 % sigTuned = all(p_bslnStimXhdgs(2:3,:,2)>0.05); 
 
 selUnits = areaSel & sigTuned;
@@ -709,6 +710,8 @@ hdgcols = [0.65 0.80 0.90;
         0.10 0.45 0.70;
         0.70 0.90 0.55;
         0.20 0.60 0.20];
+
+hdgcols = cbrewer('qual','Set2',4);
 
 % for headings, spectrum
 % N = length(hdgs);
@@ -763,7 +766,7 @@ for uc = 1:size(unqModCoh,1)
             hh.YAxis.Visible = 'off';
         end
         hh.XLim = t([1 end]);
-        hh.YLim = [-2 4];
+        hh.YLim = [-1.5 ymax];
 
         nTrs_conds = allUnitsTaskTR.data.condntrs{iae}(ic==uc, :);
         enough_trials = all(nTrs_conds>=3);
@@ -795,12 +798,13 @@ for uc = 1:size(unqModCoh,1)
 
         plot([0 0],ylim,'k','linestyle','-','linewidth',2);
         if iae==al_inds(1)
-%             if uc==2
-%             lh=legend('null-lo','null-hi','pref-lo','pref-hi');
-%             set(lh,'box','off')
-%             end
+            if uc==2
+            lh=legend('null-lo','null-hi','pref-lo','pref-hi');
+            set(lh,'box','off')
+            end
         elseif iae==al_inds(end)
-            title(condnames{uc});
+            ht=title(condnames{uc});
+            ht.Position(1) = ht.Position(1)+0.4;
         end
     
 

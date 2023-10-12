@@ -6,15 +6,14 @@ addpath(genpath('/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes/'))
 % Load in the data
 
 subject   = 'lucio';
-dateRange = 20220512:20230131;
+dateRange = 20220512:20230602;
 
-dataPath = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/data/';
+dataPath = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/data/lucio_neuro_datasets/';
 dataFileName = sprintf('%s_%d-%d_neuralData.mat',subject,dateRange(1),dateRange(end));
 load(fullfile(dataPath,dataFileName));
 
 % 20220512-20230131, remove 20220520
 dataStruct(4) = [];
-
 
 load(fullfile(dataPath,dataFileName));
 
@@ -87,9 +86,9 @@ allUnitsChoiceWager = dots3DMP_FRmatrix_fromDataStruct(dataStruct,par,TaskeventI
 % 163, 166,184, 187, 207, 217, 226, 233, 236, 242, 247, 257, 260, 262, 263, 264, 265, 272, 275, 278, 282, 284
 
 % 263
-fsz = 20;
+fsz = 14;
 
-u = 197;
+u = 25;
 auMat = allUnitsChoiceWager;
 muFRs = auMat.data.PSTHs;
 
@@ -185,14 +184,13 @@ for c=1:size(ucond,1)
 %             lx.Box = 'off';
 
             
-%             inset = axes('position',[0.6 0.6 0.25 0.2]);
-%             axis(inset,[-1 1 -1 1]); axis square; hold on;
-%             scatter(inset,[-1 -1 1 1],[1 -1 1 -1]*0.6,300,cols,'filled')
-%             scatter(inset,0,0,150,'k','filled')
-%             inset.YAxis.Visible = 'off';
-%             inset.XAxis.Visible = 'off';
-%             inset.Title.String = 'PDW Targets';
-%             inset.Title.fontsize = fsz;
+            inset = axes('position',[0.6 0.8 0.25 0.2]);
+            axis(inset,[-1 1 -1 1]); axis square; hold on;
+            scatter(inset,[-1 -1 1 1],[1 -1 1 -1]*0.6,300,cols,'filled')
+            scatter(inset,0,0,150,'k','filled')
+            inset.YAxis.Visible = 'off';
+            inset.XAxis.Visible = 'off';
+            inset.Title.String = 'PDW Targets';
         end
 
         if iae==1

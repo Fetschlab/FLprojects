@@ -35,7 +35,7 @@
 % this could also be achieved by a loop over info.probe, but might require
 % some refactoring. Works fine for now.
 
-sess_info = readtable('/Users/stevenjerjian/Desktop/FetschLab/Analysis/RecSessionInfo.xlsx', sheet = subject);
+sess_info = readtable(sess_info_file, sheet = subject);
 sess_info.Properties.VariableNames = lower(sess_info.Properties.VariableNames);
 sess_info.chs = table2cell(rowfun(@(x,y) x:y, sess_info(:,{'min_ch','max_ch'})));
 sess_info = sess_info(logical(sess_info.is_good),:);
@@ -211,7 +211,13 @@ for n = 1:length(currentFolderList)
             ch        = unitInfo.ch(keepUnits)';
             nspks     = unitInfo.n_spikes(keepUnits)';
 
+            % loop over sessions
+            % a recording with two probes will have two separate rows 
             for s = 1:length(sess)
+
+                % convert matlab datetime to string rep
+                dataStruct(sess(s)).date = datestr(dataStruct(sess(s)).date);
+
 
                 if contains(info.probe_type,'DBC')
                     ch_depth  = calcProbeChDepth(depth,dataStruct(sess(s)));
