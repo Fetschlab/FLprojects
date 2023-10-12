@@ -15,6 +15,7 @@ fieldExcludes = {'leftEarly','tooSlow','fixFP','FPHeld','eyeXYs','corrLoopActive
                  'timeTargDisappears','probOfMemorySaccade','leftTargR','leftTargTheta', ...
                  'rightTargR','rightTargTheta','audioFeedback','textFeedback','rewardDelay','fixRewarded','amountRewardHighConf'};
 
+
 % now search localDir again for matching files and extract the desired variables from PDS
 allFiles = dir(localDir);
 
@@ -71,6 +72,15 @@ for d = 1:length(dateRange)
                                 data.dotPos{T,1} = PDS.data{t}.stimulus.dotPos;
                             end
                             
+                            if addEyeMovementToStruct % maybe for Nexonar too?
+                                behaviorTimeFields = fieldnames(PDS.data{t}.stimulus);
+                                behaviorTimeFields = behaviorTimeFields(startsWith(behaviorTimeFields, 'time'));
+    
+                                for F = 1:length(behaviorTimeFields)
+                                    data.(behaviorTimeFields{F})(T,1) = PDS.data{t}.stimulus.(behaviorTimeFields{F});
+                                end
+                            end
+                            
                             % reward variables
                             if saveRewardData
                                 fnames = fieldnames(PDS.data{t}.reward);
@@ -98,7 +108,6 @@ for d = 1:length(dateRange)
                                 % SJ 07-2020, correct defaults to logical but
                                 % then gives error for NaN - use double instead
                                 if strcmp(fnames{F},'correct'), data.correct(T,1) = 0; end
-%                                 eval(['data.' fnames{F} '(T,1) = PDS.data{t}.behavior.' fnames{F} ';']);
                                 data.(fnames{F})(T,1) = PDS.data{t}.behavior.(fnames{F});
 
                             end
