@@ -73,7 +73,7 @@ for n = 1:length(currentFolderList)
         sess = find(sess_info.date == datetime(num2str(info.date),'InputFormat','yyyyMMdd') & sess_info.rec_set==unique_sets(u));
 
         if sum(sess)==0
-            fprintf('no date/set match in RecSessionInfo.xlsx\n')
+            fprintf('no date/set match in RecSessionInfo.xlsx for %d_%d\n', info.date, sess_info(sess).rec_set)
             continue
         end
         
@@ -97,8 +97,10 @@ for n = 1:length(currentFolderList)
 
         try
             unitInfo = readtable(fullfile(mountDir,'cluster_info.tsv'),'FileType','delimitedtext');
+            has_unit_info = true;
         catch
-            error('dots3DMP:createSessionData:getUnitInfo','Could not get cluster info for this ks file..file has probably not been manually curated\n')
+            has_unit_info = false;
+            warning('dots3DMP:createSessionData:getUnitInfo', 'Could not get cluster info for this ks file..file has probably not been manually curated\n')
         end
 
         % old SJ 04/2023
@@ -206,55 +208,57 @@ for n = 1:length(currentFolderList)
 
             if isempty(sp.st), continue, end
 
-            keepUnits = ismember(unitInfo.cluster_id,sp.cids)';
-            depth     = unitInfo.depth(keepUnits)';
-            ch        = unitInfo.ch(keepUnits)';
-            nspks     = unitInfo.n_spikes(keepUnits)';
+            if has_unit_info
+                keepUnits = ismember(unitInfo.cluster_id,sp.cids)';
+                depth     = unitInfo.depth(keepUnits)';
+                ch        = unitInfo.ch(keepUnits)';
+                nspks     = unitInfo.n_spikes(keepUnits)';
 
-            % loop over sessions
-            % a recording with two probes will have two separate rows 
-            for s = 1:length(sess)
+                % loop over sessions
+                % a recording with two probes will have two separate rows
+                for s = 1:length(sess)
 
-                % convert matlab datetime to string rep
-                dataStruct(sess(s)).date = datestr(dataStruct(sess(s)).date);
-
-
-                if contains(info.probe_type,'DBC')
-                    ch_depth  = calcProbeChDepth(depth,dataStruct(sess(s)));
-                elseif contains(info.probe_type,'Single')
-                    ch_depth = MDI_depth;
-                end
-
-                if keepMU, inds = sp.cgs<=3;
-                else,      inds = sp.cgs==2;
-                end
+                    % convert matlab datetime to string rep
+                    dataStruct(sess(s)).date = datestr(dataStruct(sess(s)).date);
 
 
-                dataStruct(sess(s)).data.(paradigms{par}).units.depth = ch_depth(inds);
-                dataStruct(sess(s)).data.(paradigms{par}).units.ch    = depth(inds);
+                    if contains(info.probe_type,'DBC')
+                        ch_depth  = calcProbeChDepth(depth,dataStruct(sess(s)));
+                    elseif contains(info.probe_type,'Single')
+                        ch_depth = MDI_depth;
+                    end
 
-                inds = inds & ismember(ch+1, dataStruct(sess(s)).chs);
+                    if keepMU, inds = sp.cgs<=3;
+                    else,      inds = sp.cgs==2;
+                    end
 
-                cids = sp.cids(inds);
-                cgs  = sp.cgs(inds);
 
-                dataStruct(sess(s)).data.(paradigms{par}).units.cluster_id = cids;
-                dataStruct(sess(s)).data.(paradigms{par}).units.cluster_type = cgs;
+                    dataStruct(sess(s)).data.(paradigms{par}).units.depth = ch_depth(inds);
+                    dataStruct(sess(s)).data.(paradigms{par}).units.ch    = depth(inds);
 
-                dataStruct(sess(s)).data.(paradigms{par}).units.cluster_labels = clus_labels(cgs);
-                dataStruct(sess(s)).data.(paradigms{par}).units.npks = nspks(inds);
+                    inds = inds & ismember(ch+1, dataStruct(sess(s)).chs);
 
-                if any(cgs==3)
-                    fprintf('Adding %d SU, %d MU, %d unsorted\n\n',sum(cgs==2),sum(cgs==1),sum(cgs==3|cgs==0))
-                else
-                    fprintf('Adding %d SU, %d MU\n\n',sum(cgs==2),sum(cgs==1))
-                end
+                    cids = sp.cids(inds);
+                    cgs  = sp.cgs(inds);
 
-                % finally, add each unit's spikes to an entry in spiketimes cell
-                for unit=1:sum(inds)
-                    theseSpikes = sp.clu==cids(unit) & thisParSpikes;
-                    %                 theseSpikes = sp.clu==cids(unit);
-                    dataStruct(sess(s)).data.(paradigms{par}).units.spiketimes{unit} = sp.st(theseSpikes);
+                    dataStruct(sess(s)).data.(paradigms{par}).units.cluster_id = cids;
+                    dataStruct(sess(s)).data.(paradigms{par}).units.cluster_type = cgs;
+
+                    dataStruct(sess(s)).data.(paradigms{par}).units.cluster_labels = clus_labels(cgs);
+                    dataStruct(sess(s)).data.(paradigms{par}).units.npks = nspks(inds);
+
+                    if any(cgs==3)
+                        fprintf('Adding %d SU, %d MU, %d unsorted\n\n',sum(cgs==2),sum(cgs==1),sum(cgs==3|cgs==0))
+                    else
+                        fprintf('Adding %d SU, %d MU\n\n',sum(cgs==2),sum(cgs==1))
+                    end
+
+                    % finally, add each unit's spikes to an entry in spiketimes cell
+                    for unit=1:sum(inds)
+                        theseSpikes = sp.clu==cids(unit) & thisParSpikes;
+                        %                 theseSpikes = sp.clu==cids(unit);
+                        dataStruct(sess(s)).data.(paradigms{par}).units.spiketimes{unit} = sp.st(theseSpikes);
+                    end
                 end
             end
         end
