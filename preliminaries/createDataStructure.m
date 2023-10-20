@@ -72,12 +72,26 @@ for d = 1:length(dateRange)
                                 data.dotPos{T,1} = PDS.data{t}.stimulus.dotPos;
                             end
                             
+                            % TEMP SJ 10-17-2023
+                            for F = 1:length(behaviorTimeFields)
+                                    data.(behaviorTimeFields{F})(T,1) = PDS.data{t}.stimulus.(behaviorTimeFields{F});
+                            end
+
                             if addEyeMovementToStruct % maybe for Nexonar too?
                                 behaviorTimeFields = fieldnames(PDS.data{t}.stimulus);
                                 behaviorTimeFields = behaviorTimeFields(startsWith(behaviorTimeFields, 'time'));
     
                                 for F = 1:length(behaviorTimeFields)
                                     data.(behaviorTimeFields{F})(T,1) = PDS.data{t}.stimulus.(behaviorTimeFields{F});
+                                end
+
+                                try
+                                    data.ADCdata{T, 1} = PDS.data{t}.datapixx.adc.data;
+                                    dp_time = PDS.data{t}.datapixx.unique_trial_time(2);
+                                    data.ADCtime{T, 1} = PDS.data{t}.datapixx.adc.dataSampleTimes - dp_time;
+                                catch
+                                    data.ADCdata{T, 1} = NaN;
+                                    data.ADCtime{T, 1} = NaN;
                                 end
                             end
                             
