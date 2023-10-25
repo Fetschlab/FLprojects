@@ -246,23 +246,32 @@ function [data] = pds_preprocessing_dots3DMP(subject, paradigm, dateRange, local
                         if options.eyemovement
                             try
                                 adc_data = PDS.data{t}.datapixx.adc.data;
-                                dp_time = PDS.data{t}.datapixx.unique_trial_time(2);
+                                dp_time = PDS.data{t}.datapixx.unique_trial_time(2); % datapixx 'start' time
                                 adc_time = PDS.data{t}.datapixx.adc.dataSampleTimes - dp_time;
 
-                                [~, zero_pos] = min(abs(adc_time - data.(align_event)(t)));
+                                [~, zero_pos] = min(abs(adc_time - data.(align_event)(T))); % T not t!!
 
-                                data.eyeX(T, 1:length(win_samples)) = adc_data(1, eyewin_samples+zero_pos);
-                                data.eyeY(T, 1:length(win_samples)) = adc_data(2, eyewin_samples+zero_pos);
-                                data.ADCtime(T, 1:length(win_samples)) = adc_time(eyewin_samples+zero_pos);
+                                % find 'RT' in high-freq data
+                                % TODO set threshold based on st dev
+                                % search for consecutive values above threshold
+%                                 xdata = adc_data(1, eyewin_samples+zero_pos);
+%                                 xdata = abs(xdata-xdata(1));
+%                                 zero_pos = find(xdata>0.1, 1) + zero_pos + eyewin_samples(1);
+                                
+                                data.eyeX(1:length(eyewin_samples), T) = adc_data(1, eyewin_samples+zero_pos);
+                                data.eyeY(1:length(eyewin_samples), T) = adc_data(2, eyewin_samples+zero_pos);
 
                             catch
-                                data.eyeX(T, 1:length(eyewin_samples)) = NaN;
-                                data.eyeX(T, 1:length(eyewin_samples)) = NaN;
+                                data.eyeX(1:length(eyewin_samples), T) = NaN;
+                                data.eyeY(1:length(eyewin_samples), T) = NaN;
                             end
+                            data.eyeT(1:length(eyewin_samples), T) = eyewin_samples/Fs;
+
                         end
 
 
                         if options.dotposition
+                            % TODO modify to store dotPos as data x trials array
                             try
                                 if ~isfield(PDS.data{t}.stimulus,'dotX_3D')
                                     PDS.data{t}.stimulus.dotX_3D = dotX_3D{t};
