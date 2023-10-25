@@ -5,57 +5,33 @@ clear all; close all
 conftask = 2;
 RTtask = 1;
 
-subject = 'zarya';
-paradigm = 'dots3DMP';
+subject = 'lucio';
+% paradigm = 'dots3DMP';
 % dateRange = 20210315:20210805; % RT
 % dateRange = 20220512:20230605;
-dateRange = 20221201:20230928;
-
-
-recode_headings = 0;
+% dateRange = 20221201:20230601;
 
 %%
 % folder = '/Users/chris/Documents/MATLAB/PLDAPS_data/';
-folder = '/Users/stevenjerjian/Desktop/FetschLab/PLDAPS_data/dataStructs/';
-
-file = [subject '_' num2str(dateRange(1)) '-' num2str(dateRange(end)) '.mat'];
-load([folder file], 'data');
-
-try data = rmfield(data,'amountRewardLowConf'); catch, end
-try data = rmfield(data,'amountRewardHighConf'); catch, end
-try data = rmfield(data,'rewardGiven'); catch, end
-
-%% temp: CF needs these for now
-for k = 1:length(data.filename)
-    data.subj{k,:} = subject;
-%     data.oneTargChoice(k,:) = 0;
-%     data.oneTargConf(k,:) = 0;
-end
-
-%%
-% struct data has fields:
-% filename
-% subj: subject code
-% choice: 1=left, 2=right, nan = fixation break or otherwise invalid
-% heading: angle in deg relative to straight ahead, positive = rightward
-% coherence: dot motion coherence aka visual reliability
-% modality: stimulus modality: 1=ves, 2=vis, 3=comb
-% delta: conflict angle in deg, positive means visual right, vestib left
-% correct: was the choice correct, 1 or 0
-% conf: confidence rating via saccadic end-point to color-bar target
-%       (or in other datasets, PDW)
-
+[file, path] = uigetfile;
+load(fullfile(path, file));
 
 %% new 04/2020: selecting 'good' data (esp RT)
 
 % some new useful vars
-for k = 1:length(data.filename)
-    data.date(k,1) = str2double(data.filename{k}(6:13));
-    data.subjDate{k,:} = [data.subj{k} data.filename{k}(6:13)];
-end
+% for k = 1:length(data.filename)
+%     data.date(k,1) = str2double(data.filename{k}(6:13));
+%     data.subjDate{k,:} = [data.subj{k} data.filename{k}(6:13)];
+% end
+
+% SJ 10-2023
+data.date = cellfun(@(x) str2double(x(6:13)), data.filename);
+data.subjDate = cellfun(@(x, y) [x y(6:13)], data.subj, data.filename, 'UniformOutput', false);
 
 
 %% Some manual excludes e.g. of bad sessions, non-RT/PDW
+
+% TODO convert these to functions
 
 excludes_filename = {};
 excludes_date = [];
@@ -65,12 +41,11 @@ removethese = isnan(data.choice) | isnan(data.RT) | isinf(data.RT) | isnan(data.
 removethese = removethese | ismember(data.filename,excludes_filename) | ismember(data.date,excludes_date);
 fnames = fieldnames(data);
 for F = 1:length(fnames)
-    data.(fnames{F})(removethese) = [];
+    data.(fnames{F})(:, removethese) = [];
 end
 
-% should do the trial number based exclusion here, once brfixes are removed
+% do the trial number based exclusion here, once brfixes are removed
 
-% quick look at blocks, for when some need to be excluded
 blocks = unique(data.filename);
 nTrialsByBlock = nan(length(blocks),1);
 for u = 1:length(blocks)
@@ -81,7 +56,7 @@ end
 N = 50;
 removethese = ismember(data.filename,blocks(nTrialsByBlock<N));
 for F = 1:length(fnames)
-    data.(fnames{F})(removethese) = [];
+    data.(fnames{F})(:, removethese) = [];
 end
 
 % quick look at blocks again
@@ -121,7 +96,7 @@ fnames = fieldnames(data);
 if strcmp(subject, 'zarya')
     removethese = abs(data.heading) > 4.5 & abs(data.heading) < 8;
     for F = 1:length(fnames)
-        data.(fnames{F})(removethese) = [];
+        data.(fnames{F})(:, removethese) = [];
     end
 end
 
@@ -140,13 +115,13 @@ switch subject
 end
 
 hdg_index = interp1(hdg_ranges, 1:numel(hdg_ranges), abs(data.heading), 'nearest');
-data.heading = newhdgvals(hdg_index)' .* sign(data.heading);
+data.heading = newhdgvals(hdg_index) .* sign(data.heading);
 
 
 % remove the rest
 % removethese = ~ismember(data.heading,hdgs) | ~ismember(data.coherence,cohs);
 % for F = 1:length(fnames)
-%     eval(['data.' fnames{F} '(removethese) = [];']);
+%     data.(fnames{F})(:, removethese) = [];
 % end
 
 
@@ -158,7 +133,7 @@ data.heading = newhdgvals(hdg_index)' .* sign(data.heading);
 % leaving in, these can be removed for analysis later if desired
 % removethese = data.oneTargChoice | data.oneTargConf;
 % for F = 1:length(fnames)
-%     eval(['data.' fnames{F} '(removethese) = [];']);
+%     data.(fnames{F})(:, removethese) = [];
 % end
 
 try data = rmfield(data,'reward'); catch, end
@@ -169,6 +144,7 @@ try data = rmfield(data,'TargMissed'); catch, end
 try data = rmfield(data,'subjDate'); catch, end
 try data = rmfield(data,'insertTrial'); catch, end
 try data = rmfield(data,'confRT'); catch, end
+try data = rmfield(data,'amountRewardHighConf'); catch, end
 
 % sorted_fnames = {'filename','subj','date','heading','modality','coherence','delta','choice','RT','PDW','correct'};
 % data = orderfields(data,sorted_fnames);
@@ -190,7 +166,7 @@ end
 
 
 %% save it
-save(fullfile(folder,[file(1:end-4) '_clean.mat']),'data','nTrialsByDate','nTrialsByBlock');
+save(fullfile(path,[file(1:end-4) '_clean.mat']),'data','nTrialsByDate','nTrialsByBlock', '-v7.3');
 
 
 
