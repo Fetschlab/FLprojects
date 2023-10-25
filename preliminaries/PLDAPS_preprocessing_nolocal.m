@@ -15,11 +15,11 @@ dateRange = 20220512:20230601;
 % localDir = '/Users/stevenjerjian/Desktop/FetschLab/PLDAPS_data/';
 localDir = uigetdir([], 'Choose directory to save data to');
 
-opts = struct('eyemovement', 1);
+opts = struct('eyemovement', 1, 'reward', 1);
 data = pds_preprocessing_dots3DMP(subject, paradigm, dateRange, localDir, [], opts);
 
 filename = [subject '_' num2str(dateRange(1)) '-' num2str(dateRange(end)) '_wEM.mat'];
-save(fullfile(localDir, filename), 'data');
+save(fullfile(localDir, filename), 'data', '-v7.3');
 
 
 function [data] = pds_preprocessing_dots3DMP(subject, paradigm, dateRange, localDir, data, options)
@@ -63,7 +63,7 @@ function [data] = pds_preprocessing_dots3DMP(subject, paradigm, dateRange, local
         pt_names = {};
         st_names = {};
     end
-    bhv_names = {'choice', 'RT', 'PDW', 'TargMissed', 'oneTargChoice', 'oneTargConf'};
+    bhv_names = {'choice', 'RT', 'PDW', 'correct', 'TargMissed', 'oneTargChoice', 'oneTargConf'};
 
 
     % set directories
@@ -77,10 +77,6 @@ function [data] = pds_preprocessing_dots3DMP(subject, paradigm, dateRange, local
         remoteDir = fullfile('Z:\fetschlab\data', subject);
         mountDir  = remoteDir;
     end
-
-    localDir = fullfile(localDir, subject);
-    if ~exist(localDir,'dir'), mkdir(localDir); end
-
 
     % initialize data struct
     if ~use_existing_file
@@ -296,9 +292,8 @@ function [data] = pds_preprocessing_dots3DMP(subject, paradigm, dateRange, local
                     end
                 end
 
-
                 telapsed = toc(tstart);
-                fprintf('%s, time taken: %.2fs', remoteFileNames{f}, telapsed)
+                fprintf('numtrials = %d, time taken: %.2fs', length(PDS.data), telapsed)
 
             catch
                 keyboard
