@@ -61,7 +61,8 @@ for t = 1:length(PDS.data) % loop over trials for this file
         end
     end
     
-   if removeAnalogData % also removes analog-derived vars
+    if removeAnalogData % also removes analog-derived vars
+%         try PDS.data{t}.datapixx = rmfield(PDS.data{t}.datapixx,'adc'); catch; end
         try PDS.data{t}.behavior = rmfield(PDS.data{t}.behavior,'fixFP'); catch; end
         try PDS.data{t}.behavior = rmfield(PDS.data{t}.behavior,'eyeXYs'); catch; end
         try PDS.data{t}.stimulus = rmfield(PDS.data{t}.stimulus,'eyeXYs'); catch; end
