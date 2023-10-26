@@ -10,10 +10,11 @@
 % 03-2022 SJ, separate to PLDAPS preprocessing, for spike sorted waveforms,
 % timestamps, and RippleEvents
 
-% 
-cmd = 'ifconfig en7 inet'; % check if on local MBI network or need VPN workaround
-[~,ifstuff] = system(cmd);
-if ~useVPN || any(strfind(ifstuff,'172.'))
+
+% TODO re-write this to match PLDAPS_preprocessing_nolocal - use striplines
+% and no need to save files locally
+ 
+if ~useVPN
     IPadd = 'fetschlab@172.30.3.33'; % MBI machine
 else
     IPadd = 'fetschlab@10.161.240.133'; % probably off campus, try proxy IP (requires VPN)
