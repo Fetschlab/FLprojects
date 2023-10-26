@@ -77,37 +77,35 @@ for n = 1:length(currentFolderList)
             continue
         end
         
-        remoteDirSpikes = sprintf('/var/services/homes/fetschlab/data/%s/%s_neuro/%d/%s%d_%d/',subject,subject,info.date,subject,info.date,unique_sets(u));
-        mountDir = sprintf('/Volumes/homes/fetschlab/data/%s/%s_neuro/%d/%s%d_%d/',subject,subject,info.date,subject,info.date,unique_sets(u));
+        remoteDirSpikes = fullfile(remoteDir, sprintf('%d/%s%d_%d/',info.date,subject,info.date,unique_sets(u)));
+        mountDirSpikes = fullfile(mountDir, sprintf('%d/%s%d_%d/',info.date,subject,info.date,unique_sets(u)));
+
+%         remoteDirSpikes = sprintf('/var/services/homes/fetschlab/data/%s/%s_neuro/%d/%s%d_%d/',subject,subject,info.date,subject,info.date,unique_sets(u));
+%         mountDirSpikes = sprintf('/Volumes/homes/fetschlab/data/%s/%s_neuro/%d/%s%d_%d/',subject,subject,info.date,subject,info.date,unique_sets(u));
 
         % if recording was single electrode, sorting was done with SI, so sub-folder is phy_WC
         if contains(info.probe_type{1},'Single')
-            mountDir = [mountDir 'phy_WC/']; 
+            mountDirSpikes = [mountDirSpikes 'phy_WC/']; 
             continue % skip these regardless for now
         end
 
 
         try
-            disp(mountDir)
-            sp = loadKSdir(mountDir);
+            disp(mountDirSpikes)
+            sp = loadKSdir(mountDirSpikes);
         catch
             sp.st = [];
             error('dots3DMP:createSessionData:loadKSdir','Could not load kilosort sp struct for %d, set %d...Are you connected to the NAS?\n\n',info.date,unique_sets(u));
         end
 
         try
-            unitInfo = readtable(fullfile(mountDir,'cluster_info.tsv'),'FileType','delimitedtext');
+            unitInfo = readtable(fullfile(mountDirSpikes,'cluster_info.tsv'),'FileType','delimitedtext');
             has_unit_info = true;
         catch
             has_unit_info = false;
             warning('dots3DMP:createSessionData:getUnitInfo', 'Could not get cluster info for this ks file..file has probably not been manually curated\n')
         end
 
-        % old SJ 04/2023
-%         dataStruct(sess).date = info.date;
-%         dataStruct(sess).info = info;
-%         dataStruct(sess).set = unique_sets(u);
-        
 
         % loop over paradigms 
         % (NOTE that the logic here differs from how nsEvents is initially created on the experiment rig)
