@@ -136,8 +136,8 @@ for n = 1:length(currentFolderList)
                 st = en+1;
             end
             
-            % for each trellis file within a given set+paradigm, concatenate and store the events
 
+            % for each trellis file within a given set+paradigm, concatenate and store the events
             [unique_trellis_files,~,ii] = unique(info.trellis_filenums(theseFiles));
             thisParSpikes  = false(size(sp.st));
 
@@ -212,7 +212,7 @@ for n = 1:length(currentFolderList)
                 keepUnits = ismember(unitInfo.cluster_id,sp.cids)';
                 depth     = unitInfo.depth(keepUnits)';
                 ch        = unitInfo.ch(keepUnits)';
-                nspks     = unitInfo.n_spikes(keepUnits)';
+%                 nspks     = unitInfo.n_spikes(keepUnits)';
 
                 % loop over sessions
                 % a recording with two probes will have two separate rows
@@ -256,7 +256,7 @@ for n = 1:length(currentFolderList)
                     % finally, add each unit's spikes to an entry in spiketimes cell
                     for unit=1:sum(inds)
                         theseSpikes = sp.clu==cids(unit) & thisParSpikes;
-                        %                 theseSpikes = sp.clu==cids(unit);
+                        dataStruct(sess(s)).data.(paradigms{par}).units.nspks(unit) = sum(theseSpikes); 
                         dataStruct(sess(s)).data.(paradigms{par}).units.spiketimes{unit} = sp.st(theseSpikes);
                     end
                 end
