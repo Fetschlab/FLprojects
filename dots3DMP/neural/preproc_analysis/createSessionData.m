@@ -40,13 +40,16 @@ sess_info.Properties.VariableNames = lower(sess_info.Properties.VariableNames);
 sess_info.chs = table2cell(rowfun(@(x,y) x:y, sess_info(:,{'min_ch','max_ch'})));
 sess_info = sess_info(logical(sess_info.is_good),:);
 
-% dataStruct = struct(); sess = 0; % original
 dataStruct = table2struct(sess_info);
 
 %% main loop
 
 % loop over each 'date' in folder list, then over unique sets
 % each date/set is referenced against the sess_info sheet
+
+% previously dataStruct was initialized as an empty struct and the loop
+% below just added a new row for each file in currentFolderList
+
 
 % fields in 'events' which contain event times, this will be important later
 tEvs   = {'trStart','fpOn','fixation','reward','stimOn','stimOff','saccOnset',...
@@ -69,7 +72,6 @@ for n = 1:length(currentFolderList)
     for u=1:length(unique_sets)
         clear sp
 
-%         sess = sess+1; % increment the row in dataStruct % old
         sess = find(sess_info.date == datetime(num2str(info.date),'InputFormat','yyyyMMdd') & sess_info.rec_set==unique_sets(u));
 
         if sum(sess)==0

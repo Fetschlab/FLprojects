@@ -76,9 +76,8 @@ mountDir  = ['/Volumes/homes/fetschlab/data/' subject '/' subject '_neuro/'];
 
 %% grab the task events and info files
 % this time we will locally download these (_RippleEvents and info files)
-
+% TODO probably unnecessary, could just read them directly from mount
 getNeuralEventsInfo; 
-
 
 %% create the dataStruct
 
