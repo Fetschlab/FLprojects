@@ -1,3 +1,4 @@
 [submodule "pyDots3DMP"]
 	path = pyDots3DMP
 	url = https://github.com/sjjerjian/pyDots3DMP
+	branch = main
