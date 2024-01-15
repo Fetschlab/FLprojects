@@ -6,8 +6,11 @@ clear;clc
 
 subject   = 'lucio';
 dateRange = 20220512:20230602;
-
 dataPath = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/data/lucio_neuro_datasets';
+
+dateRange = 20231003:20231017;
+dataPath = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/data/';
+
 dataFileName = sprintf('%s_%d-%d_neuralData.mat',subject,dateRange(1),dateRange(end));
 load(fullfile(dataPath,dataFileName));
 
@@ -22,7 +25,7 @@ unitStruct = unitStruct_from_dataStruct(dataStruct, par);
 
 mods = [1 2 3];
 % cohs = [0.2 0.6];
-cohs = [1 2]; % use inds instead, real-val cohs were not always the same
+cohs = [2]; % use inds instead, real-val cohs were not always the same
 deltas = 0;
 
 % use actual headings vector, and then remove/ignore NaNs
@@ -37,10 +40,12 @@ switch par
     hdgs = [-12 -6 -3 -1.5 0 1.5 3 6 12];
 end
 
+% define colormap for headings
 N    = length(hdgs);
 splitcols = cbrewer('div','RdBu',N*2);
 splitcols = splitcols([1:floor(N/2) end-floor(N/2):end],:);
-splitcols(hdgs==0,:) = [0 0 0];
+splitcols(hdgs==0,:) = [0 0 0]; % force zero hdg to be black
+
 
 % generate the whole list of conditions we want to include
 [hdg,modality,coh,~,~] = dots3DMP_create_trial_list(hdgs,mods,cohs,deltas,1,0); 
@@ -48,12 +53,11 @@ condsTuning = [modality,coh,hdg];
 condlabels  = {'modality','coherenceInd','heading'}; % must be consistent order with conds lists below
 
 
-% 08-2023 as of now the code below will only work for a single alignment
-% event...
+% 08-2023 as of now the plotting code below will only work for a single alignment
 alignEvent = {'stimOn'};
 % otherEvents = {{'fpOn','fixation','stimOff'}};
 otherEvents = {{'fpOn','fixation','stimOff','postTargHold'}};
-tmin = [-1.5];
+tmin = [-1.5]; % seconds
 tmax = [3];
 
 
@@ -61,15 +65,16 @@ cohCol = contains(condlabels,'coherence');
 hdgCol = contains(condlabels,'heading');
 
 [uconds,ia,ic1] = unique(condsTuning(:,~hdgCol),'rows'); 
-[p,~] = numSubplots(size(uconds,1));
-
 condtitles = {'Ves','Vis-L','Vis-H','Comb-L','Comb-H'};
 
+condtitles = {'Ves','Vis', 'Comb'};
+
+[p,~] = numSubplots(size(uconds,1));
 save_plots = 1;
 
 %%
 
-f=figure('position',[100 100 1000 700],'color','w');
+f=figure('position',[100 100 1000 350*p(1)],'color','w');
 set(f,'PaperUnits','centimeters');
 set(f,'PaperPositionMode', 'manual');
 x=f.Position(3); y=f.Position(4);
@@ -89,7 +94,7 @@ for u = 1:length(unitStruct)
         condsUnit(:,cond) = events.(condlabels{cond});
     end
 
-    % force cohInd to match coh % do this in nsEvents?
+    % force cohInd to match coh % TODO should do this in nsEvents?
     if length(unique(condsUnit(:,cohCol)))==1 && strcmp(condlabels{cohCol},'coherenceInd')
         condsUnit(:,cohCol) = double(events.coherence>=0.5)+1;
 %         fprintf('Session %d: only 1 coh above 0.5, changing "coherence index" from 1 to 2 for consistency\n',ses)
@@ -97,9 +102,6 @@ for u = 1:length(unitStruct)
 
     
     unitcols = splitcols(ismember(hdgs,unique(condsUnit(:,hdgCol))),:);
-
-    % this won't work for multiple alignEvents (because of the subplot
-    % positioning)
 
     for iae=1:length(alignEvent)
         otherevs = cell(1,length(otherEvents{iae}));
@@ -157,35 +159,37 @@ for u = 1:length(unitStruct)
 
     end
 
-    if save_plots
+    
+%     subplot(p(1),p(2),p(1)*p(2))
+    ax = axes('Position', [.675 .2 .5 .5]);
+    sc = 3; len = 3;
 
-        subplot(p(1),p(2),p(1)*p(2))
-        sc = 3; len = 3;
+    hdgVec = hdgs;
+    hdgXY = len .* [sind(hdgVec.*sc); cosd(hdgVec.*sc)];
+    textVec = hdgXY .* [1.05; 1.1];
+    startPoint = [0 0];
+    % axis([-6 6 -6 6]);
+    axis(ax, [-1 1 -1 1]*4); axis square
+    hold on
+    for h=1:length(hdgVec)
+        plot(ax, startPoint(1)+[0; hdgXY(1,h)],startPoint(2)+[0; hdgXY(2,h)],'linew',2,'color',splitcols(h,:));
 
-        hdgVec = hdgs;
-        hdgXY = len .* [sind(hdgVec.*sc); cosd(hdgVec.*sc)];
-        textVec = hdgXY .* [1.05; 1.1];
-        startPoint = [0 0];
-        % axis([-6 6 -6 6]);
-        axis([-1 1 -1 1]*4); axis square
-        hold on
-        for h=1:length(hdgVec)
-            plot(startPoint(1)+[0; hdgXY(1,h)],startPoint(2)+[0; hdgXY(2,h)],'linew',2,'color',splitcols(h,:));
+        [th,r] = cart2pol(startPoint(1)+textVec(1,:),startPoint(2)+textVec(2,:));
+        th = rad2deg(th);
 
-            [th,r] = cart2pol(startPoint(1)+textVec(1,:),startPoint(2)+textVec(2,:));
-            th = rad2deg(th);
-
-            if hdgVec(h)>0, ha = 'left'; ra = th(h); va = 'middle';
-            elseif hdgVec(h)<0, ha = 'right'; ra = th(h)-180; va = 'middle';
-            else , ha = 'center'; ra = 0; va = 'bottom';
-            end
-            if hdgVec(h)==0 || abs(hdgVec(h))>2
-                text(startPoint(1)+textVec(1,h),startPoint(2)+textVec(2,h),num2str(hdgVec(h)),'fontsize',14,'horizo',ha,'verti',va,'rotation',ra,'color',splitcols(h,:),'fontweight','bold')
-            end
+        if hdgVec(h)>0, ha = 'left'; ra = th(h); va = 'middle';
+        elseif hdgVec(h)<0, ha = 'right'; ra = th(h)-180; va = 'middle';
+        else , ha = 'center'; ra = 0; va = 'bottom';
         end
-        plot(startPoint(1)+[0; 0],startPoint(2)+[0; len],'k--')
-        set(gca,'Visible','Off');
+        if hdgVec(h)==0 || abs(hdgVec(h))>2
+            text(ax, startPoint(1)+textVec(1,h),startPoint(2)+textVec(2,h),num2str(hdgVec(h)),'fontsize',14,'horizo',ha,'verti',va,'rotation',ra,'color',splitcols(h,:),'fontweight','bold')
+        end
+    end
+    plot(ax, startPoint(1)+[0; 0],startPoint(2)+[0; len],'k--')
+    set(ax,'Visible','Off');
 
+        
+    if save_plots
         printfig(f,sprintf('au_rh_%s_%s',par,datestr(now,'mm-dd-yyyy')),'pdf',[],1);
 
     end

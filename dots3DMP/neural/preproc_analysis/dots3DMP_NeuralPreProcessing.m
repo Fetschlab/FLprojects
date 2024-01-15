@@ -41,17 +41,6 @@
 %            cleanUp option - to sub-select desirable units
 % SJ 06-2022 shifting of timestamps of multiple recordings. 
 %            switched dataCell from {} to dataStruct () struct format.
-%
-% Warnings/possible bugs
-%
-% 1. assignment of unitInfo
-% 2. dealing with non-kilosort/probe recordings
-%
-% % TODO:
-%
-% 1. remove redundancies in createSessionData / clean-up
-% 2. remove createSetEvents
-% 3. fix processing of phy_WC folders given lack of unitInfo
 
 clear;clc;close all
 
@@ -65,10 +54,9 @@ subject = 'lucio';
 dateRange = 20220512:20230602;
 
 keepMU = 1;           % include all SU and MU, by default, do it, can always remove them later
-useSCP = 1; 
-useVPN = 0;
+useSCP = 1;             % use scp to copy PDS files, or just load directly from mount
+useVPN = 0;             % use off-campus proxy (vpn), or MBI address
 overwriteLocalFiles = 0; % set to 1 to always use the server copy
-% overwriteEventSets = 0; % obsolete for now, to be removed
 
 
 %%
@@ -79,46 +67,22 @@ for d = 2:length(dateRange)
 end
 
 % SJ 04-2022
-% download associated PDS data files (we'll need this for some cleanup)
-% actually, just specify the mountDir, don't bother downloading the files
-
-% localDir = ['/Users/stevenjerjian/Desktop/FetschLab/PLDAPS_data/' subject '/']; 
-% remoteDir = ['/var/services/homes/fetschlab/data/' subject '/'];
-% getDataFromServer;
-
-mountDir  = ['/Volumes/homes/fetschlab/data/' subject '/'];    
-PDSdir = mountDir; % reassign for later
-
+% these will be user/OS specific...
 localDir = ['/Users/stevenjerjian/Desktop/FetschLab/Analysis/data/' subject '_neuro/'];
+
+PDSdir  = ['/Volumes/homes/fetschlab/data/' subject '/'];    
 remoteDir = ['/var/services/homes/fetschlab/data/' subject '/' subject '_neuro/'];
 mountDir  = ['/Volumes/homes/fetschlab/data/' subject '/' subject '_neuro/'];
 
 %% grab the task events and info files
 % this time we will locally download these (_RippleEvents and info files)
-
+% TODO probably unnecessary, could just read them directly from mount
 getNeuralEventsInfo; 
-
 
 %% create the dataStruct
 
 sess_info_file = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/info/RecSessionInfo.xlsx';
 createSessionData;   
-
-%% create one .mat file containing concatenated events from all paradigms for a given set
-
-% SJ: initially wrote this to ease importing of data in Python code
-% (for now) python code will rely on already created dataStruct here, so
-% this is obsolete.
-% also rather roundabout, because it duplicates some of the code in
-% createSessionData dealing with multiple RippleEvents files for one
-% recording
-
-% as it stands a BUG FIX is required - ending up with some mismatches in
-% vector lengths
-% issue arising from RFmapping having some different fields to other pars
-
-% paradigms = {'dots3DMPtuning','dots3DMP','RFMapping','VesMapping'}; % use all pars
-% createSetEvents;
 
 
 %% exclude cells which were not adequately recorded in ALL fundamental experiments

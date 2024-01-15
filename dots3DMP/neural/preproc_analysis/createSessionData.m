@@ -40,13 +40,16 @@ sess_info.Properties.VariableNames = lower(sess_info.Properties.VariableNames);
 sess_info.chs = table2cell(rowfun(@(x,y) x:y, sess_info(:,{'min_ch','max_ch'})));
 sess_info = sess_info(logical(sess_info.is_good),:);
 
-% dataStruct = struct(); sess = 0; % original
 dataStruct = table2struct(sess_info);
 
 %% main loop
 
 % loop over each 'date' in folder list, then over unique sets
 % each date/set is referenced against the sess_info sheet
+
+% previously dataStruct was initialized as an empty struct and the loop
+% below just added a new row for each file in currentFolderList
+
 
 % fields in 'events' which contain event times, this will be important later
 tEvs   = {'trStart','fpOn','fixation','reward','stimOn','stimOff','saccOnset',...
@@ -69,43 +72,42 @@ for n = 1:length(currentFolderList)
     for u=1:length(unique_sets)
         clear sp
 
-%         sess = sess+1; % increment the row in dataStruct % old
         sess = find(sess_info.date == datetime(num2str(info.date),'InputFormat','yyyyMMdd') & sess_info.rec_set==unique_sets(u));
 
         if sum(sess)==0
-            fprintf('no date/set match in RecSessionInfo.xlsx\n')
+            fprintf('no date/set match in RecSessionInfo.xlsx for %d_%d\n', info.date, sess_info(sess).rec_set)
             continue
         end
         
-        remoteDirSpikes = sprintf('/var/services/homes/fetschlab/data/%s/%s_neuro/%d/%s%d_%d/',subject,subject,info.date,subject,info.date,unique_sets(u));
-        mountDir = sprintf('/Volumes/homes/fetschlab/data/%s/%s_neuro/%d/%s%d_%d/',subject,subject,info.date,subject,info.date,unique_sets(u));
+        remoteDirSpikes = fullfile(remoteDir, sprintf('%d/%s%d_%d/',info.date,subject,info.date,unique_sets(u)));
+        mountDirSpikes = fullfile(mountDir, sprintf('%d/%s%d_%d/',info.date,subject,info.date,unique_sets(u)));
+
+%         remoteDirSpikes = sprintf('/var/services/homes/fetschlab/data/%s/%s_neuro/%d/%s%d_%d/',subject,subject,info.date,subject,info.date,unique_sets(u));
+%         mountDirSpikes = sprintf('/Volumes/homes/fetschlab/data/%s/%s_neuro/%d/%s%d_%d/',subject,subject,info.date,subject,info.date,unique_sets(u));
 
         % if recording was single electrode, sorting was done with SI, so sub-folder is phy_WC
         if contains(info.probe_type{1},'Single')
-            mountDir = [mountDir 'phy_WC/']; 
+            mountDirSpikes = [mountDirSpikes 'phy_WC/']; 
             continue % skip these regardless for now
         end
 
 
         try
-            disp(mountDir)
-            sp = loadKSdir(mountDir);
+            disp(mountDirSpikes)
+            sp = loadKSdir(mountDirSpikes);
         catch
             sp.st = [];
             error('dots3DMP:createSessionData:loadKSdir','Could not load kilosort sp struct for %d, set %d...Are you connected to the NAS?\n\n',info.date,unique_sets(u));
         end
 
         try
-            unitInfo = readtable(fullfile(mountDir,'cluster_info.tsv'),'FileType','delimitedtext');
+            unitInfo = readtable(fullfile(mountDirSpikes,'cluster_info.tsv'),'FileType','delimitedtext');
+            has_unit_info = true;
         catch
-            error('dots3DMP:createSessionData:getUnitInfo','Could not get cluster info for this ks file..file has probably not been manually curated\n')
+            has_unit_info = false;
+            warning('dots3DMP:createSessionData:getUnitInfo', 'Could not get cluster info for this ks file..file has probably not been manually curated\n')
         end
 
-        % old SJ 04/2023
-%         dataStruct(sess).date = info.date;
-%         dataStruct(sess).info = info;
-%         dataStruct(sess).set = unique_sets(u);
-        
 
         % loop over paradigms 
         % (NOTE that the logic here differs from how nsEvents is initially created on the experiment rig)
@@ -134,8 +136,8 @@ for n = 1:length(currentFolderList)
                 st = en+1;
             end
             
-            % for each trellis file within a given set+paradigm, concatenate and store the events
 
+            % for each trellis file within a given set+paradigm, concatenate and store the events
             [unique_trellis_files,~,ii] = unique(info.trellis_filenums(theseFiles));
             thisParSpikes  = false(size(sp.st));
 
@@ -206,55 +208,57 @@ for n = 1:length(currentFolderList)
 
             if isempty(sp.st), continue, end
 
-            keepUnits = ismember(unitInfo.cluster_id,sp.cids)';
-            depth     = unitInfo.depth(keepUnits)';
-            ch        = unitInfo.ch(keepUnits)';
-            nspks     = unitInfo.n_spikes(keepUnits)';
+            if has_unit_info
+                keepUnits = ismember(unitInfo.cluster_id,sp.cids)';
+                depth     = unitInfo.depth(keepUnits)';
+                ch        = unitInfo.ch(keepUnits)';
+%                 nspks     = unitInfo.n_spikes(keepUnits)';
 
-            % loop over sessions
-            % a recording with two probes will have two separate rows 
-            for s = 1:length(sess)
+                % loop over sessions
+                % a recording with two probes will have two separate rows
+                for s = 1:length(sess)
 
-                % convert matlab datetime to string rep
-                dataStruct(sess(s)).date = datestr(dataStruct(sess(s)).date);
-
-
-                if contains(info.probe_type,'DBC')
-                    ch_depth  = calcProbeChDepth(depth,dataStruct(sess(s)));
-                elseif contains(info.probe_type,'Single')
-                    ch_depth = MDI_depth;
-                end
-
-                if keepMU, inds = sp.cgs<=3;
-                else,      inds = sp.cgs==2;
-                end
+                    % convert matlab datetime to string rep
+                    dataStruct(sess(s)).date = datestr(dataStruct(sess(s)).date);
 
 
-                dataStruct(sess(s)).data.(paradigms{par}).units.depth = ch_depth(inds);
-                dataStruct(sess(s)).data.(paradigms{par}).units.ch    = depth(inds);
+                    if contains(info.probe_type,'DBC')
+                        ch_depth  = calcProbeChDepth(depth,dataStruct(sess(s)));
+                    elseif contains(info.probe_type,'Single')
+                        ch_depth = MDI_depth;
+                    end
 
-                inds = inds & ismember(ch+1, dataStruct(sess(s)).chs);
+                    if keepMU, inds = sp.cgs<=3;
+                    else,      inds = sp.cgs==2;
+                    end
 
-                cids = sp.cids(inds);
-                cgs  = sp.cgs(inds);
 
-                dataStruct(sess(s)).data.(paradigms{par}).units.cluster_id = cids;
-                dataStruct(sess(s)).data.(paradigms{par}).units.cluster_type = cgs;
+                    dataStruct(sess(s)).data.(paradigms{par}).units.depth = ch_depth(inds);
+                    dataStruct(sess(s)).data.(paradigms{par}).units.ch    = depth(inds);
 
-                dataStruct(sess(s)).data.(paradigms{par}).units.cluster_labels = clus_labels(cgs);
-                dataStruct(sess(s)).data.(paradigms{par}).units.npks = nspks(inds);
+                    inds = inds & ismember(ch+1, dataStruct(sess(s)).chs);
 
-                if any(cgs==3)
-                    fprintf('Adding %d SU, %d MU, %d unsorted\n\n',sum(cgs==2),sum(cgs==1),sum(cgs==3|cgs==0))
-                else
-                    fprintf('Adding %d SU, %d MU\n\n',sum(cgs==2),sum(cgs==1))
-                end
+                    cids = sp.cids(inds);
+                    cgs  = sp.cgs(inds);
 
-                % finally, add each unit's spikes to an entry in spiketimes cell
-                for unit=1:sum(inds)
-                    theseSpikes = sp.clu==cids(unit) & thisParSpikes;
-                    %                 theseSpikes = sp.clu==cids(unit);
-                    dataStruct(sess(s)).data.(paradigms{par}).units.spiketimes{unit} = sp.st(theseSpikes);
+                    dataStruct(sess(s)).data.(paradigms{par}).units.cluster_id = cids;
+                    dataStruct(sess(s)).data.(paradigms{par}).units.cluster_type = cgs;
+
+                    dataStruct(sess(s)).data.(paradigms{par}).units.cluster_labels = clus_labels(cgs);
+                    dataStruct(sess(s)).data.(paradigms{par}).units.npks = nspks(inds);
+
+                    if any(cgs==3)
+                        fprintf('Adding %d SU, %d MU, %d unsorted\n\n',sum(cgs==2),sum(cgs==1),sum(cgs==3|cgs==0))
+                    else
+                        fprintf('Adding %d SU, %d MU\n\n',sum(cgs==2),sum(cgs==1))
+                    end
+
+                    % finally, add each unit's spikes to an entry in spiketimes cell
+                    for unit=1:sum(inds)
+                        theseSpikes = sp.clu==cids(unit) & thisParSpikes;
+                        dataStruct(sess(s)).data.(paradigms{par}).units.nspks(unit) = sum(theseSpikes); 
+                        dataStruct(sess(s)).data.(paradigms{par}).units.spiketimes{unit} = sp.st(theseSpikes);
+                    end
                 end
             end
         end
