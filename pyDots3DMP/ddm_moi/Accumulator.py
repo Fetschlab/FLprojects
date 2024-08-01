@@ -8,12 +8,10 @@ from dataclasses import dataclass, field
 from typing import Optional
 from codetiming import Timer
 
-
-
 @dataclass(repr=False)
-class AccumulatorModelMOI:
+class Accumulator:
     """
-    Dataclass for 2-D accumulator model, calculated via method of images.
+    Dataclass for 2-D accumulator, calculated via method of images.
     
     Instantiate an object of the class with a list of drift rates, bound, and grid settings (time vector and grid vector).
     Drift rates can be single values (constant rate, or time series matching the length of tvec).
@@ -45,13 +43,9 @@ class AccumulatorModelMOI:
     urgency: np.ndarray = field(default=None)
     num_images: int = 7
 
-    # all empty arrays by default, will get filled by method calls (cdf, pdf, log_odds, dist...)
-    p_corr: np.ndarray = np.array([])
-    rt_dist: np.ndarray = np.array([])
-    pdf3D: np.ndarray = np.array([])
-    up_lose_pdf: np.ndarray = np.array([])
-    lo_lose_pdf: np.ndarray = np.array([])
-    log_odds: np.ndarray = np.array([])
+    @classmethod
+    def build_accum_grid(cls, grid_dict):
+        return cls(**grid_dict)
 
     @property
     def bound(self):
@@ -59,7 +53,7 @@ class AccumulatorModelMOI:
 
     @bound.setter
     def bound(self, b):
-        """Set accumulator bound. This is a convenience method which gets run if you write A.bound = ..."""
+        """Set accumulator bound. This is a convenience logic so we can use the syntactic sugar A.bound = ..."""
         if isinstance(b, (int, float)):
             b = [b, b]
         self._bound = np.array(b)
@@ -73,14 +67,12 @@ class AccumulatorModelMOI:
         self._tvec = time_vec
         self.dt = np.gradient(time_vec)
 
-    def set_drifts(self, drifts: Optional[list] = None,
-                   labels: Optional[list] = None):
+    def set_drifts(self, drifts, labels: Optional[list] = None):
         """Set accumulator drift rates. Optionally add label for each drift.
         This also adds a mirrored drift rate for the anti-correlated accumulator, and 
         updates drift rates based on sensitivity and urgency parameters."""
         
-        if drifts is not None:
-            self.drift_rates = drifts
+        self.drift_rates = drifts
 
         # add corresponding negated value for anti-correlated accumulator
         # also update drift rates based on sensitivity and urgency, if provided
@@ -94,13 +86,13 @@ class AccumulatorModelMOI:
 
         return self
 
-    def __post_init__(self):
-        """this gets automatically run after object initialization"""
+    # def __post_init__(self):
+    #     """this gets automatically run after object initialization"""
         
-        # default set the drift labels as 0:ndrifts
-        if len(self.drift_labels) == 0 or self.drift_labels is None:
-            self.drift_labels = np.arange(len(self.drift_rates))
-        self.set_drifts(labels=self.drift_labels)
+    #     # default set the drift labels as 0:ndrifts
+    #     if len(self.drift_labels) == 0 or self.drift_labels is None:
+    #         self.drift_labels = np.arange(len(self.drift_rates))
+    #     self.set_drifts(labels=self.drift_labels)
 
     def cdf(self):
         p_corr, rt_dist = [], []
@@ -110,10 +102,8 @@ class AccumulatorModelMOI:
             p_corr.append(p_up)
             rt_dist.append(rt)
 
-        self.p_corr = np.array(p_corr)
-        self.rt_dist = np.stack(rt_dist, axis=0)
-
-        return self
+        self.p_corr_ = np.array(p_corr)
+        self.rt_dist_ = np.stack(rt_dist, axis=0)
 
     def pdf(self, full_pdf=False):
 
@@ -150,16 +140,15 @@ class AccumulatorModelMOI:
             marg_lo.append(pdf_lo)  # top bound
 
         if full_pdf:
-            self.pdf3D = np.stack(pdfs, axis=0)
+            self.pdf3D_ = np.stack(pdfs, axis=0)
 
-        self.up_lose_pdf = np.stack(marg_up, axis=0)
-        self.lo_lose_pdf = np.stack(marg_lo, axis=0)
+        self.up_lose_pdf_ = np.stack(marg_up, axis=0)
+        self.lo_lose_pdf_ = np.stack(marg_lo, axis=0)
 
-        return self
 
     def log_posterior_odds(self):
         """Return the log posterior odds given pdfs"""
-        self.log_odds = log_odds(self.up_lose_pdf, self.lo_lose_pdf)
+        self.log_odds_ = log_odds(self.up_lose_pdf_, self.lo_lose_pdf_)
 
     def dv(self, drift, sigma):
         """Return accumulated DV for given drift rate and diffusion noise."""
@@ -168,11 +157,13 @@ class AccumulatorModelMOI:
 
     def dist(self, return_pdf=False):
         """Calculate cdf and pdf for accumulator object."""
+        
         self.cdf()
 
         if return_pdf:
             self.pdf()
 
+        # return self so that we can chain together with log odds
         return self
 
     def plot(self, d_ind: int = -1):
@@ -190,39 +181,41 @@ class AccumulatorModelMOI:
         """
         
         fig_cdf, axc = plt.subplots(2, 1, figsize=(4, 5))
-        axc[0].plot(self.drift_labels, self.p_corr)
+        axc[0].plot(self.drift_labels, self.p_corr_)
         axc[0].set_xlabel('drift')
         axc[0].set_xticks(self.drift_labels)
         axc[0].set_ylabel('prob. correct choice')
 
-        axc[1].plot(self.tvec, self.rt_dist.T)
+        axc[1].plot(self.tvec, self.rt_dist_.T)
         # axc[1].legend(self.drift_labels, frameon=False)
         axc[1].set_xlabel('Time (s)')
         axc[1].set_title('RT distribution (no NDT)')
         fig_cdf.tight_layout()
 
         fig_pdf = None
-        if self.up_lose_pdf.size > 0:
-            fig_pdf, axp = plt.subplots(3, 1, figsize=(5, 6))
+        has_log_odds = hasattr(self, 'log_odds_')
+        n = 3 if has_log_odds else 2
+        if hasattr(self, 'up_lose_pdf_'):
+            fig_pdf, axp = plt.subplots(n, 1, figsize=(5, 6))
             contour = axp[0].contourf(self.tvec, self.grid_vec,
-                                      log_pmap(np.squeeze(self.up_lose_pdf[d_ind, :, :])).T,
+                                      log_pmap(np.squeeze(self.up_lose_pdf_[d_ind, :, :])).T,
                                       levels=100)
             axp[1].contourf(self.tvec, self.grid_vec,
-                            log_pmap(np.squeeze(self.lo_lose_pdf[d_ind, :, :])).T,
+                            log_pmap(np.squeeze(self.lo_lose_pdf_[d_ind, :, :])).T,
                             levels=100)
             axp[0].set_title(f"Losing accumulator | Correct, drift rate {self.drift_labels[d_ind]}")
             axp[1].set_title(f"Losing accumulator | Error, drift rate {self.drift_labels[d_ind]}")
             cbar = fig_cdf.colorbar(contour, ax=axp[0])
             cbar = fig_cdf.colorbar(contour, ax=axp[1])
 
-            if self.log_odds.size > 0:
-                vmin, vmax = 0, 3
-                contour = axp[2].contourf(self.tvec, self.grid_vec,
-                                          self.log_odds.T, vmin=vmin, vmax=vmax,
-                                          levels=100)
-                axp[2].set_title("Log Odds of Correct Choice given Losing Accumulator")
-                cbar = fig_pdf.colorbar(contour, ax=axp[2])
-            fig_pdf.tight_layout()
+        if has_log_odds:
+            vmin, vmax = 0, 3
+            contour = axp[2].contourf(self.tvec, self.grid_vec,
+                                        self.log_odds_.T, vmin=vmin, vmax=vmax,
+                                        levels=100)
+            axp[2].set_title("Log Odds of Correct Choice given Losing Accumulator")
+            cbar = fig_pdf.colorbar(contour, ax=axp[2])
+        fig_pdf.tight_layout()
 
         return fig_cdf, fig_pdf
 
@@ -247,6 +240,7 @@ class AccumulatorModelMOI:
         writervideo = animation.PillowWriter(fps=10)
         anim.save(f'pdf_animation_{self.drift_labels[d_ind]}.gif', writer=writervideo)
 
+
 ## ----------------------------------------------------------------
 ## % Private functions
 
@@ -256,7 +250,10 @@ class AccumulatorModelMOI:
 
 ## ----------------------------------------------------------------
 
-@np_cache_minimal
+# TODO make these all static methods and move them inside the class namespace
+
+# @staticmethod
+#@np_cache_minimal
 def _sj_rot(j, s0, k):
     """
     Image rotation formalism.
@@ -284,7 +281,7 @@ def _weightj(j, mu, sigma, sj, s0):
     return (-1) ** j * np.exp(mu @ np.linalg.inv(sigma) @ (sj - s0).T)
 
 
-@lru_cache(maxsize=32)
+#@lru_cache(maxsize=32)
 def _corr_num_images(num_images):
     """2-D accumulator correlation given a number of images"""
     k = int(np.ceil(num_images / 2))
@@ -569,7 +566,6 @@ def _multiple_logpdfs_vec_input(xs, means, covs):
     return out.T
 
 
-# TODO these should possibly be private methods as well...
 def urgency_scaling(mu: np.ndarray, tvec: np.ndarray, urg=None) -> np.ndarray:
     """Scale mu according to urgency vector."""
     if len(mu) != len(tvec):
