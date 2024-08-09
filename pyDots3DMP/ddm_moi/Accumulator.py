@@ -26,7 +26,8 @@ class Accumulator:
     - log_posterior_odds uses the losing accumulator pdfs given correct and errors to calculate log odds of correct choice
 
     """
-    
+
+    # clean this up - I don't think we need a dataclass here
     # set default values for parameters
     bound: np.ndarray = np.array([1, 1])
     tvec: np.ndarray = field(default=np.arange(0, 2, 0.005))
@@ -71,15 +72,18 @@ class Accumulator:
         """Set accumulator drift rates. Optionally add label for each drift.
         This also adds a mirrored drift rate for the anti-correlated accumulator, and 
         updates drift rates based on sensitivity and urgency parameters."""
-        
-        self.drift_rates = drifts
 
+        if isinstance(drifts, np.ndarray):
+            drifts = np.split(drifts, drifts.shape[1], axis=1)
+        
         # add corresponding negated value for anti-correlated accumulator
         # also update drift rates based on sensitivity and urgency, if provided
-        for d, drift in enumerate(self.drift_rates):
+
+        self.drift_rates = []
+        for d, drift in enumerate(drifts):
             drift = drift * np.array([1, -1])
-            self.drift_rates[d] = urgency_scaling(drift * self.sensitivity,
-                                                  self.tvec, self.urgency)
+            drifts_posneg = urgency_scaling(drift * self.sensitivity, self.tvec, self.urgency)
+            self.drift_rates.append(drifts_posneg)
 
         if labels is not None:
             self.drift_labels = labels
@@ -145,17 +149,19 @@ class Accumulator:
         self.up_lose_pdf_ = np.stack(marg_up, axis=0)
         self.lo_lose_pdf_ = np.stack(marg_lo, axis=0)
 
+        return self.up_lose_pdf_, self.lo_lose_pdf_
 
     def log_posterior_odds(self):
         """Return the log posterior odds given pdfs"""
         self.log_odds_ = log_odds(self.up_lose_pdf_, self.lo_lose_pdf_)
+        return self.log_odds_
 
     def dv(self, drift, sigma):
         """Return accumulated DV for given drift rate and diffusion noise."""
         return _moi_dv(mu=drift*self.tvec.reshape(-1, 1),
                        s=sigma, num_images=self.num_images)
 
-    def dist(self, return_pdf=False):
+    def compute_distrs(self, return_pdf=False):
         """Calculate cdf and pdf for accumulator object."""
         
         self.cdf()

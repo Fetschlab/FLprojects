@@ -11,7 +11,7 @@ from typing import Optional, Union, Sequence
 from functools import wraps
 from codetiming import Timer
 
-from .Accumulator import AccumulatorModelMOI
+from .Accumulator import Accumulator
 
 def optim_decorator(loss_func):
     """
@@ -244,7 +244,7 @@ def generate_data(params: dict, data: pd.DataFrame, accum_kw: dict,
     model_data[['choice', 'PDW', 'RT']] = np.nan
 
     # initialize accumulator object
-    accumulator = AccumulatorModelMOI(**accum_kw)
+    accumulator = Accumulator(**accum_kw)
     accumulator.bound = params['bound']
 
     # we'll need this later
@@ -373,9 +373,9 @@ def generate_data(params: dict, data: pd.DataFrame, accum_kw: dict,
                     drifts_list = abs_drifts.tolist()
 
                 # run the method of images - diffusion to bound to extract pdfs, cdfs, and LPO
-                accumulator.set_drifts(drifts_list, hdgs[hdgs >= 0])
-                accumulator.dist(return_pdf=True).log_posterior_odds()
-
+                accumulator.set_drifts(abs_drifts, hdgs[hdgs >= 0])
+                accumulator.compute_distrs(return_pdf=True)
+                
                 # TODO allow for different configurations of confidence mapping 
                 if wager_thres == 'log_odds':
                     accumulator.log_posterior_odds()
@@ -628,7 +628,7 @@ def generate_data(params: dict, data: pd.DataFrame, accum_kw: dict,
 
 # @Timer(name="accumulator_timer")
 def dots3dmp_accumulator(params: dict, hdgs, mod, delta, accum_kw: dict,
-                  stim_scaling=True, use_signed_drifts: bool = True) -> AccumulatorModelMOI:
+                  stim_scaling=True, use_signed_drifts: bool = True):
     """
     pared down version of generate_data, to return the actual accumulator object for given set of conditions
     (mainly for testing purposes)
@@ -640,7 +640,7 @@ def dots3dmp_accumulator(params: dict, hdgs, mod, delta, accum_kw: dict,
 
     """
     # initialize accumulator
-    accumulator = AccumulatorModelMOI(**accum_kw)
+    accumulator = Accumulator(**accum_kw)
     accumulator.bound = params['bound']
 
     # we'll need this later
