@@ -15,6 +15,7 @@ from behavior.preprocessing import (
     data_cleanup, format_onetargconf,
     )
 
+from dataclasses import dataclass, field
 import itertools
 from copy import copy, deepcopy
 import logging
@@ -30,9 +31,16 @@ from Accumulator import Accumulator
 # - if no wager, drop wager params and handle
 # - cleanup RT part
 # - add logging 
-# - add mlflow
+# - replace config args with dataclass
 
 
+# low-level to do 
+# handle fixed params/params when calling predict before any fitting?
+# maybe the way is to call fit with all fixed params...
+
+# RT prediction from distribution
+# deal with where RT comes in to predict_proba/predict
+#ß
 
 # %% ----------------------------------------------------------------
 
@@ -66,6 +74,17 @@ def main():
 
 # %% ----------------------------------------------------------------
 
+@dataclass
+class AccumConfig:
+    grid: np.ndarray = field(default=np.arange(-3, 0, 0.05), repr=False)
+    tvec: np.ndarray = field(default=np.arange(0, 2, 0.005), repr=False)
+    kmult: list = field(default_factory=list)
+    bound: list = field(default_factory=list)
+    non_dec_time: list = field(default_factory=list)
+    wager_thres: list = field(default_factory=list)
+    wager_alpha: list = field(default_factory=list)
+    
+    
 class AccumulatorModel2D(BaseEstimator):
 
     PARAM_NAMES = ('kmult', 'bound', 'non_dec_time', 'wager_thr', 'wager_alpha') # class attribute
