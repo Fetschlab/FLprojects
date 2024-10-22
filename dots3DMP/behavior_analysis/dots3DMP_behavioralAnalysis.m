@@ -16,17 +16,23 @@ clear; clc; close all
 
 %% select subject, load the data
 
-datapath = '/Users/stevenjerjian/Desktop/FetschLab/PLDAPS_data/dataStructs';
+datapath = '/Users/chris/Downloads/';
 subject = 'zarya';
 export_figs = 0;
 
-fig_folder = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/figs';
+fig_folder = '/Users/chris/Downloads/figs';
 
 conftask = 2;
 RTtask   = 1;
 
 data = dots3DMP_loadBehaviorData(subject,datapath,conftask,RTtask);
 RTlims = [0.25 2.25];
+
+% convert to 0::1
+if max(data.choice)==2
+    data.choice = data.choice-1;
+end
+
 
 if ~isfield(data,'oneTargConf')
     data.oneTargConf = false(size(data.heading));
@@ -69,10 +75,10 @@ hdgs   = unique(data.heading);
 
 %% Zarya, remove older data
 
-removethese = data.date >= 20230901;
-for f=1:length(fnames)
-    data.(fnames{f})(removethese) = [];
-end
+% removethese = data.date >= 20230901;
+% for f=1:length(fnames)
+%     data.(fnames{f})(removethese) = [];
+% end
 
 %% basic parsing and plot of logistic fits
 

@@ -104,7 +104,11 @@ for d = 1:length(deltas)+1 % add extra column for all trials irrespective of del
     if nansum(~isnan(data.heading(K)))>=3*length(hdgs) && length(hdgs)>5
         X = data.heading(K);
         y = data.choice(K)==2; % 2 is rightward
-        [B{m,c,d}, ~, stats{m,c,d}] = glmfit(X, y, 'binomial');
+        try
+            [B{m,c,d}, ~, stats{m,c,d}] = glmfit(X, y, 'binomial');
+        catch
+            [B{m,c,d}, ~, stats{m,c,d}] = glmfit(X, y', 'binomial');
+        end
         yVals(m,c,d,:) = glmval(B{m,c,d},xVals,'logit');
         plotLogistic(m,c,d) = 1;
     else
@@ -115,7 +119,7 @@ end
 end
 end
 
-% standard error of proportion
+% standard error of a proportion
 pRightSE = sqrt( (pRight.*(1-pRight)) ./ n );
 pCorrectSE = sqrt( (pCorrect.*(1-pCorrect)) ./ n );
 

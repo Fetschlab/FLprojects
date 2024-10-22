@@ -1,6 +1,5 @@
 % load/plot data from Yared struct
 
-
 clear
 close all
 load('/Users/chris/Downloads/lucio_20230331-20230701_neuralData_clean.mat');
@@ -8,9 +7,9 @@ dbstop if error
 
 
 %%
-plotTuningFits = 1;
+plotTuningFits = 0;
 plotTuningPSTH = 0;
-plotTaskPSTH = 0;
+plotTaskPSTH = 1;
 
 excludes = []; % to exclude non-selective cells, etc.
 
@@ -129,6 +128,8 @@ for n = 1 %:length(newDataStruct)
                 guess = [max(FRmean)-min(FRmean), 1.5, peak, min(FRmean)];
                 [beta, ~] = fminsearch(@(x) tuning_vonMises_err(x,hdg(I),spRate_tun(I)), guess);
                 prefhdg_fit(n,c,m,o) = beta(3);
+                    % significance of tuning by anova
+                pvalTuning(n,c,m,o) = anovan(spRate_tun(I),hdg(I),'display','off');
 
                 if plotTuningFits
                     figure(n*10+c); set(gcf, 'Color', 'w', 'Position', [1000 500 410 860], 'PaperPositionMode', 'auto');
@@ -141,6 +142,9 @@ for n = 1 %:length(newDataStruct)
                     if m==3; xlabel('heading (deg)'); end
                     title(mlabel{m});
                     changeAxesFontSize(gca, 16, 16);
+                    yl = ylim; xl = xlim;
+                    text(xl(1)+0.02*(xl(2)-xl(1)),yl(1)+0.08*(yl(2)-yl(1)),sprintf('p = %1.2f',pvalTuning(n,c,m,o)));
+                    keyboard
                 end
                 
                 % fit a line to middle few headings, to establish a slope-around-zero criterion
@@ -516,7 +520,7 @@ end
 %% save, to save time later
 
 clear newDataStruct raster_stimOn raster_RT raster_tun
-save(['/Users/chris/Documents/MATLAB/temp.mat']);
+save('/Users/chris/Documents/MATLAB/temp.mat');
 
 
 
@@ -529,18 +533,18 @@ save(['/Users/chris/Documents/MATLAB/temp.mat']);
 
 %% plot average choice/conf-conditioned PSTH
 
+
+for m = 1:length(mods)
+
     % aligned stimOn
 clear psth
 
+I = nansum(psthNorm_stimOn_one{m},2)>10; % pick some selection criteria; for now it's all cells (w nonzero spike count) 
 
-
-
-I = nansum(psthNorm_stimOn_one,2)>10; % pick some selection criteria; for now it's all cells (w nonzero spike count) 
-
-psth(1,:) = nanmean(psthNorm_stimOn_one(I,:));
-psth(2,:) = nanmean(psthNorm_stimOn_two(I,:));
-psth(3,:) = nanmean(psthNorm_stimOn_three(I,:));
-psth(4,:) = nanmean(psthNorm_stimOn_four(I,:));
+psth(1,:) = nanmean(psthNorm_stimOn_one{m}(I,:));
+psth(2,:) = nanmean(psthNorm_stimOn_two{m}(I,:));
+psth(3,:) = nanmean(psthNorm_stimOn_three{m}(I,:));
+psth(4,:) = nanmean(psthNorm_stimOn_four{m}(I,:));
 
 figure(5000); set(gcf, 'Color', 'w', 'Position', [1 220 700 450], 'PaperPositionMode', 'auto');
 tAxis = -extRaster(1) : psth_xlim1;
@@ -591,10 +595,10 @@ clear psth
 
 I = nansum(psthNorm_stimOn_one,2)>10; % pick some selection criteria; for now it's all cells (w nonzero spike count) 
 
-psth(1,:) = nanmean(psthResid_stimOn_one(I,:));
-psth(2,:) = nanmean(psthResid_stimOn_two(I,:));
-psth(3,:) = nanmean(psthResid_stimOn_three(I,:));
-psth(4,:) = nanmean(psthResid_stimOn_four(I,:));
+psth(1,:) = nanmean(psthResid_stimOn_one{m}(I,:));
+psth(2,:) = nanmean(psthResid_stimOn_two{m}(I,:));
+psth(3,:) = nanmean(psthResid_stimOn_three{m}(I,:));
+psth(4,:) = nanmean(psthResid_stimOn_four{m}(I,:));
 
 figure(5100); set(gcf, 'Color', 'w', 'Position', [1 220 700 450], 'PaperPositionMode', 'auto');
 tAxis = -extRaster(1) : psth_xlim1;
@@ -639,12 +643,12 @@ saveas(gcf, '4b', 'pdf')
 
 %% CP and ConfP, vs each other and as a func of prefDir
 
-nanmean(CP_high(:))
-nanmean(CP_low(:))
-nanmean(CP_all(:))
-nanmean(ConfP_pref(:))
-nanmean(ConfP_null(:))
-nanmean(ConfP_all(:))
+nanmean(CP_high(:,m))
+nanmean(CP_low(:,m))
+nanmean(CP_all(:,m))
+nanmean(ConfP_pref(:,m))
+nanmean(ConfP_null(:,m))
+nanmean(ConfP_all(:,m))
 
 
 %% choose which to plot
@@ -704,6 +708,7 @@ saveas(gcf, '5c', 'pdf')
 
 
 
+end % mods
 
 
 
