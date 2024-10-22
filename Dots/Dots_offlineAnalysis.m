@@ -149,7 +149,7 @@ pval_ttest_pHighCorrErr = 2*(1-tcdf(t,df)) % two-tailed
 
 %% plot
 
-forTalk = 1;
+forTalk = 0;
 cohs = unique(data.scoh);
 Dots_plot(parsedData,cohs,conftask,RTtask,0,forTalk);
 
