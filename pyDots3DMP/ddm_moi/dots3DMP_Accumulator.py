@@ -3,23 +3,23 @@
 import numpy as np
 import pandas as pd
 from typing import Union, Optional
+
+from dataclasses import dataclass, field
+from copy import copy, deepcopy
+import itertools
+import logging
+import time
+
 from sklearn.base import BaseEstimator
 from scipy.signal import convolve
 from scipy.stats import norm, skewnorm
-
-from pybads import BADS
 from scipy.optimize import minimize
+from pybads import BADS
 
 from behavior.preprocessing import (
     dots3DMP_create_trial_list, dots3DMP_create_conditions,
     data_cleanup, format_onetargconf,
     )
-
-from dataclasses import dataclass, field
-import itertools
-from copy import copy, deepcopy
-import logging
-
 from Accumulator import Accumulator
 
 # TODO list
@@ -31,16 +31,15 @@ from Accumulator import Accumulator
 # - if no wager, drop wager params and handle
 # - cleanup RT part
 # - add logging 
-# - replace config args with dataclass
 
 
 # low-level to do 
 # handle fixed params/params when calling predict before any fitting?
 # maybe the way is to call fit with all fixed params...
 
-# RT prediction from distribution
-# deal with where RT comes in to predict_proba/predict
-#ß
+# ISSUE - are params being set correctly on each fitting iteration - should be concatenating 
+# fit and fixed for predict function # use print print print
+
 
 # %% ----------------------------------------------------------------
 
@@ -48,14 +47,19 @@ logger = logging.getLogger()
 logging.basicConfig(level=logging.INFO)
 
 def main():
-    accum_kw = {'grid': np.arange(-3, 0, 0.05),
-                'tvec': np.arange(0, 2, 0.01),
-                'kmult': [0.4, 0.7],
-                'bound': [0.7, 0.7, 0.7],
-                'non_dec_time': [0.3],
-                'wager_thr': [.5, .5, .5],
-                'wager_alpha': [0]}
-    accum = dots3dmpAccumulator(stim_scaling=True, **accum_kw)
+    
+    grid_vec = np.arange(-3, 0, 0.05)
+    time_vec = np.arange(0, 2, 0.05)
+       
+    init_params = {
+        'kmult': [0.3, 0.3], 
+        'bound': [0.3, 0.3, 0.3],
+        'non_dec_time': [0.3],
+        'wager_thr': [1, 1, 1],
+        'wager_alpha': [0]
+    }
+    accum = dots3dmpAccumulator(grid_vec=grid_vec, tvec=time_vec, **init_params, 
+                                stim_scaling=False, return_wager=False)
 
     datafilepath = "/Users/stevenjerjian/Desktop/FetschLab/PLDAPS_data/dataStructs/lucio_20220512-20230606.csv"
     data = data_cleanup(datafilepath)  # this is a hack function to quickly load and clean the data, could be improved/generalized with options
@@ -67,31 +71,22 @@ def main():
     y['RT'] += 0.3 # to reverse the downshift from motion platform latency
 
     # accum.fit(X, y, fixed_params=['kmult', 'wager_alpha'])
-    y_pred, y_pred_samp = accum.predict(X, y, n_samples=1)
+    y_pred, y_pred_samp = accum.predict(X, y, n_samples=1, seed=1)
+    # y_pred_samp['RT'] -= 0.3
 
+    print(y.head())
     print(y_pred.head())
     print(y_pred_samp.head())
 
 # %% ----------------------------------------------------------------
-
-@dataclass
-class AccumConfig:
-    grid: np.ndarray = field(default=np.arange(-3, 0, 0.05), repr=False)
-    tvec: np.ndarray = field(default=np.arange(0, 2, 0.005), repr=False)
-    kmult: list = field(default_factory=list)
-    bound: list = field(default_factory=list)
-    non_dec_time: list = field(default_factory=list)
-    wager_thres: list = field(default_factory=list)
-    wager_alpha: list = field(default_factory=list)
-    
     
 class AccumulatorModel2D(BaseEstimator):
 
     PARAM_NAMES = ('kmult', 'bound', 'non_dec_time', 'wager_thr', 'wager_alpha') # class attribute
 
-    def __init__(self, grid: np.ndarray, tvec: np.ndarray, kmult: list, bound: list, non_dec_time: list=[0.3], 
+    def __init__(self, grid_vec: np.ndarray, tvec: np.ndarray, kmult: list, bound: list, non_dec_time: list=[0.3], 
                  return_wager: bool=True, wager_thr: list=[1], wager_alpha: list=[0.0], wager_axis=None):
-        self.grid = grid
+        self.grid_vec = grid_vec
         self.tvec = tvec
         self.kmult = kmult
         self.bound = bound
@@ -99,27 +94,33 @@ class AccumulatorModel2D(BaseEstimator):
         self.return_wager = return_wager
         self.wager_thr = wager_thr
         self.wager_alpha = wager_alpha
-        self.wager_axis = None # None means both axes i.e. time and evidence (log odds)
+        self.wager_axis = wager_axis # None means both axes i.e. time and evidence (log odds)
+
+        # init as empty
+        self.params_ = {}
+        self.fixed_params = {}
         
     def fit(self, X, y, fixed_params=None):
+        # custom implementation
         pass
         
     def predict(self, X):
+        # custom implementation
         pass
 
     def simulate(self, X):
+        # custom implementation
         pass
     
-    # TODO define other generic AccumulatorModel methods
-
 
 class dots3dmpAccumulator(AccumulatorModel2D):
 
     def __init__(self, stim_scaling=False, **kwargs):
         super().__init__(**kwargs)  # Inherit parent class parameters
         self.stim_scaling = stim_scaling
+        self.init_params = {k: getattr(self, k) for k in self.PARAM_NAMES}
 
-    def get_params(self, deep=True):
+    def _get_params(self, deep=True):
         """
         This is a workaround to make the scikit-learn get_params call actually return all parent class parameters
         # https://stackoverflow.com/questions/51430484/how-to-subclass-a-vectorizer-in-scikit-learn-without-repeating-all-parameters-in
@@ -130,72 +131,74 @@ class dots3dmpAccumulator(AccumulatorModel2D):
         params.update(AccumulatorModel2D.get_params(cp, deep))
         return params
 
-    def _get_fit_params(self):
+    def _set_params_dict(self, params_array: np.ndarray, end_inds) -> None:
+        """reconstruct full params dictionary from params array and fixed params dictionary"""
 
-        # convert kwargs to dict,
-        # subset out fittable parameters and fixed parameters
-        # make fittable parameters, return as list
-        self.model_params = {k: getattr(self, k) for k in self.PARAM_NAMES}
-        self.fit_param_names = self.model_params.keys()
-        if self.fixed_params:
-            self.fixed_params = {k: self.model_params[k] for k in self.fixed_params}
-            self.fit_param_names = [k for k in self.fit_param_names if k not in self.fixed_params.keys()]
-
-        self.fitted_params_ = {k: self.model_params[k] for k in self.fit_param_names}
-        params_list = list({k: v for k,v in self.model_params.items() if k in self.fit_param_names}.values())
-
-        return params_list    
-            
-    def fit(self, X: pd.DataFrame, y: pd.DataFrame, fixed_params=None):
-        
-        self.n_features_in_ = len(X.columns)
-        self.fixed_params = fixed_params
-
-        params_list  = self._get_fit_params()
-        params_array = np.array(list(itertools.chain(*params_list)))
-
-        # pass fixed model_params and data as fixed inputs to objective function
-        optim_fcn_part = lambda params: self._objective_fcn(params, X, y)
-
-        # TODO allow user to specify these instead or with init params
-        lb = params_array * 0.3
-        ub = params_array * 2
-        plb = params_array * 0.5
-        pub = params_array * 1.5
-
-        bads_bounds = (lb, ub, plb, pub)
-        bads = BADS(optim_fcn_part, params_array, *bads_bounds)
-        result = bads.optimize()
-
-        self.fitted_params_ = dict(zip(fit_param_names, result.x))
-
-        return self
-
-    def set_params(self):
-        
-        params_list  = self._get_fit_params()
-        params_array = np.array(list(itertools.chain(*params_list)))
-        end_inds = list(itertools.accumulate(map(len, params_list)))
-
-        # from params_array and fixed_params, reconstruct full params_dict
         start_ind = 0
         for p, param in enumerate(self.fit_param_names):
             if p > 0:
                 start_ind = end_inds[p-1]
-            self.fitted_params_[param] = params_array[start_ind:end_inds[p]].tolist()
-
-        self.params_ = self.fitted_params_.copy()
-        if self.fixed_params:
-            self.params_ = self.params_ | self.fixed_params
-        # self.params = {k: self.params[k] for k in self.PARAM_NAMES}
-
-        
-    def _objective_fcn(self, params_array, X, y):
-
-        self.set_params()
+            self.params_[param] = params_array[start_ind:end_inds[p]].tolist()
+        self.params_ = self.params_ | self.fixed_params
         print(self.params_)
 
-        y_pred = self.predict(X, y['RT'].to_numpy())
+    def _get_fit_params(self) -> list:
+        """return list of fittable parameters (from initial parameters dict)"""
+
+        if self.fixed_params:
+            self.fixed_params = {k: self.init_params[k] for k in self.fixed_params}
+            self.fit_param_names = [k for k in self.init_params.keys() if k not in self.fixed_params.keys()]
+
+        # self.fit_params = {k: self.init_params[k] for k in self.fit_param_names}
+        # return self.fit_params.values()
+
+        return [self.init_params[k] for k in self.fit_param_names]
+            
+    def fit(self, X: pd.DataFrame, y: pd.DataFrame, fixed_params=None):
+
+        self.params_ = {}
+        self.n_features_in_ = len(X.columns)
+
+        # pull out the fittable parameters as an array, for optimization function
+        # and store the breakdown of the params dict for reconstructing the params dictionary 
+        # inside the optimization objective function
+
+        self.fixed_params = fixed_params 
+        params_list = self._get_fit_params()
+
+        if params_list:
+            params_array = np.array(list(itertools.chain(*params_list)))
+            self.param_end_inds = list(itertools.accumulate(map(len, params_list)))
+
+            # pass fixed model_params and data as fixed inputs to objective function
+            optim_fcn_part = lambda params: self._objective_fcn(params, X, y)
+
+            # TODO allow user to specify these instead or with init params
+            lb = params_array * 0.3
+            ub = params_array * 2
+            plb = params_array * 0.5
+            pub = params_array * 1.5
+
+            bads_bounds = (lb, ub, plb, pub)
+            bads = BADS(optim_fcn_part, params_array, *bads_bounds)
+            result = bads.optimize()
+
+            # at the end, store fitted params back into dict, with fixed ones
+            self._set_params_dict(result.x, self.param_end_inds)
+        else:
+            self.params_ = self.init_params.copy()
+
+        return self
+
+    def _objective_fcn(self, params_array: np.ndarray, X: pd.DataFrame, y) -> float:
+
+        # use params array and fixed params to reconstruct full params
+        self._set_params_dict(params_array, self.param_end_inds)
+
+        t0_pred = time.perf_counter()
+        y_pred = self.predict(X, y)
+        t1_pred = time.perf_counter() - t0_pred
+        print(f'single objective function prediction run took {t1_pred:.2f} seconds')
 
         log_lik_choice = log_lik_bin(y['choice'].to_numpy(), y_pred['choice'].to_numpy())
         log_lik_pdw    = log_lik_bin(y['PDW'].to_numpy(), y_pred['PDW'].to_numpy())
@@ -207,7 +210,7 @@ class dots3dmpAccumulator(AccumulatorModel2D):
         # self.neg_llh_ = -sum(self.log_lik_.values())
         # self.neg_llh_ = -sum([self.log_lik[v]*w for v, w in zip(outputs, llh_scaling) if v in self.log_lik])
 
-        self.neg_llh_ = self.log_lik_choice 
+        self.neg_llh_ = self.log_lik_['choice']
 
         logger.info('Total loss:\t%.2f', self.neg_llh_)
         logger.info('Individual log likelihoods: %s', {key: round(val, 2) for key,val in self.log_lik_.items()})
@@ -228,13 +231,11 @@ class dots3dmpAccumulator(AccumulatorModel2D):
     def predict(self, X, y, n_samples: int=0, seed=None):
         """make a probabilistic prediction, given model params, or sample from that prediction"""
 
-        rng = np.random.RandomState(seed)
-
-        # this seems messy...and probably not the right approach
-        if not hasattr(self, 'neg_llh_'):
-            self.fixed_params = None
-            self.set_params()
+        if not self.params_:
+            self.params_ = self.init_params
             
+        rng = np.random.RandomState(seed)
+        
         mods = np.unique(X['modality'])
         cohs = np.unique(X['coherence'])
         deltas = np.unique(X['delta'])
@@ -243,14 +244,17 @@ class dots3dmpAccumulator(AccumulatorModel2D):
         cond_groups = X[['modality','coherence','delta']].drop_duplicates(
             ).sort_values(by=['modality','coherence','delta'])
 
-        kves, kvis = self._handle_kmult(self.params_['kmult'], cohs.T) 
+        # abstract these away...
+        kves, kvis = self._handle_kmult(self.params_['kmult'], cohs.T, k_scale=len(self.tvec)) 
         bound = self._handle_param_mod(self.params_['bound'], mods)  
         non_dec_time = self._handle_param_mod(self.params_['non_dec_time'], mods)  
         thetas = self._handle_param_mod(self.params_['wager_thr'], mods)  
 
         if not self.stim_scaling:
             b_ves, b_vis = np.ones_like(self.tvec), np.ones_like(self.tvec)
-            # divide by len for time course of sensitivity
+            # divide by len for time course of sensitivity i.e.
+            # what proportion of the total evidence is available at each timestep
+            # something is WRONG here...
             b_ves /= len(b_ves)
             b_vis /= len(b_vis)
         elif isinstance(self.stim_scaling, tuple):
@@ -264,54 +268,56 @@ class dots3dmpAccumulator(AccumulatorModel2D):
                                    columns=['choice', 'PDW', 'RT'])
         pred_sample = deepcopy(predictions)
 
-        self.wager_maps = []
+        if self.return_wager:
+            print('Calculating wager maps')
+            self.wager_maps = []
+            k_vals_fixed = [kves, np.mean(kvis), [kves, np.mean(kvis)]]
+            for m, mod in enumerate(mods):
 
-        k_vals_fixed = [kves, np.mean(kvis), [kves, np.mean(kvis)]]
+                # set accumulators with absolute drifts, for log odds mappings
+                
+                accumulator = Accumulator(grid_vec=self.grid_vec, tvec=self.tvec, bound=bound[m])
 
-        for m, mod in enumerate(mods):
+                # TODO: pass the accumulator to this method
+                abs_drifts, accumulator.tvec = self.calc_3dmp_drift_rates(
+                    b_vals[m], k_vals_fixed[m], self.tvec[-1], hdgs[hdgs>=0], delta=0,
+                    )
 
-            # set accumulators with absolute drifts, for log odds mappings
-            
-            accumulator = Accumulator(grid_vec=self.grid, tvec=self.tvec)
-            accumulator.bound = bound[m]
-            abs_drifts, accumulator.tvec = self.calc_3dmp_drift_rates(
-                b_vals[m], k_vals_fixed[m], self.tvec[-1], hdgs[hdgs>=0], delta=0,
-                )
+                # run the method of images - diffusion to bound to extract pdfs, cdfs, and LPO
+                accumulator.apply_drifts(abs_drifts, hdgs[hdgs>=0])
+                accumulator.compute_distrs(return_pdf=True)
 
-            # run the method of images - diffusion to bound to extract pdfs, cdfs, and LPO
-            accumulator.set_drifts(abs_drifts, hdgs[hdgs>=0])
-            accumulator.compute_distrs(return_pdf=True)
+                if self.wager_axis is None:
+                    log_odds_map = accumulator.log_posterior_odds()
+                    self.wager_maps.append(log_odds_map)
+                else:
+                    raise NotImplementedError('alternatives to log odds not yet implemented')
 
-            if self.wager_axis is None:
-                log_odds_map = accumulator.log_posterior_odds()
-                self.wager_maps.append(log_odds_map)
-            else:
-                raise NotImplementedError('alternatives to log odds not yet implemented')
-
-            wager_above_threshold = [p >= theta for p, theta in zip(self.wager_maps, thetas)]
+                wager_above_threshold = [p >= theta for p, theta in zip(self.wager_maps, thetas)]
 
         # now loop over coherences and deltas with one accumulator each for actual predictions
-        
-            for c, coh in enumerate(cohs):
-                k_vals = [kves, kvis[c], [kves, kvis[c]]]
-                
+        for c, coh in enumerate(cohs):
+            k_vals = [kves, kvis[c], [kves, kvis[c]]]
+
+            for m, mod in enumerate(mods):
                 for d, delta in enumerate(deltas):
 
+                    trial_index = (X['modality'] == mod) & (X['coherence'] == coh) & (X['delta'] == delta)
+                    trial_index = trial_index.to_numpy()
+
                     # non-valid conditions
-                    if (delta != 0 and mod < 3) or (c > 0 and mod == 1):
+                    if (delta != 0 and mod < 3) or (c > 0 and mod == 1) or trial_index.sum()==0:
                         continue       
-                        
-                    accumulator = Accumulator(grid_vec=self.grid, tvec=self.tvec)
-                    accumulator.bound = bound[m] # TODO deal with this in initialization?
+
+                    accumulator = Accumulator(grid_vec=self.grid_vec, tvec=self.tvec, bound=bound[m])
 
                     drifts, accumulator.tvec = self.calc_3dmp_drift_rates(
                         b_vals[m], k_vals[m], self.tvec[-1], hdgs, delta=delta,
                         )
-                    accumulator.set_drifts(drifts, hdgs) # TODO include this in set_drift_rates, basically wrap it
-                    accumulator.compute_distrs(return_pdf=True)
-
-                    trial_index = (X['modality'] == mod) & (X['coherence'] == coh) & (X['delta'] == delta)
-                    trial_index = trial_index.to_numpy()
+                    accumulator.apply_drifts(drifts, hdgs) 
+                    
+                    # THIS IS THE BOTTLENECK
+                    accumulator.compute_distrs(return_pdf=self.return_wager)
 
                     # ====== CHOICE ======
                     p_right = np.clip(accumulator.p_corr_.T, 1e-100, 1-1e-100)
@@ -320,7 +326,7 @@ class dots3dmpAccumulator(AccumulatorModel2D):
                     # ====== WAGER ======
 
                     # TODO figure out how to vectorize over heading for PDW and RT
-                    
+                
                     for h, hdg in enumerate(hdgs):
                         
                         trial_index = (X['modality'] == mod) & (X['coherence'] == coh) & \
@@ -336,30 +342,31 @@ class dots3dmpAccumulator(AccumulatorModel2D):
                             pred_sample.loc[trial_index, 'choice'] = rng.binomial(n_samples, p_right[h], trial_index.sum()) / n_samples
 
                         # ====== WAGER ======
-                        # select pdf for losing race, given correct or incorrect
-                        pxt_up = np.squeeze(accumulator.up_lose_pdf_[h, :, :])
-                        pxt_lo = np.squeeze(accumulator.lo_lose_pdf_[h, :, :])
-                        total_p = np.sum(pxt_up + pxt_lo)
-                        pxt_up /= total_p
-                        pxt_lo /= total_p
+                        if self.return_wager:
+                            # select pdf for losing race, given correct or incorrect
+                            pxt_up = np.squeeze(accumulator.up_lose_pdf_[h, :, :])
+                            pxt_lo = np.squeeze(accumulator.lo_lose_pdf_[h, :, :])
+                            total_p = np.sum(pxt_up + pxt_lo)
+                            pxt_up /= total_p
+                            pxt_lo /= total_p
 
-                        p_choice_and_wager = np.array(
-                            [[np.sum(pxt_up[wager_above_threshold[m]]),     # pRight+High
-                                np.sum(pxt_up[~wager_above_threshold[m]])],   # pRight+Low
-                                [np.sum(pxt_lo[wager_above_threshold[m]]),     # pLeft+High
-                                np.sum(pxt_lo[~wager_above_threshold[m]])]],  # pLeft+Low
-                        )
+                            p_choice_and_wager = np.array(
+                                [[np.sum(pxt_up[wager_above_threshold[m]]),     # pRight+High
+                                    np.sum(pxt_up[~wager_above_threshold[m]])],   # pRight+Low
+                                    [np.sum(pxt_lo[wager_above_threshold[m]]),     # pLeft+High
+                                    np.sum(pxt_lo[~wager_above_threshold[m]])]],  # pLeft+Low
+                            )
 
-                        # calculate p_wager using Bayes rule, then factor in base rate of low bets ("alpha")
-                        p_choice_given_wager, p_wager = _margconds_from_intersection(p_choice_and_wager, p_choice)
-                        p_wager += np.array([-self.params_['wager_alpha'][0], self.params_['wager_alpha'][0]]) * p_wager[0]
-                        p_wager = np.clip(p_wager, 1e-100, 1-1e-100)
+                            # calculate p_wager using Bayes rule, then factor in base rate of low bets ("alpha")
+                            p_choice_given_wager, p_wager = _margconds_from_intersection(p_choice_and_wager, p_choice)
+                            p_wager += np.array([-self.params_['wager_alpha'][0], self.params_['wager_alpha'][0]]) * p_wager[0]
+                            p_wager = np.clip(p_wager, 1e-100, 1-1e-100)
 
-                        # print(f'heading={hdg}, p_wager={p_wager}')
-                        predictions.loc[trial_index, 'PDW'] = p_wager[0]
+                            # print(f'heading={hdg}, p_wager={p_wager}')
+                            predictions.loc[trial_index, 'PDW'] = p_wager[0]
 
-                        if n_samples:
-                            pred_sample.loc[trial_index, 'PDW'] = rng.binomial(n_samples, p_wager[0], trial_index.sum()) / n_samples
+                            if n_samples:
+                                pred_sample.loc[trial_index, 'PDW'] = rng.binomial(n_samples, p_wager[0], trial_index.sum()) / n_samples
 
 
                         # ====== RT ======
@@ -374,21 +381,21 @@ class dots3dmpAccumulator(AccumulatorModel2D):
                         rt_dist /= rt_dist.sum()  # renormalize to get posterior
 
                         # need original data here for RT to get the likelihood in the predictions
-                        actual_rts = y['RT'][trial_index] + 0.3
+                        actual_rts = y.loc[trial_index, 'RT'].values
                         dist_inds = [np.argmin(np.abs(self.tvec - rt)) for rt in actual_rts]
                         predictions.loc[trial_index, 'RT'] = rt_dist[dist_inds]
 
                         if n_samples:
-                            pred_sample.loc[trial_index, 'RT'] = rng.choice(self.tvec, trial_index.sum(), replace=True, p=rt_dist) - 0.3
+                            pred_sample.loc[trial_index, 'RT'] = rng.choice(self.tvec, trial_index.sum(), replace=True, p=rt_dist)
 
-                        
+       
         if n_samples:
             return predictions, pred_sample
         else:
             return predictions
         
 
-    def loss(self):
+    def get_loss(self):
         # self.loss = -sum([self.log_lik[v]*w for v, w in zip(outputs, llh_scaling) if v in model_llh])
         pass
 
@@ -448,8 +455,6 @@ class dots3dmpAccumulator(AccumulatorModel2D):
         """
 
         sin_uhdgs = np.sin(np.deg2rad(hdgs))
-        # if return_abs:
-        #     sin_uhdgs = sin_uhdgs[sin_uhdgs >= 0]
 
         cumul_bt = np.cumsum((b_t**2)/(b_t**2).sum(axis=0), axis=0)
 
@@ -458,7 +463,7 @@ class dots3dmpAccumulator(AccumulatorModel2D):
             b_t = b_t.reshape(-1, 1)
             tvec = cumul_bt * tmax
             drifts = np.cumsum(b_t**2 * b_k * sin_uhdgs, axis=0)
-            # drifts = b_k * sin_uhdgs   # w/o stim scaling, reduces to this
+            # drifts2 = b_k * sin_uhdgs   # w/o stim scaling, reduces to this
 
         elif len(b_k) == 2:
             # two sensitivities/time-courses - combined condition
@@ -467,10 +472,9 @@ class dots3dmpAccumulator(AccumulatorModel2D):
             if cue_weights is None:
                 k2 = b_k**2
                 cue_weights = np.sqrt(k2 / k2.sum())
-            else:
-                cue_weights = cue_weights.toarray()
-
+                
             w_ves, w_vis = cue_weights
+            
             # if return_abs:
             #     drift_ves = np.cumsum(b_t[:, [0]]**2 * b_k[0] * sin_uhdgs, axis=0)
             #     drift_vis = np.cumsum(b_t[:, [1]]**2 * b_k[1] * sin_uhdgs, axis=0)
@@ -496,8 +500,8 @@ class dots3dmpAccumulator(AccumulatorModel2D):
 ## HELPER FUNCTIONS
 
 def log_lik_bin(y, y_hat):
-    return np.sum(y * np.log(y_hat) + (1 - y) * np.log(y_hat))
-    #return np.sum(np.log(y_hat[y==1])) + np.sum(np.log(1 - y_hat[y==0]))
+    # return np.sum(y * np.log(y_hat) + (1 - y) * np.log(y_hat))
+    return np.sum(np.log(y_hat[y==1])) + np.sum(np.log(1 - y_hat[y==0]))
 
 def log_lik_cont(y, y_hat, t):
     y_inds = np.searchsorted(t, y)
@@ -511,18 +515,33 @@ def _margconds_from_intersection(prob_ab, prob_a):
         a_given_b: conditional probability of A given B
         prob_b: marginal probability of B
     """
-    prob_a = np.expand_dims(prob_a, axis=0)
 
-    # conditional probability
-    b_given_a = (prob_ab / np.sum(prob_ab, axis=(0, 1))) / prob_a
-    prob_b = prob_a.t  @ b_given_a
+    prob_a = prob_a.reshape(-1, 1)  # make it 2-D, for element-wise and matrix mults below
+    b_given_a = (prob_ab / np.sum(prob_ab)) / prob_a
+    prob_b = prob_a.T @ b_given_a
+    prob_b[prob_b==0] = np.finfo(np.float64).tiny
+    a_given_b = b_given_a * prob_a / prob_b
 
-    if np.any(prob_b == 0):
-        a_given_b = b_given_a * prob_a
-    else:
-        a_given_b = b_given_a * prob_a / prob_b
+    # TODO convert to unit tests
+    # print(f'prob_a = {prob_a}')
+    # print(f'prob_b = {prob_b}')
+    # print(f'a_given_b = {a_given_b}')
+    # print(f'prob_ab = {prob_ab}')
 
+    # assert np.allclose(prob_b, 1.0) and np.allclose(np.sum(a_given_b, axis=0), [1.0, 1.0])
+    # assert np.allclose(prob_a, 1.0) and np.allclose(prob_ab, 1.0)
+    
     return a_given_b, prob_b.flatten()
+    
+    # TODO attempt to do for multiple headings at once...work in progress
+    # proba_full = np.expand_dims(prob_a, axis=1)
+    # b_given_a = (prob_ab / np.sum(prob_ab, axis=(0, 1))) / proba_full
+    # prob_b = np.zeros_like(prob_a)
+    # for d in range(prob_b.shape[1]):
+    #     prob_b[:, d] = prob_a[:, d].T @ b_given_a[:, :, d]
+    
+    # a_given_b = b_given_a * proba_full / np.expand_dims(prob_b, axis=0)
+    # return a_given_b, prob_b
 
 
 def _intersection_from_margconds(a_given_b, prob_a, prob_b):
@@ -547,5 +566,5 @@ def _intersection_from_margconds(a_given_b, prob_a, prob_b):
 # %%
 
 if __name__ == '__main__':
-    logger = logging.getLogger(__name__)
+    # logger = logging.getLogger(__name__)
     main()

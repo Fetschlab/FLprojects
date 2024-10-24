@@ -5,13 +5,16 @@ import matplotlib.pyplot as plt
 from matplotlib import animation
 
 from dataclasses import dataclass, field
-from typing import Optional
-from codetiming import Timer
+from typing import Optional, Union, Sequence
 
-@dataclass(repr=False)
+import concurrent.futures
+from functools import partial
+
+# from codetiming import Timer
+    
 class Accumulator:
     """
-    Dataclass for 2-D accumulator, calculated via method of images.
+    2-D accumulator, calculated via method of images.
     
     Instantiate an object of the class with a list of drift rates, bound, and grid settings (time vector and grid vector).
     Drift rates can be single values (constant rate, or time series matching the length of tvec).
@@ -27,49 +30,38 @@ class Accumulator:
 
     """
 
-    # clean this up - I don't think we need a dataclass here
-    # set default values for parameters
-    bound: np.ndarray = np.array([1, 1])
-    tvec: np.ndarray = field(default=np.arange(0, 2, 0.005))
-    grid_vec: np.ndarray = field(default=np.arange(-3, 0, 0.025))
+    def __init__(self, tvec: np.ndarray, grid_vec: np.ndarray, 
+                 drift_rates: Optional[list] = None, 
+                 bound: Optional[Union[float, Sequence, np.ndarray]] = 1.0,
+                 num_images: Optional[int]=7,
+                 wager_theta: Optional[float]=1.0):
+        self.tvec = tvec
+        self.grid_vec = grid_vec
+        self.bound = bound
+        self.drift_rates = drift_rates if drift_rates is not None else []
+        self.num_images = num_images
+        self.wager_theta = wager_theta
 
-    # don't initialize these, they will be set by the setter methods
-    _bound: np.ndarray = field(init=False, repr=False)
-    _tvec: np.ndarray = field(init=False, repr=False)
-
-    dt: float = field(init=False, repr=False)
-    drift_rates: list = field(default_factory=list)
-    drift_labels: list = field(default_factory=list)
-    sensitivity: float = field(default=1)
-    urgency: np.ndarray = field(default=None)
-    num_images: int = 7
-
-    @classmethod
-    def build_accum_grid(cls, grid_dict):
-        return cls(**grid_dict)
-
+        if self.drift_rates:
+            self.drift_labels = self.drift_rates.copy()
+        
     @property
     def bound(self):
-        return self._bound
-
-    @bound.setter
-    def bound(self, b):
-        """Set accumulator bound. This is a convenience logic so we can use the syntactic sugar A.bound = ..."""
+        """return symmetric bound as 2-element array"""
+        b = self._bound
         if isinstance(b, (int, float)):
             b = [b, b]
         self._bound = np.array(b)
+        return self._bound
 
-    @property
-    def tvec(self):
-        return self._tvec
+    @bound.setter
+    def bound(self, bound):
+        self._bound = bound
 
-    @tvec.setter
-    def tvec(self, time_vec: np.ndarray):
-        self._tvec = time_vec
-        self.dt = np.gradient(time_vec)
-
-    def set_drifts(self, drifts, labels: Optional[list] = None):
-        """Set accumulator drift rates. Optionally add label for each drift.
+    def apply_drifts(self, drifts, labels: Optional[list] = None, 
+                     sensitivity: float = 1.0, urgency: Optional[Union[np.ndarray,float]] = None):
+        """
+        Set accumulator drift rates. Optionally add label for each drift.
         This also adds a mirrored drift rate for the anti-correlated accumulator, and 
         updates drift rates based on sensitivity and urgency parameters."""
 
@@ -79,35 +71,28 @@ class Accumulator:
         # add corresponding negated value for anti-correlated accumulator
         # also update drift rates based on sensitivity and urgency, if provided
 
-        self.drift_rates = []
+        if labels is not None:
+            assert len(drifts) == len(labels), "drift rates and provided labels must match in length"
+            self.drift_labels = labels
+        
         for d, drift in enumerate(drifts):
             drift = drift * np.array([1, -1])
-            drifts_posneg = urgency_scaling(drift * self.sensitivity, self.tvec, self.urgency)
+            drifts_posneg = _urgency_scaling(drift * sensitivity, self.tvec, urgency)
             self.drift_rates.append(drifts_posneg)
-
-        if labels is not None:
-            self.drift_labels = labels
-
-        return self
-
-    # def __post_init__(self):
-    #     """this gets automatically run after object initialization"""
-        
-    #     # default set the drift labels as 0:ndrifts
-    #     if len(self.drift_labels) == 0 or self.drift_labels is None:
-    #         self.drift_labels = np.arange(len(self.drift_rates))
-    #     self.set_drifts(labels=self.drift_labels)
+            
 
     def cdf(self):
-        p_corr, rt_dist = [], []
-        for drift in self.drift_rates:
-            p_up, rt, flux1, flux2 = _moi_cdf(self.tvec, drift, self.bound,
-                                              0.025, self.num_images)
-            p_corr.append(p_up)
-            rt_dist.append(rt)
+        """calculate cdf at boundaries, and corresponding choices and times"""
+        # faster to preallocate array rather than appending to list
+        p_corr = np.zeros(len(self.drift_rates))
+        rt_dist = np.zeros((len(self.drift_rates), len(self.tvec)))
+        
+        for d, drift in enumerate(self.drift_rates):
+            p_corr[d], rt_dist[d, :], flux1, flux2 = _moi_cdf(
+                self.tvec, drift, self.bound, 0.025, self.num_images)
 
-        self.p_corr_ = np.array(p_corr)
-        self.rt_dist_ = np.stack(rt_dist, axis=0)
+        self.p_corr_ = p_corr
+        self.rt_dist_ = rt_dist
 
     def pdf(self, full_pdf=False):
 
@@ -156,20 +141,21 @@ class Accumulator:
         self.log_odds_ = log_odds(self.up_lose_pdf_, self.lo_lose_pdf_)
         return self.log_odds_
 
+    @property
+    def wager_map(self):
+        return self.log_odds_ >= self.wager_theta
+
     def dv(self, drift, sigma):
         """Return accumulated DV for given drift rate and diffusion noise."""
         return _moi_dv(mu=drift*self.tvec.reshape(-1, 1),
                        s=sigma, num_images=self.num_images)
 
     def compute_distrs(self, return_pdf=False):
-        """Calculate cdf and pdf for accumulator object."""
-        
-        self.cdf()
+        """Calculate cdf and pdf for accumulator object. Returns self for chaining commands"""
 
+        self.cdf()
         if return_pdf:
             self.pdf()
-
-        # return self so that we can chain together with log odds
         return self
 
     def plot(self, d_ind: int = -1):
@@ -185,7 +171,9 @@ class Accumulator:
         -------
         fig_cdf & fig_pdf: figure handles
         """
-        
+        if not self.is_fitted:
+            return
+
         fig_cdf, axc = plt.subplots(2, 1, figsize=(4, 5))
         axc[0].plot(self.drift_labels, self.p_corr_)
         axc[0].set_xlabel('drift')
@@ -256,7 +244,7 @@ class Accumulator:
 
 ## ----------------------------------------------------------------
 
-# TODO make these all static methods and move them inside the class namespace
+# TODO make these all static methods and move them inside the class namespace?
 
 # @staticmethod
 #@np_cache_minimal
@@ -281,24 +269,29 @@ def _sj_rot(j, s0, k):
 
     return (1 / np.sin(np.pi / k)) * (s @ s0.T)
 
-
 def _weightj(j, mu, sigma, sj, s0):
     """weight of the jth image"""
     return (-1) ** j * np.exp(mu @ np.linalg.inv(sigma) @ (sj - s0).T)
 
-
 #@lru_cache(maxsize=32)
-def _corr_num_images(num_images):
-    """2-D accumulator correlation given a number of images"""
+def _corr_num_images(num_images: int) -> tuple[np.ndarray, int]:
+    """returns 2-D accumulator correlation given a number of images"""
+
     k = int(np.ceil(num_images / 2))
     rho = -np.cos(np.pi / k)
     sigma = np.array([[1, rho], [rho, 1]])
 
     return sigma, k
 
-
-def _moi_pdf_vec(xmesh: np.ndarray, ymesh: np.ndarray, tvec: np.ndarray,
-                 mu: np.ndarray, bound=np.array([1, 1]), num_images: int = 7):
+# TODO this has the same input and outputs as _moi_pdf, so should be a single function with a flag
+def _moi_pdf_vec(
+    xmesh: np.ndarray, 
+    ymesh: np.ndarray, 
+    tvec: np.ndarray,
+    mu: np.ndarray,
+    bound=np.array([1, 1]),
+    num_images: int = 7):
+    
     """
     Calculate 2-D pdf according to method of images (vectorized implementation).
 
@@ -310,6 +303,7 @@ def _moi_pdf_vec(xmesh: np.ndarray, ymesh: np.ndarray, tvec: np.ndarray,
     :param num_images: number of images for MOI, default is 7
     :return: 2-D probability density function evaluated at points in xmesh-ymesh
     """
+    
     sigma, k = _corr_num_images(num_images)
 
     nx, ny = xmesh.shape
@@ -326,7 +320,6 @@ def _moi_pdf_vec(xmesh: np.ndarray, ymesh: np.ndarray, tvec: np.ndarray,
     s0 = -bound
 
     covs = tvec[:, None, None] * sigma
-
     mu_t = tvec[:, None] * mu
 
     pdf_result += np.exp(_multiple_logpdfs_vec_input(new_mesh, s0 + mu_t, covs))
@@ -349,9 +342,14 @@ def _moi_pdf_vec(xmesh: np.ndarray, ymesh: np.ndarray, tvec: np.ndarray,
 
     return pdf_result
 
-
-def _moi_pdf(xmesh: np.ndarray, ymesh: np.ndarray, tvec: np.ndarray,
-            mu: np.ndarray, bound=np.array([1, 1]), num_images: int = 7):
+def _moi_pdf(
+    xmesh: np.ndarray, 
+    ymesh: np.ndarray,
+    tvec: np.ndarray,
+    mu: np.ndarray,
+    bound=np.array([1, 1]), 
+    num_images: int = 7
+    ) -> np.ndarray:
     """
     Calculate pdf according to method of images. Older implementation,
     this is not vectorized over time so runs slower.
@@ -364,6 +362,7 @@ def _moi_pdf(xmesh: np.ndarray, ymesh: np.ndarray, tvec: np.ndarray,
     :param num_images: number of images for MOI, default is 7
     :return: pdf at each timepoint (t, x, y)-shape array
     """
+    
     sigma, k = _corr_num_images(num_images)
 
     nx, ny = xmesh.shape
@@ -381,8 +380,14 @@ def _moi_pdf(xmesh: np.ndarray, ymesh: np.ndarray, tvec: np.ndarray,
 
     return pdf_result
 
-
-def _pdf_at_timestep(t, mu: np.ndarray, sigma: np.ndarray, xy_mesh: np.ndarray, k: int, s0: np.ndarray):
+def _pdf_at_timestep(
+    t, 
+    mu: np.ndarray, 
+    sigma: np.ndarray, 
+    xy_mesh: np.ndarray, 
+    k: int, 
+    s0: np.ndarray
+    ):
 
     pdf = mvn(mean=s0 + mu*t, cov=sigma*t).pdf(xy_mesh)
 
@@ -394,13 +399,17 @@ def _pdf_at_timestep(t, mu: np.ndarray, sigma: np.ndarray, xy_mesh: np.ndarray, 
 
     return pdf
 
-
-# @Timer(name='moi_cdf')
-def _moi_cdf(tvec: np.ndarray, mu, bound=np.array([1, 1]), margin_width=0.025, num_images: int = 7):
+def _moi_cdf(
+    tvec: np.ndarray, 
+    mu: np.ndarray,
+    bound = np.array([1, 1]),
+    margin_width: float = 0.025,
+    num_images: int = 7
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Calculate the cdf of a 2-D particle accumulator.
 
-    The function will then return
+    Returns:
         a) the probability of a correct choice
         b) the distribution of response times (bound crossings)
     choices are calculated by evaluating cdf at each boundary separately,
@@ -572,7 +581,7 @@ def _multiple_logpdfs_vec_input(xs, means, covs):
     return out.T
 
 
-def urgency_scaling(mu: np.ndarray, tvec: np.ndarray, urg=None) -> np.ndarray:
+def _urgency_scaling(mu: np.ndarray, tvec: np.ndarray, urg=None) -> np.ndarray:
     """Scale mu according to urgency vector."""
     if len(mu) != len(tvec):
         mu = np.tile(mu, (len(tvec), 1))
@@ -588,7 +597,6 @@ def urgency_scaling(mu: np.ndarray, tvec: np.ndarray, urg=None) -> np.ndarray:
         mu = mu + urg.reshape(-1, 1)
 
     return mu
-
 
 def log_odds(pdf1: np.ndarray, pdf2: np.ndarray) -> np.ndarray:
     """
