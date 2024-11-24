@@ -2,7 +2,6 @@
 *.m~
 *.icloud
 *.asv
-*.mat
 *.yml
 *.pdf
 

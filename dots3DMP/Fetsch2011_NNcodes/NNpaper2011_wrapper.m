@@ -16,26 +16,27 @@
 
 %%
 clear; clc
-% load the data (assumes current folder is /Fetsch2011_NNcodes)
-cd LikelihoodDecodingNN_CF
+% load the data (change current folder as needed)
 load Fetsch_et_al_NatNeuro_2011.mat
-cd ..
 
 % struct "data" with following fields, each with 79029 rows (one for each
 % trial, concatenated across sessions):
 
-% filename: string format is m=monkey number (m18 is monkey Y I think,
-%           M24 is monkey W), c=cell number, r = 'run' number
+% filename: string format is m=monkey number (m18 is monkey Y, I think,
+%           so m24 is monkey W), c=cell number, r = 'run' (block) number
 % heading: heading angle in degrees
-% coherence: 16 ('low') or 60 ('high') ; arbitrarily assigned 16 for vestib trials
+% coherence: visual stimulus strength, 16% ('low') or 60% ('high');
+%            arbitrarily assigned 16 for vestib trials
 % modality: aka stimulus condition, 1=vestib, 2=visual, 3=combined
 % delta: confict angle (deg), positive means visual to the right of vestib
 % choice: the monkey's saccadic decision, 1=rightward, 0=leftward
 % spikes: raster array where each column is a 1-ms bin containing 1 for a spike and 0 for no spike;
 %         length is 2200 because it includes 100 ms before and 100 ms after the 2-s stimulus epoch
-% spikeRates: spikes counted in a 1-s bin centered on the peak velocity of the stimulus;
-%             this turns out to be a bit later than t=1100 in the spikes matrix, something like spikes(:,640:1640) 
-
+% spikeRates: spike rate for each trial, typically counted in a 1-s bin centered on the peak velocity
+%             of the stimulus, which turns out to be a bit later than t=1100 in the spikes matrix,
+%             something like spikes(:,636:1636)(?). I recall that for a few cells this window was 
+%             manually adjusted based on idiosyncratic firing rate dynamics, the details of
+%             which are lost to time I'm afraid.
 
 
 %%
