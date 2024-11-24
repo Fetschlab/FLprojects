@@ -6,16 +6,37 @@
 % some figures look slightly different from figures in paper...why?
 % likelihood calculations (Fig. 4) seem to be off
 
-%%
-clear;clc
-% load the data
-% cd /Users/stevenjerjian/Desktop/FetschLab/Analysis/data
-cd /Users/chris/Documents/MATLAB/paper_datasets/
-load Fetsch_et_al_NatNeuro_2011.mat
+% CF 11-2024: fixed a few things, prob related to a version mismatch with 
+% dots3DMP_likelihood_decoding.m.
+% Fig 4 (single-trial likelihoods) still seems off, could be a bug
+% somewhere, and congruency section throws an error because tuning_curves
+% is missing a 5th dim...
+% but the basic components are here if anyone wants to update it some day
+ 
 
-% add relevant code folders to path, user specific
-% addpath(genpath('/Users/stevenjerjian/Desktop/FetschLab/Analysis/codes'))
-% addpath(genpath('/Users/stevenjerjian/Desktop/PhD/Codes/General/'))
+%%
+clear; clc
+% load the data (assumes current folder is /Fetsch2011_NNcodes)
+cd LikelihoodDecodingNN_CF
+load Fetsch_et_al_NatNeuro_2011.mat
+cd ..
+
+% struct "data" with following fields, each with 79029 rows (one for each
+% trial, concatenated across sessions):
+
+% filename: string format is m=monkey number (m18 is monkey Y I think,
+%           M24 is monkey W), c=cell number, r = 'run' number
+% heading: heading angle in degrees
+% coherence: 16 ('low') or 60 ('high') ; arbitrarily assigned 16 for vestib trials
+% modality: aka stimulus condition, 1=vestib, 2=visual, 3=combined
+% delta: confict angle (deg), positive means visual to the right of vestib
+% choice: the monkey's saccadic decision, 1=rightward, 0=leftward
+% spikes: raster array where each column is a 1-ms bin containing 1 for a spike and 0 for no spike;
+%         length is 2200 because it includes 100 ms before and 100 ms after the 2-s stimulus epoch
+% spikeRates: spikes counted in a 1-s bin centered on the peak velocity of the stimulus;
+%             this turns out to be a bit later than t=1100 in the spikes matrix, something like spikes(:,640:1640) 
+
+
 
 %%
 mods   = unique(data.modality);
@@ -25,7 +46,6 @@ hdgs   = unique(data.heading);
 
 % select monkey (optional), [] = select both, 'W' = m18, 'Y' = m24
 monkey = []; % [], 'W','Y'
-
 
 if ~isempty(monkey)
     switch monkey
@@ -82,54 +102,70 @@ dots3DMP_plot_neuron_tuning(meanFRs(:,:,:,:,unit),semFRs(:,:,:,:,unit),cohs,hdgs
 
 %% Likelihood based decoding (Fig. 4)
 
-step = 0.1;
-numtrs = 100;
-[tuning_curves, posterior, pop_lh, xq, simChoice] = ...
+step = 0.1; % heading interpolation (deg steps)
+numtrs = 100; % num simulated trials per hdg/condition
+[tuning_curves, posterior, pop_lh, xq, simdata] = ...
     dots3DMP_likelihood_decoding(data,meanFRs,hdgs,mods,cohs,deltas,numtrs,step);
 
 %% Fig 4 in paper...
 
 figure('position',[300 300 600 400],'color','w'); hold on
-h = 4; % hdgs(5) is +1.2
-d = 3;
 
 % select a few simulated trials to plot
-simTrs2plot = randperm(numtrs,10);
+simTrs2plot = randperm(numtrs,5);
 
 % vestibular only
 ax=subplot(231); hold on;
-                       %m,c,d,h, interphdgs, units
-temp = squeeze(posterior(mods==1,cohs==16,2,h,:,simTrs2plot));
-plot(xq,temp,'linew',1,'color','k')
+m=1; c=1; d=2; h=5;
+% boolean index for condition in simulated trials data struct                        
+K = simdata.modality==m & simdata.coherence==cohs(c) & simdata.heading==hdgs(h) & simdata.delta==deltas(d);
+temp = posterior(K,:);
+plot(xq,temp(simTrs2plot,:),'linew',1,'color','k')
 ax.XLim = [-6 6]; ax.TickDir = 'out'; ax.XTick = -5:2.5:5;
 ylab = ylabel('Likelihood (p(r|\theta))');
 ylab.Position(2) = -0.1;
 ylim([0 0.4]);
 
 % visual only
-ax=subplot(232); hold on;                    
-plot(xq,squeeze(posterior(mods==2,cohs==60,2,h,:,simTrs2plot)),'color','r')
-plot(xq,squeeze(posterior(mods==2,cohs==16,2,h,:,simTrs2plot)),'color','m','linestyle',':');
+ax=subplot(232); hold on;         
+m=2; c=1; d=2; h=5;
+K = simdata.modality==m & simdata.coherence==cohs(c) & simdata.heading==hdgs(h) & simdata.delta==deltas(d);
+temp = posterior(K,:);
+plot(xq,temp(simTrs2plot,:),'linew',1,'color','r')
+m=2; c=2; d=2; h=5;
+K = simdata.modality==m & simdata.coherence==cohs(c) & simdata.heading==hdgs(h) & simdata.delta==deltas(d);
+temp = posterior(K,:);
+plot(xq,temp(simTrs2plot,:),'linew',1,'color','m','linestyle',':')
 ax.XLim = [-6 6]; ax.TickDir = 'out'; ax.XTick = -5:2.5:5;
 ylim([0 0.4]);
+
 % combined, delta = +4, low coh
 % visual is to the right of vestibular, at low coh, likelihood decoding is
 % biased towards vestibular (left)
 ax=subplot(234); hold on;                   
-plot(xq,squeeze(posterior(mods==3,cohs==16,d,h,:,simTrs2plot)),'color','c','linestyle','-');
+m=3; c=1; d=3; h=5;
+K = simdata.modality==m & simdata.coherence==cohs(c) & simdata.heading==hdgs(h) & simdata.delta==deltas(d);
+temp = posterior(K,:);
+plot(xq,temp(simTrs2plot,:),'linew',1,'color','c','linestyle','-')
 ax.XLim = [-6 6]; ax.TickDir = 'out'; ax.XTick = -5:2.5:5;
 ylim([0 0.4]);
+
 % combined, delta = +4, high coh
 % visual is to the right of vestibular, at high coh, likelihood decoding is
 % biased towards visual (right)
-ax=subplot(235); hold on;                   
-plot(xq,squeeze(posterior(mods==3,cohs==60,d,h,:,simTrs2plot)),'color','b','linestyle','-');
+ax=subplot(235); hold on;         
+m=3; c=2; d=3; h=5;
+K = simdata.modality==m & simdata.coherence==cohs(c) & simdata.heading==hdgs(h) & simdata.delta==deltas(d);
+temp = posterior(K,:);
+plot(xq,temp(simTrs2plot,:),'linew',1,'color','b','linestyle','-')
 ax.XLim = [-6 6]; ax.TickDir = 'out'; ax.XTick = -5:2.5:5;
 ylim([0 0.4]);
+
 % #TODO - cumulative Gaussian fits to simChoices for psychometric curves
 % (4e + f)
 ax = subplot(233);
 ax = subplot(236);
+
 %% Fig. 5 congruency index and tuning curves
 % correlation between firing rate and heading for ves and vis separately,
 % then product of these two
@@ -157,3 +193,7 @@ end
     monkUnit,tuning_curves,vesCorr,visCorr,vesP,visP,xq);
 
 %% 
+
+
+
+

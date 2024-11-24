@@ -84,7 +84,11 @@ end
 end
 end
 
-lh(lh==0) = .01;               % kluge to avoid prod(0...), % lh dimensions: each trial condition repeated 100 times, Each trial is assigned a likelihood distribution of length 'hdgs_intp', each unit has a unique tr x lh_value matrix
+lh(lh==0) = .01;  % kluge to avoid prod(0...), % lh dimensions:
+% each trial condition repeated 100 times, Each trial is assigned a
+% likelihood distribution of length 'hdgs_intp', each unit has a unique
+% tr x lh_value matrix
+
 pop_lh = squeeze(prod(lh,3,'omitnan')); % population likelihood, product across units
 
 % normalize over interpolated headings to get posterior, assuming flat prior
