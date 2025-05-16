@@ -13,7 +13,6 @@
 clear; close all
 
 % all these folder settings are user specific and shouldn't be in the script
-
 datafolder = '/Users/chris/Documents/MATLAB/data/dots3DMP_DDM';
 codefolder = '/Users/chris/Documents/MATLAB/git/FLprojects/dots3DMP/behav_models';
 
@@ -39,9 +38,10 @@ cohs  = [0.4 0.8];      % visual coherence levels (these are really just labels,
 
 % hdgs = [-10 -3.5 -1.25 1.25 3.5 10];
 hdgs  = [-12 -6 -3 -1.5 0 1.5 3 6 12];
+% hdgs  = [-20 20];
 
-% deltas = [-3 0 3];    % conflict angle; positive means vis to the right
-deltas  = 0;
+deltas = [-5 0 5];    % conflict angle; positive means vis to the right
+% deltas  = 0;
 
 % time information
 dT      = 1; % time step, ms
@@ -68,8 +68,8 @@ plotSimulatedData = 1; % plot average psychometric curves etc.
 kmult       = 30;               % drift rate multiplier
 kvis        = kmult*cohs;       % assume drift proportional to coh, reduces nParams
 kves        = mean(kvis);       % for now, assume 'straddling'
-% knoise      = [0.07 0.07];    % additional variability added to drift rate, unused for now
-B           = 0.8;              % assume a single bound, but different Tnds for each modality
+knoise      = [0.1 0.1];        % trial-by-trial variability added to weights
+B           = 1.8;              % assume a single bound, but different Tnds for each modality
 
 % diffusion
 sigma       = 1;                % unit variance (Moreno-Bote 2010), not a free param!         
@@ -82,16 +82,18 @@ alpha       = 0.03;             % base rate of low bets (offset to PDW curve, as
 % Tconf       = 0;              % (ms), delay between choice and conf report, unused for now
 
  % Tnd = non-decision time (ms), to account for sensory/motor latencies
-% TndMean     = [600 800 700];    % must have different Tnds for [ves, vis, comb]
-TndMean     = [700 700 700];    % must have different Tnds for [ves, vis, comb]
+% TndMean     = [600 800 700];    % must have different Tnds for [ves, vis, comb]?
+TndMean     = [300 300 300];    % or not
 TndSD       = [0 0 0];          % 50-100 works well; set to 0 for fixed Tnd 
 TndMin      = TndMean/2;        % need to truncate the Tnd dist
 TndMax      = TndMean+TndMin;
+
 
 %% build trial list
 
 [hdg, modality, coh, delta, ntrials] = dots3DMP_create_trial_list(hdgs,mods,cohs,deltas,nreps,0); % don't shuffle
 dur = ones(ntrials,1) * max_dur;
+
 
 %% create acceleration and velocity profiles
 
@@ -214,6 +216,8 @@ P(3) = PComb;
 dv_all = cell(ntrials,1); % shouldn't need to store every trial's DV, but if you want to, it's here
 choice          = nan(ntrials,1); % choices (left = -1, right = 1);
 RT              = nan(ntrials,1); % reaction time (or time-to-bound for fixed/variable duration task)
+wVes            = nan(ntrials,1); % vestibular weight; can now vary across identical trials due to noise
+wVis            = nan(ntrials,1); % visual weight; can now vary across identical trials due to noise
 finalV          = nan(ntrials,1); % now this is the value of the losing accumulator
 hitBound        = zeros(1,ntrials); % hit bound or not on that trial
 logOddsCorr     = nan(ntrials,1); % log odds correct
@@ -252,22 +256,25 @@ for n = 1:ntrials
             muVis = svis .* kvis(cohs==coh(n)) * sind(hdg(n)+delta(n)/2) * dT/1000;
             
             % optimal weights (Drugo et al.)
-            wVes = sqrt( kves^2 / (kvis(cohs==coh(n))^2 + kves^2) );
-            wVis = sqrt( kvis(cohs==coh(n))^2 / (kvis(cohs==coh(n))^2 + kves^2) );
+            wVes(n) = sqrt( kves^2 / (kvis(cohs==coh(n))^2 + kves^2) );
+            wVis(n) = sqrt( kvis(cohs==coh(n))^2 / (kvis(cohs==coh(n))^2 + kves^2) );
             
-            % corrupt optimal weights with noise
-%             wVes = wVes + randn*knoise(1);
-%             wVis = wVis + randn*knoise(2);
-
+            % corrupt optimal weights with trial-by-trial noise
+%             wVes(n) = wVes(n) + randn*knoise(1);
+%             wVis(n) = wVis(n) + randn*knoise(2);
+              % instead assume that when one goes up the other goes down
+            adj = randn*knoise(1);
+            wVes(n) = wVes(n)+adj; wVis(n) = max([0 wVis(n)-adj]); 
+            
             % or randomize (TMS idea, for Amir grant)
 %             wVes = rand; wVis = 1 - wVes;       
 
-            mu = wVes.*muVes + wVis.*muVis;
+            mu = wVes(n).*muVes + wVis(n).*muVis;
             
             % the DV is a sample from a dist with mean = weighted sum of
             % means. thus the variance is the weighted sum of variances
             % (error propagation formula):
-            sigmaComb = sqrt(wVes.^2 .* sigmaVes^2 + wVis.^2 .* sigmaVis(cohs==coh(n))^2); % assume zero covariance
+            sigmaComb = sqrt(wVes(n).^2 .* sigmaVes^2 + wVis(n).^2 .* sigmaVis(cohs==coh(n))^2); % assume zero covariance
             s = [sigmaComb*sqrt(dT/1000) sigmaComb*sqrt(dT/1000)];
     end
 
@@ -275,29 +282,29 @@ for n = 1:ntrials
 
     % convert correlation to covariance matrix
     V = diag(s)*S*diag(s);
-    dv = [0 0; cumsum(mvnrnd(Mu,V))]; % bivariate normrnd, where Mu is a
+    dv = [0 0; cumsum(mvnrnd(Mu,V))]; % bivariate normrnd, where Mu is a vector
 
     dv_all{n} = dv; % uncomment if saving DV
 
     % decision outcome
-    cRT1 = find(dv(1:dur(n),1)>=B, 1);
-    cRT2 = find(dv(1:dur(n),2)>=B, 1);
+    cRT_right = find(dv(1:dur(n),1)>=B, 1);
+    cRT_left = find(dv(1:dur(n),2)>=B, 1);
     
     % the options are:
     % (1) only right accumulator hits bound,
-    if ~isempty(cRT1) && isempty(cRT2)
-        RT(n) = cRT1;
-        finalV(n) = dv(cRT1,2); % only 1 hit, so 2 is the loser
+    if ~isempty(cRT_right) && isempty(cRT_left)
+        RT(n) = cRT_right;
+        finalV(n) = dv(cRT_right,2); % only 1 hit, so 2 is the loser
         hitBound(n) = 1;
         choice(n) = 1;
     % (2) only left accumulator hits bound,
-    elseif isempty(cRT1) && ~isempty(cRT2)
-        RT(n) = cRT2;
-        finalV(n) = dv(cRT2,1); % only 2 hit, so 1 is the loser
+    elseif isempty(cRT_right) && ~isempty(cRT_left)
+        RT(n) = cRT_left;
+        finalV(n) = dv(cRT_left,1); % only 2 hit, so 1 is the loser
         hitBound(n) = 1;
         choice(n) = -1;
     % (3) neither hits bound,
-    elseif isempty(cRT1) && isempty(cRT2)
+    elseif isempty(cRT_right) && isempty(cRT_left)
         hitBound(n) = 0;
         if allowNonHB
             RT(n) = dur(n);
@@ -318,14 +325,14 @@ for n = 1:ntrials
         end
     % (4) or both do
     else
-        RT(n) = min([cRT1 cRT2]);
-        whichWon = [cRT1<=cRT2 cRT1>cRT2];
-        finalV(n) = dv(min([cRT1 cRT2]),~whichWon); % the not-whichWon is the loser
+        RT(n) = min([cRT_right cRT_left]);
+        whichWon = [cRT_right<=cRT_left cRT_right>cRT_left];
+        finalV(n) = dv(min([cRT_right cRT_left]),~whichWon); % the not-whichWon is the loser
         hitBound(n) = 1;
         a = [1 -1];
         choice(n) = a(whichWon);
     end
-    
+        
     % calculate confidence
     if hitBound(n)==0 && allowNonHB==0
         logOddsCorr(n) = NaN;
@@ -379,7 +386,14 @@ RT(remove)=[];
 conf(remove)=[];
 pdw(remove)=[];
 correct(remove)=[];
+wVes(remove)=[];          
+wVis(remove)=[];
+finalV(remove)=[];
+logOddsCorr(remove)=[];
+expectedPctCorr(remove)=[];
+
 ntrials = length(choice);
+
 
 % adjust wager probability for base rate of low bets, as seen in data
 % ('compresses' the curve, not an offset, because P(high) varies with hdg)
@@ -434,7 +448,8 @@ data.oneTargConf = false(size(data.heading));
 
 
 %% save it
-save(fullfile(datafolder,[savefilename '.mat']), 'data', 'origParams', 'allowNonHB', 'sves', 'svis');
+% save(fullfile(datafolder,[savefilename '.mat']), 'data', 'origParams', 'allowNonHB', 'sves', 'svis');
+
 
 %% plots, optional
 
@@ -450,8 +465,83 @@ if plotSimulatedData
     % plot it
     dots3DMP_plots(parsedData,mods,cohs,deltas,hdgs,conftask,RTtask)
 
-    % gaussian fits
+%     % gaussian fits
 %     gfit = dots3DMP_fit_cgauss(data,mods,cohs,deltas,conftask,RTtask);
 %     dots3DMP_plots_cgauss_byCoh(gfit,parsedData,mods,cohs,deltas,hdgs,conftask,RTtask)
 end
+
+
+
+%% new: compute weights split by RT quantile, and vice versa
+% what we want is to recover the latent weight by using RT
+
+fast = false(size(data.RT)); % flag for fast (1) vs slow (0), median split separately by condition
+for m = 1:length(mods)
+    for c = 1:length(cohs)
+        for d = 1:length(deltas)
+            for h = 1:length(hdgs)
+                I = data.modality==mods(m) & data.coherence==cohs(c) & data.delta==deltas(d) & data.heading==hdgs(h);
+                fast(I & data.RT <= median(data.RT(I))) = true;
+            end
+        end
+    end
+end
+
+dataFast.modality   = modality(fast);
+dataFast.heading    = hdg(fast);
+dataFast.coherence  = coh(fast);
+dataFast.delta      = delta(fast);
+dataFast.choice     = choice(fast);
+dataFast.RT         = RT(fast)/1000; % change to seconds
+dataFast.conf       = conf(fast);
+dataFast.PDW        = pdw(fast);
+dataFast.PDW_preAlpha = pdw_preAlpha(fast);
+dataFast.correct    = correct(fast);
+
+dataSlow.modality   = modality(~fast);
+dataSlow.heading    = hdg(~fast);
+dataSlow.coherence  = coh(~fast);
+dataSlow.delta      = delta(~fast);
+dataSlow.choice     = choice(~fast);
+dataSlow.RT         = RT(~fast)/1000; % change to seconds
+dataSlow.conf       = conf(~fast);
+dataSlow.PDW        = pdw(~fast);
+dataSlow.PDW_preAlpha = pdw_preAlpha(~fast);
+dataSlow.correct    = correct(~fast);
+
+
+% plot em
+parsedData = dots3DMP_parseData(dataSlow,mods,cohs,deltas,hdgs,conftask,RTtask);
+dots3DMP_plots(parsedData,mods,cohs,deltas,hdgs,conftask,RTtask)
+   % currently _plots uses the same figure numbers,
+   % so this second one will overwrite the first
+parsedData = dots3DMP_parseData(dataFast,mods,cohs,deltas,hdgs,conftask,RTtask);
+dots3DMP_plots(parsedData,mods,cohs,deltas,hdgs,conftask,RTtask)
+
+
+
+% % gfit fails for 'fast' because wager curve is flat!
+% gfit = dots3DMP_fit_cgauss(dataSlow,mods,cohs,deltas,conftask,RTtask);
+% wves_emp_slow = dots3DMP_cueWeights(gfit,cohs,deltas,conftask);
+% 
+% gfit = dots3DMP_fit_cgauss(dataFast,mods,cohs,deltas,conftask,RTtask);
+% wves_emp_fast = dots3DMP_cueWeights(gfit,cohs,deltas,conftask);
+
+
+
+%% forget the old method, all we need to do is link the generative weights to RT
+
+% comb, low coh, zero delta, choose a heading:
+I = data.modality==3 & data.coherence==cohs(1) & data.delta==0 & abs(data.heading)>=12;
+figure;plot(wVes(I),RT(I),'x'); 
+[r,p] = corrcoef(wVes(I),RT(I))
+% something there, at least for edge headings (because that's where the single-cue conds show an RT diff!)
+
+
+% high coh
+I = data.modality==3 & data.coherence==cohs(2) & data.delta==0 & abs(data.heading)>=12;
+figure;plot(wVes(I),RT(I),'x');
+[r,p] = corrcoef(wVes(I),RT(I))
+
+
 
