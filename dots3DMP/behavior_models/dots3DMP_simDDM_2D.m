@@ -116,6 +116,12 @@ if useVelAcc
 %     %acc(acc<0) = 0;
 %     acc = abs(acc);
 
+    % optionally, offset each by some amount of time
+    % TBD
+    
+    
+    
+    
 % step functions, for testing param recovery and LL comparisons
 %     acc = [zeros(max_dur/2,1); ones(max_dur/2,1)];
 %     vel = [ones(max_dur/2,1); zeros(max_dur/2,1)];
@@ -284,12 +290,23 @@ for n = 1:ntrials
     V = diag(s)*S*diag(s);
     dv = [0 0; cumsum(mvnrnd(Mu,V))]; % bivariate normrnd, where Mu is a vector
 
+    % CREATE LEAK FUNCTION,
+%     dv = leakyDV(Mu,V,leakiness);
+      
     dv_all{n} = dv; % uncomment if saving DV
 
     % decision outcome
     cRT_right = find(dv(1:dur(n),1)>=B, 1);
     cRT_left = find(dv(1:dur(n),2)>=B, 1);
     
+    
+%     
+%     % OUTLIER DETECTION: [may become obsolete with leak ver]
+%     cRT_right = find(Mu(1:dur(n),1)>=Bprime, 1);
+%     cRT_left = find(Mu(1:dur(n),2)>=Bprime, 1);    
+%     
+    
+
     % the options are:
     % (1) only right accumulator hits bound,
     if ~isempty(cRT_right) && isempty(cRT_left)
@@ -472,76 +489,75 @@ end
 
 
 
-%% new: compute weights split by RT quantile, and vice versa
-% what we want is to recover the latent weight by using RT
-
-fast = false(size(data.RT)); % flag for fast (1) vs slow (0), median split separately by condition
-for m = 1:length(mods)
-    for c = 1:length(cohs)
-        for d = 1:length(deltas)
-            for h = 1:length(hdgs)
-                I = data.modality==mods(m) & data.coherence==cohs(c) & data.delta==deltas(d) & data.heading==hdgs(h);
-                fast(I & data.RT <= median(data.RT(I))) = true;
-            end
-        end
-    end
-end
-
-dataFast.modality   = modality(fast);
-dataFast.heading    = hdg(fast);
-dataFast.coherence  = coh(fast);
-dataFast.delta      = delta(fast);
-dataFast.choice     = choice(fast);
-dataFast.RT         = RT(fast)/1000; % change to seconds
-dataFast.conf       = conf(fast);
-dataFast.PDW        = pdw(fast);
-dataFast.PDW_preAlpha = pdw_preAlpha(fast);
-dataFast.correct    = correct(fast);
-
-dataSlow.modality   = modality(~fast);
-dataSlow.heading    = hdg(~fast);
-dataSlow.coherence  = coh(~fast);
-dataSlow.delta      = delta(~fast);
-dataSlow.choice     = choice(~fast);
-dataSlow.RT         = RT(~fast)/1000; % change to seconds
-dataSlow.conf       = conf(~fast);
-dataSlow.PDW        = pdw(~fast);
-dataSlow.PDW_preAlpha = pdw_preAlpha(~fast);
-dataSlow.correct    = correct(~fast);
-
-
-% plot em
-parsedData = dots3DMP_parseData(dataSlow,mods,cohs,deltas,hdgs,conftask,RTtask);
-dots3DMP_plots(parsedData,mods,cohs,deltas,hdgs,conftask,RTtask)
-   % currently _plots uses the same figure numbers,
-   % so this second one will overwrite the first
-parsedData = dots3DMP_parseData(dataFast,mods,cohs,deltas,hdgs,conftask,RTtask);
-dots3DMP_plots(parsedData,mods,cohs,deltas,hdgs,conftask,RTtask)
-
-
-
-% % gfit fails for 'fast' because wager curve is flat!
-% gfit = dots3DMP_fit_cgauss(dataSlow,mods,cohs,deltas,conftask,RTtask);
-% wves_emp_slow = dots3DMP_cueWeights(gfit,cohs,deltas,conftask);
+% %% new: compute weights split by RT quantile, and vice versa
+% % what we want is to recover the latent weight by using RT
 % 
-% gfit = dots3DMP_fit_cgauss(dataFast,mods,cohs,deltas,conftask,RTtask);
-% wves_emp_fast = dots3DMP_cueWeights(gfit,cohs,deltas,conftask);
-
-
-
-%% forget the old method, all we need to do is link the generative weights to RT
-
-% comb, low coh, zero delta, choose a heading:
-I = data.modality==3 & data.coherence==cohs(1) & data.delta==0 & abs(data.heading)>=12;
-figure;plot(wVes(I),RT(I),'x'); 
-[r,p] = corrcoef(wVes(I),RT(I))
-% something there, at least for edge headings (because that's where the single-cue conds show an RT diff!)
-
-
-% high coh
-I = data.modality==3 & data.coherence==cohs(2) & data.delta==0 & abs(data.heading)>=12;
-figure;plot(wVes(I),RT(I),'x');
-[r,p] = corrcoef(wVes(I),RT(I))
-
+% fast = false(size(data.RT)); % flag for fast (1) vs slow (0), median split separately by condition
+% for m = 1:length(mods)
+%     for c = 1:length(cohs)
+%         for d = 1:length(deltas)
+%             for h = 1:length(hdgs)
+%                 I = data.modality==mods(m) & data.coherence==cohs(c) & data.delta==deltas(d) & data.heading==hdgs(h);
+%                 fast(I & data.RT <= median(data.RT(I))) = true;
+%             end
+%         end
+%     end
+% end
+% 
+% dataFast.modality   = modality(fast);
+% dataFast.heading    = hdg(fast);
+% dataFast.coherence  = coh(fast);
+% dataFast.delta      = delta(fast);
+% dataFast.choice     = choice(fast);
+% dataFast.RT         = RT(fast)/1000; % change to seconds
+% dataFast.conf       = conf(fast);
+% dataFast.PDW        = pdw(fast);
+% dataFast.PDW_preAlpha = pdw_preAlpha(fast);
+% dataFast.correct    = correct(fast);
+% 
+% dataSlow.modality   = modality(~fast);
+% dataSlow.heading    = hdg(~fast);
+% dataSlow.coherence  = coh(~fast);
+% dataSlow.delta      = delta(~fast);
+% dataSlow.choice     = choice(~fast);
+% dataSlow.RT         = RT(~fast)/1000; % change to seconds
+% dataSlow.conf       = conf(~fast);
+% dataSlow.PDW        = pdw(~fast);
+% dataSlow.PDW_preAlpha = pdw_preAlpha(~fast);
+% dataSlow.correct    = correct(~fast);
+% 
+% 
+% % plot em
+% parsedData = dots3DMP_parseData(dataSlow,mods,cohs,deltas,hdgs,conftask,RTtask);
+% dots3DMP_plots(parsedData,mods,cohs,deltas,hdgs,conftask,RTtask)
+%    % currently _plots uses the same figure numbers,
+%    % so this second one will overwrite the first
+% parsedData = dots3DMP_parseData(dataFast,mods,cohs,deltas,hdgs,conftask,RTtask);
+% dots3DMP_plots(parsedData,mods,cohs,deltas,hdgs,conftask,RTtask)
+% 
+% 
+% 
+% % % gfit fails for 'fast' because wager curve is flat!
+% % gfit = dots3DMP_fit_cgauss(dataSlow,mods,cohs,deltas,conftask,RTtask);
+% % wves_emp_slow = dots3DMP_cueWeights(gfit,cohs,deltas,conftask);
+% % 
+% % gfit = dots3DMP_fit_cgauss(dataFast,mods,cohs,deltas,conftask,RTtask);
+% % wves_emp_fast = dots3DMP_cueWeights(gfit,cohs,deltas,conftask);
+% 
+% 
+% 
+% %% forget the old method, all we need to do is link the generative weights to RT
+% 
+% % comb, low coh, zero delta, choose a heading:
+% I = data.modality==3 & data.coherence==cohs(1) & data.delta==0 & abs(data.heading)>=12;
+% figure;plot(wVes(I),RT(I),'x'); 
+% [r,p] = corrcoef(wVes(I),RT(I))
+% % something there, at least for edge headings (because that's where the single-cue conds show an RT diff!)
+% 
+% % high coh
+% I = data.modality==3 & data.coherence==cohs(2) & data.delta==0 & abs(data.heading)>=12;
+% figure;plot(wVes(I),RT(I),'x');
+% [r,p] = corrcoef(wVes(I),RT(I))
+% 
 
 
