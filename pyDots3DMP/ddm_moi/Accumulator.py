@@ -41,10 +41,15 @@ class Accumulator:
         self.drift_rates = drift_rates if drift_rates is not None else []
         self.num_images = num_images
         self.wager_theta = wager_theta
+        self._is_fitted = False
 
         if self.drift_rates:
             self.drift_labels = self.drift_rates.copy()
-        
+
+    @property
+    def is_fitted(self):
+        return self._is_fitted
+    
     @property
     def bound(self):
         """return symmetric bound as 2-element array"""
@@ -156,6 +161,8 @@ class Accumulator:
         self.cdf()
         if return_pdf:
             self.pdf()
+        self.is_fitted = True
+        
         return self
 
     def plot(self, d_ind: int = -1):
@@ -172,7 +179,8 @@ class Accumulator:
         fig_cdf & fig_pdf: figure handles
         """
         if not self.is_fitted:
-            return
+            print('Accumulator distributions have not yet been calculated...')
+            return None
 
         fig_cdf, axc = plt.subplots(2, 1, figsize=(4, 5))
         axc[0].plot(self.drift_labels, self.p_corr_)
@@ -444,7 +452,7 @@ def _moi_cdf(
     # calling the lower-level Fortran for generating the mv normal distribution is MUCH MUCH faster
     # lots of overhead associated with repeated calls of mvn.cdf...
     # downside is that this is a private function, so have to be more careful as it skips a lot of
-    # typical checks e.g. on positive definite-ness of cov matrix. It could also change in
+    # typical checks e.g. on positive definite-ness of cov matrix. It could also change in 
     # future Scipy releases without warning...
     use_mvnun = True
 

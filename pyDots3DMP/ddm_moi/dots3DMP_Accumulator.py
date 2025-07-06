@@ -15,6 +15,7 @@ from scipy.signal import convolve
 from scipy.stats import norm, skewnorm
 from scipy.optimize import minimize
 from pybads import BADS
+from abc import abstractmethod
 
 from behavior.preprocessing import (
     dots3DMP_create_trial_list, dots3DMP_create_conditions,
@@ -30,12 +31,12 @@ from Accumulator import Accumulator
 # - abstract common parts of predict and simulate methods together
 # - if no wager, drop wager params and handle
 # - cleanup RT part
-# - add logging 
+# - add logging 
 
 
 # low-level to do 
-# handle fixed params/params when calling predict before any fitting?
-# maybe the way is to call fit with all fixed params...
+# handle fixed params/params when calling predict before any fitting?
+# maybe the way is to call fit with all fixed params...
 
 # ISSUE - are params being set correctly on each fitting iteration - should be concatenating 
 # fit and fixed for predict function # use print print print
@@ -44,16 +45,16 @@ from Accumulator import Accumulator
 # %% ----------------------------------------------------------------
 
 logger = logging.getLogger()
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 
 def main():
     
-    grid_vec = np.arange(-3, 0, 0.05)
-    time_vec = np.arange(0, 2, 0.05)
+    grid_vec = np.arange(-3, 0, 0.025)
+    time_vec = np.arange(0, 2, 0.01)
        
     init_params = {
         'kmult': [0.3, 0.3], 
-        'bound': [0.3, 0.3, 0.3],
+        'bound': [1., 1., 1.],
         'non_dec_time': [0.3],
         'wager_thr': [1, 1, 1],
         'wager_alpha': [0]
@@ -76,7 +77,7 @@ def main():
 
     print(y.head())
     print(y_pred.head())
-    print(y_pred_samp.head())
+    # print(y_pred_samp.head())
 
 # %% ----------------------------------------------------------------
     
@@ -84,8 +85,8 @@ class AccumulatorModel2D(BaseEstimator):
 
     PARAM_NAMES = ('kmult', 'bound', 'non_dec_time', 'wager_thr', 'wager_alpha') # class attribute
 
-    def __init__(self, grid_vec: np.ndarray, tvec: np.ndarray, kmult: list, bound: list, non_dec_time: list=[0.3], 
-                 return_wager: bool=True, wager_thr: list=[1], wager_alpha: list=[0.0], wager_axis=None):
+    def __init__(self, grid_vec: np.ndarray, tvec: np.ndarray, kmult: list, bound: list, non_dec_time: list, 
+                 return_wager: bool=True, wager_thr: list=[1], wager_alpha: list=[0.05], wager_axis=None):
         self.grid_vec = grid_vec
         self.tvec = tvec
         self.kmult = kmult
@@ -94,22 +95,23 @@ class AccumulatorModel2D(BaseEstimator):
         self.return_wager = return_wager
         self.wager_thr = wager_thr
         self.wager_alpha = wager_alpha
-        self.wager_axis = wager_axis # None means both axes i.e. time and evidence (log odds)
+        self.wager_axis = wager_axis # None means both axes i.e. time and evidence (log odds)
 
         # init as empty
         self.params_ = {}
         self.fixed_params = {}
-        
+
+    @abstractmethod
     def fit(self, X, y, fixed_params=None):
-        # custom implementation
+        # custom implementation
         pass
         
     def predict(self, X):
-        # custom implementation
+        # custom implementation
         pass
 
     def simulate(self, X):
-        # custom implementation
+        # custom implementation
         pass
     
 
@@ -140,7 +142,11 @@ class dots3dmpAccumulator(AccumulatorModel2D):
                 start_ind = end_inds[p-1]
             self.params_[param] = params_array[start_ind:end_inds[p]].tolist()
         self.params_ = self.params_ | self.fixed_params
-        print(self.params_)
+
+        # for pn, p in self.params_.items():
+        #     print(f'{pn}:', sep='\t')
+        #     for elem in p:
+        #         print(f'{elem:.2f}', sep=',')
 
     def _get_fit_params(self) -> list:
         """return list of fittable parameters (from initial parameters dict)"""
@@ -161,11 +167,12 @@ class dots3dmpAccumulator(AccumulatorModel2D):
 
         # pull out the fittable parameters as an array, for optimization function
         # and store the breakdown of the params dict for reconstructing the params dictionary 
-        # inside the optimization objective function
+        # inside the optimization objective function
 
         self.fixed_params = fixed_params 
         params_list = self._get_fit_params()
 
+        self.params_ = self.init_params.copy() # if no fittable params, just return initial settings
         if params_list:
             params_array = np.array(list(itertools.chain(*params_list)))
             self.param_end_inds = list(itertools.accumulate(map(len, params_list)))
@@ -178,15 +185,18 @@ class dots3dmpAccumulator(AccumulatorModel2D):
             ub = params_array * 2
             plb = params_array * 0.5
             pub = params_array * 1.5
-
-            bads_bounds = (lb, ub, plb, pub)
-            bads = BADS(optim_fcn_part, params_array, *bads_bounds)
+            bads_bounds = (lb, ub, None, None)
+            
+            bads = BADS(
+                optim_fcn_part, 
+                params_array, 
+                *bads_bounds, 
+                options = {'random_seed': 1234}
+                )
             result = bads.optimize()
 
             # at the end, store fitted params back into dict, with fixed ones
             self._set_params_dict(result.x, self.param_end_inds)
-        else:
-            self.params_ = self.init_params.copy()
 
         return self
 
@@ -212,21 +222,13 @@ class dots3dmpAccumulator(AccumulatorModel2D):
 
         self.neg_llh_ = self.log_lik_['choice']
 
+        print('\n================================================================')
         logger.info('Total loss:\t%.2f', self.neg_llh_)
         logger.info('Individual log likelihoods: %s', {key: round(val, 2) for key,val in self.log_lik_.items()})
+        print('=================================================================\n')
 
         return self.neg_llh_
-
-    # def predict(self, X, y, nsamples: int=10, seed = None):
-    #     # run new data through (fitted) model parameters, generate sampled predictions
-    #     # This is going to have redundancies with predict_proba, so make it DRY
-            
-    #     rng = np.random.RandomState(seed)
-    #     predictions = self.predict_proba(X, y)
-    #     predictions['choice'] = predictions['choice'].apply(lambda x: rng.binomial(nsamples, x)/nsamples)
-    #     predictions['PDW'] = predictions['PDW'].apply(lambda x: rng.binomial(nsamples, x)/nsamples)
-
-    #     return predictions
+    
 
     def predict(self, X, y, n_samples: int=0, seed=None):
         """make a probabilistic prediction, given model params, or sample from that prediction"""
@@ -244,19 +246,20 @@ class dots3dmpAccumulator(AccumulatorModel2D):
         cond_groups = X[['modality','coherence','delta']].drop_duplicates(
             ).sort_values(by=['modality','coherence','delta'])
 
-        # abstract these away...
-        kves, kvis = self._handle_kmult(self.params_['kmult'], cohs.T, k_scale=len(self.tvec)) 
+        # TODO clean these up better
+        kves, kvis = self._handle_kmult(self.params_['kmult'], cohs.T, k_scale=1) 
         bound = self._handle_param_mod(self.params_['bound'], mods)  
         non_dec_time = self._handle_param_mod(self.params_['non_dec_time'], mods)  
         thetas = self._handle_param_mod(self.params_['wager_thr'], mods)  
 
         if not self.stim_scaling:
+            kves, kvis = self._handle_kmult(self.params_['kmult'], cohs.T, k_scale=100) 
+
             b_ves, b_vis = np.ones_like(self.tvec), np.ones_like(self.tvec)
-            # divide by len for time course of sensitivity i.e.
-            # what proportion of the total evidence is available at each timestep
-            # something is WRONG here...
+
             b_ves /= len(b_ves)
             b_vis /= len(b_vis)
+
         elif isinstance(self.stim_scaling, tuple):
             b_ves, b_vis = self.stim_scaling
         else:
@@ -278,14 +281,13 @@ class dots3dmpAccumulator(AccumulatorModel2D):
                 
                 accumulator = Accumulator(grid_vec=self.grid_vec, tvec=self.tvec, bound=bound[m])
 
-                # TODO: pass the accumulator to this method
                 abs_drifts, accumulator.tvec = self.calc_3dmp_drift_rates(
                     b_vals[m], k_vals_fixed[m], self.tvec[-1], hdgs[hdgs>=0], delta=0,
                     )
 
                 # run the method of images - diffusion to bound to extract pdfs, cdfs, and LPO
                 accumulator.apply_drifts(abs_drifts, hdgs[hdgs>=0])
-                accumulator.compute_distrs(return_pdf=True)
+                accumulator.compute_distrs(return_pdf=True) # get the pdfs necessarily
 
                 if self.wager_axis is None:
                     log_odds_map = accumulator.log_posterior_odds()
@@ -295,7 +297,7 @@ class dots3dmpAccumulator(AccumulatorModel2D):
 
                 wager_above_threshold = [p >= theta for p, theta in zip(self.wager_maps, thetas)]
 
-        # now loop over coherences and deltas with one accumulator each for actual predictions
+        # now loop over coherences and deltas with one accumulator each for actual predictions
         for c, coh in enumerate(cohs):
             k_vals = [kves, kvis[c], [kves, kvis[c]]]
 
@@ -315,8 +317,6 @@ class dots3dmpAccumulator(AccumulatorModel2D):
                         b_vals[m], k_vals[m], self.tvec[-1], hdgs, delta=delta,
                         )
                     accumulator.apply_drifts(drifts, hdgs) 
-                    
-                    # THIS IS THE BOTTLENECK
                     accumulator.compute_distrs(return_pdf=self.return_wager)
 
                     # ====== CHOICE ======
@@ -387,12 +387,10 @@ class dots3dmpAccumulator(AccumulatorModel2D):
 
                         if n_samples:
                             pred_sample.loc[trial_index, 'RT'] = rng.choice(self.tvec, trial_index.sum(), replace=True, p=rt_dist)
-
-       
+        
         if n_samples:
             return predictions, pred_sample
-        else:
-            return predictions
+        return predictions
         
 
     def get_loss(self):
@@ -400,13 +398,13 @@ class dots3dmpAccumulator(AccumulatorModel2D):
         pass
 
     def simulate(self, X):
-        # dv simulation for each trial in X, given model params
+        # dv simulation for each trial in X, given model params
         pass
     
     @staticmethod
     def _handle_kmult(kmult, cohs, k_scale=1):
         """break down kmult into (kves, kvis)"""
-        kmult *= k_scale
+        kmult = [k*k_scale for k in kmult]
         kves = kmult[0]
         if len(kmult) == 1:
             kvis = kmult * cohs
@@ -454,7 +452,7 @@ class dots3dmpAccumulator(AccumulatorModel2D):
         if cue_weights is None, optimal cue weights calculated from k's
         """
 
-        sin_uhdgs = np.sin(np.deg2rad(hdgs))
+        sin_hdgs = np.sin(np.deg2rad(hdgs))
 
         cumul_bt = np.cumsum((b_t**2)/(b_t**2).sum(axis=0), axis=0)
 
@@ -462,7 +460,7 @@ class dots3dmpAccumulator(AccumulatorModel2D):
             # only one sensitivity and time-course - ves or vis (logic is the same)
             b_t = b_t.reshape(-1, 1)
             tvec = cumul_bt * tmax
-            drifts = np.cumsum(b_t**2 * b_k * sin_uhdgs, axis=0)
+            drifts = np.cumsum(b_t**2 * b_k * sin_hdgs, axis=0)
             # drifts2 = b_k * sin_uhdgs   # w/o stim scaling, reduces to this
 
         elif len(b_k) == 2:
