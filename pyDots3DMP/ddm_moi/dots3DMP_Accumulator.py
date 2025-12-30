@@ -520,11 +520,6 @@ def _margconds_from_intersection(prob_ab, prob_a):
     prob_b[prob_b==0] = np.finfo(np.float64).tiny
     a_given_b = b_given_a * prob_a / prob_b
 
-    # TODO convert to unit tests
-    # print(f'prob_a = {prob_a}')
-    # print(f'prob_b = {prob_b}')
-    # print(f'a_given_b = {a_given_b}')
-    # print(f'prob_ab = {prob_ab}')
 
     # assert np.allclose(prob_b, 1.0) and np.allclose(np.sum(a_given_b, axis=0), [1.0, 1.0])
     # assert np.allclose(prob_a, 1.0) and np.allclose(prob_ab, 1.0)
