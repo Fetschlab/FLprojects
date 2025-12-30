@@ -26,7 +26,8 @@ switch subject
 
 
     case 'zarya'
-        filename = 'zarya_20221201-20230928_clean.mat';
+%         filename = 'zarya_20221201-20230928_clean.mat';
+        filename = 'zarya_20240621-20240813_vis.mat';
 
     case 'human'
 

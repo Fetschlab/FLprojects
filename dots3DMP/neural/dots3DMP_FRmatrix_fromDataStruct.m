@@ -166,12 +166,16 @@ for ses = 1:length(dataStruct)
 
             
             % calculate time-resolved and average firing rate within desired intervals
-            [fr, x, fr_mean, durs, aeI]  = trial_psth(temp.units.spiketimes{unit_inds(u)},ae,'tStart',tStart(iae),'tEnd',tEnd(iae),'binSize',binSize,'overlap',overlap);
-
+%             [fr, x, fr_mean, durs, aeI]  = trial_psth(temp.units.spiketimes{unit_inds(u)},ae,'tStart',tStart(iae),'tEnd',tEnd(iae),'binSize',binSize,'overlap',overlap);
+            [fr, x, fr_mean, durs, aeI]  = trial_psth(temp.units.spiketimes{unit_inds(u)},ae,'tStart',tStart(iae),'tEnd',tEnd(iae),'binSize',binSize);
+                    % CF 04-24-24: overlap does not exist in current trial_psth.m
+                    
             if opts.smoothFR
                 % extend time intervals a bit to avoid edge effects of conv
                 t_ext = length(opts.convKernel)/2 * binSize;
-                [fr, x1, ~, ~, ~]  = trial_psth(temp.units.spiketimes{unit_inds(u)},ae,'tStart',tStart(iae)-t_ext,'tEnd',tEnd(iae)+t_ext,'binSize',binSize,'overlap',overlap);
+%                 [fr, x1, ~, ~, ~]  = trial_psth(temp.units.spiketimes{unit_inds(u)},ae,'tStart',tStart(iae)-t_ext,'tEnd',tEnd(iae)+t_ext,'binSize',binSize,'overlap',overlap);
+                [fr, x1, ~, ~, ~]  = trial_psth(temp.units.spiketimes{unit_inds(u)},ae,'tStart',tStart(iae)-t_ext,'tEnd',tEnd(iae)+t_ext,'binSize',binSize);
+                    % CF 04-24-24: overlap does not exist in current trial_psth.m
 
                 [~,pos(1)] = min(abs(x1-x(1)));
                 [~,pos(2)] = min(abs(x1-x(end)));

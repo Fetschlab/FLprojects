@@ -25,7 +25,7 @@ coh = randsample(cohs,ntrials,'true')';
 
 
 
-%% model parameters (play around with these to see their effects)
+%% model parameters (play arocund with these to see their effects)
 k = 0.3; % 'drift rate' or sensitivity term: a constant converting stimulus
          % strength into units of momentary evidence
 sigma = 1; % standard deviation of momentary evidence; often fixed at 1

@@ -1,16 +1,23 @@
 % class 'tuned' neurons during dots3DMPtuning paradigm
 % e.g. so that we can reference CPs to preference during tuning task
 
-clear; clc
-
 %% Load data
 
-subject   = 'lucio';
-dateRange = 20220512:20230602;
+clear; clc
 
-dataPath = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/data/lucio_neuro_datasets';
-dataFileName = sprintf('%s_%d-%d_neuralData.mat',subject,dateRange(1),dateRange(end));
+dbstop if error
+
+
+% subject   = 'lucio';
+% dateRange = 20220512:20230602;
+% dataPath = '/Users/stevenjerjian/Desktop/FetschLab/Analysis/data/lucio_neuro_datasets';
+% dataFileName = sprintf('%s_%d-%d_neuralData.mat',subject,dateRange(1),dateRange(end));
+
+% temp
+dataPath = '/Users/chris/Downloads';
+dataFileName = 'lucio_20231003-20231017_neuralData.mat';
 load(fullfile(dataPath,dataFileName));
+
 
 %% 'clean up' - keep units recorded in both pars
 % crude diagnostic criteria could be revised
@@ -18,6 +25,8 @@ parSelect  = {'dots3DMPtuning','dots3DMP'};
 minRate    = 2;
 minTrs     = [5 8];
 dataStruct = dots3DMP_NeuralStruct_runCleanUp(dataStruct,parSelect,minRate,minTrs);
+
+
 
 %% define conditions
 
@@ -201,8 +210,11 @@ clear eventInfo
 eventInfo.alignEvent  = {{'stimOn'},{'stimOn','saccOnset'},{'saccOnset'},{'saccOnset'}};
 eventInfo.otherEvents = {{''},{''},{''},{''}};
 eventInfo.otherEventnames = {{''},{''},{''},{''}};
-eventInfo.tStart = [-0.3, 0, -0.3,    -0.1]; 
-eventInfo.tEnd   = [   0, 0, -0.1,    +0.1];
+eventInfo.tStart = [-0.3, 0, -0.3, -0.1]; 
+% eventInfo.tEnd   = [   0, 0, -0.1,    +0.1];
+eventInfo.tEnd   = [   0, 0,  0.1,  0.1];
+    % CF: negative tEnds cause an error, because of counting forward from zero (x1= 0:p.binSize:tEnd_new)
+
 eventInfo.binSize = 0.2;
 % eventInfo.overlap = 0.75;
 

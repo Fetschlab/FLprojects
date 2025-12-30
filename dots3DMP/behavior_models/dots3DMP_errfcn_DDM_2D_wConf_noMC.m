@@ -661,7 +661,9 @@ pRight_model_trialwise(pRight_model_trialwise==0) = minP;
 
 % CHOICE
 % log likelihood of rightward choice on each trial, under binomial assumptions:
-LL_choice = sum(log(pRight_model_trialwise(choice))) + sum(log(1-pRight_model_trialwise(~choice)));
+LL_choice = nansum(log(pRight_model_trialwise(choice))) + nansum(log(1-pRight_model_trialwise(~choice)));
+
+    % TEMP CF - why are there nans?
 
 % binomial over conditions, rather than bernoulli over trials
 % SJ 12-2022, I guess this is equivalent to above bernoulli
@@ -754,7 +756,8 @@ if options.RTtask
 
             % Option 3: fit full RT distributions
             L_RT_fromPDF(L_RT_fromPDF==0) = minP;
-            LL_RT = sum(log(L_RT_fromPDF)); % no need to use uncond
+%             LL_RT = sum(log(L_RT_fromPDF)); % no need to use uncond
+            LL_RT = nansum(log(L_RT_fromPDF)); % TEMP - why are there nans?
 
             if R.lose_flag
 %             L_RT_PDW_fromPDF(L_RT_PDW_fromPDF==0) = minP;

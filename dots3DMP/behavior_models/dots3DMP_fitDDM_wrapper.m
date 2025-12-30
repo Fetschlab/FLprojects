@@ -5,12 +5,14 @@
 
 %% try fitting simulated data to recover the generative parameters
 
-cd /Users/stevenjerjian/Desktop/FetschLab/Analysis/data/dots3DMP_DDM
-load tempsim_sepConfMaps_1000reps.mat
+% cd /Users/stevenjerjian/Desktop/FetschLab/Analysis/data/dots3DMP_DDM
+% load tempsim_sepConfMaps_1000reps.mat
 
 %% or real data
 
-% load lucio_20220301-20221006_clean
+clear
+dbstop if error
+load lucio_20220301-20221006_clean
 
 %% set some vars
 
@@ -48,9 +50,24 @@ options.runInterpFit = 0;   % model predictions for interpolated headings? for n
 
 %% initialize parameters
 
-guess = [origParams.kmult, origParams.B, origParams.theta, origParams.alpha, origParams.TndMean/1000];
+% 
+% paramNames = {'kmult','B',sprintf('%s_Ves',char(952)),sprintf('%s_Vis',char(952)),sprintf('%s_Comb',char(952)),...
+%     'alpha','TndVes','TndVis','TndComb'};
+% 
+% kmult = param(1);
+% B     = abs(param(2)); % don't accept negative bound heights
+% theta = abs(param(3:5)); % or negative thetas, one theta per mod
+% alpha = param(6); % base rate of low-conf choices, same for all mods
+% Tnds  = param(7:9); % separate Tnd for each modality to account for RT offsets
+% % but perhaps this will become obsolete too with acc/vel?
+% 
 
-guess = [50, 1.0, origParams.theta, origParams.alpha, 0.8, 0.8, 0.8];
+if exist('origParams','var')
+    % guess = [origParams.kmult, origParams.B, origParams.theta, origParams.alpha, origParams.TndMean/1000];
+    guess = [50, 1.0, origParams.thetaVes, origParams.thetaVis, origParams.thetaComb, origParams.alpha, 0.8, 0.8, 0.8];
+else
+    guess = [50, 1.0, 1, 1, 1, 0.1, 0.4, 0.4, 0.4];
+end
 
 fixed = zeros(1,length(guess));
 
@@ -70,6 +87,8 @@ fixed = [0 0 1 1 1 1 0 0 0];
 % X = fetchOutputs(fitDDMfeval); % run when done!
 
 X = dots3DMP_fitDDM(data,options,guess,fixed);
+
+
 
 %% evaluate fitted parameters at actual headings (get overall fit error)
 

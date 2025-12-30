@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -ex
+
+# compile mex files
+cd FP4
+mex FP4.c
+cd ..
+
+cd FP_Drugowitsch
+mex FP_Drugowitsch.c
+cd ..
+
+# This is the master script for the capsule. When you click "Reproducible Run", the code in this file will execute.
+matlab -r "addpath(genpath('.')); Serial_Wrapper"

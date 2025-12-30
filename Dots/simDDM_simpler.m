@@ -1,10 +1,8 @@
 %% simDDM_simple.m
 % simple simulation of a 1D drift-diffusion model in the context of a
 % choice-RT motion discrimination task (see e.g. Shadlen et al. 2006)
-% [does not include confidence]
 
 % CF circa 2015
-
 clear all; close all;
 
 ntrials = 50000;

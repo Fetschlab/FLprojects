@@ -244,17 +244,18 @@ end
     
 %% after settling on the above, run this script to generate summary data
 
-dots3DMP_parseData
+dots3DMP_parseData_OLD
 
 
 %% some plots
 
-dots3DMP_plots
+% dots3DMP_plots(parsedData,mods,cohs,deltas,hdgs,conftask,RTtask,D)
+dots3DMP_plots_OLD
 
 
 %% fit cumulative gaussians (needed for weights calculation)
 
-dots3DMP_fit_cgauss
+dots3DMP_fit_cgauss_OLD
 
 %% and plot them
  

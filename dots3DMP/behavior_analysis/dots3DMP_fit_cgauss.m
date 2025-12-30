@@ -182,9 +182,9 @@ for c = 1:length(cohs)
                 [beta,fval] = fmincon(@(x) flippedGauss_err(x,Y,data.heading(I)), guess_fgauss, [],[],[],[],...
                     fgauss_LB,fgauss_UB, [], fitOptions);
             else
-                [beta,fval] = fminsearch(@(x) flippedGauss_err(x,Y,data.heading(I)), guess_fgauss,fitOptions);
+                [beta,fval] = fminsearch(@(x) flippedGauss_err(x,Y,data.heading(I)), guess_fgauss, fitOptions);
             end
-            [betaUnc,fvalunc,flag,~,~,hessian] = fminunc(@(x) flippedGauss_err(x,Y,data.heading(I)), guess_fgauss,fitOptions);
+            [betaUnc,fvalunc,flag,~,~,hessian] = fminunc(@(x) flippedGauss_err(x,Y,data.heading(I)), guess_fgauss, fitOptions);
 
 
             SE = sqrt(diag(inv(hessian)));

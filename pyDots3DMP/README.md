@@ -12,14 +12,15 @@ Python codes for dots3DMP experiments modelling and analysis.
         - run ```$ pip install -r requirements.txt```
     - using conda
         - create environment (and install dependencies): ```$ conda create --name <your_env_name> --file environment.yml```
+					[CF: if that fails try: conda env create -f environment.yml]
         - activate the environment: ```$ conda activate <your_env_name>```
 1. Run a wrapper script e.g. ```dots3DMP_ddm_2d_example.py```, from the project directory (not the scripts sub-folder).
 
 ### ddm_2d design notes
 
-Like standard optimization routines, BADS takes in an objective function to minimize, which should return a single output, the evaluated loss. It's other parameters are a vector array of initial parameters, and corresponding bounds on each parameter (plausible and hard bounds). Most of the handling around this in the code therefore is designed to allow the user to specify the parameter as key-value pairs, and to pass in the conditions list and observed behavior, accumulator design, and other flags/settings for likelihood evaluation.
+Like standard optimization routines, BADS takes in an objective function to minimize, which should return a single output, the evaluated loss. Its other arguments are a vector array of initial parameters, and corresponding bounds on each parameter (plausible and hard bounds). Most of the handling around this in the code therefore is designed to allow the user to specify the parameter as key-value pairs, and to pass in the condition list and observed behavior, accumulator design, and other flags/settings for likelihood evaluation.
 
-The wrapper example script is ```dots3DMP_ddm_2d_example.py```, and the code relies on two sub-packages - ```ddm_moi``` (for handling the accumulator model, parameters, and defining the objective funciton) and ```behavior``` (for processing behavioral data and plotting results).
+The wrapper example script is ```dots3DMP_ddm_2d_example.py```, and the code relies on two sub-packages - ```ddm_moi``` (for handling the accumulator model, parameters, and defining the objective function) and ```behavior``` (for processing behavioral data and plotting results).
 
 ```ddm_moi``` is broken down into two submodules:
 - ```ddm_2d```

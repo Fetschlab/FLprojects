@@ -6,8 +6,8 @@ clear all
 close all
 
 subject = 'hanzo';
-% dateRange = 20201001:20201031;
-dateRange = 20201101:20201130;
+dateRange = 20201001:20201031;
+% dateRange = 20201101:20201130;
 % dateRange = 20201201:20201231;
 % dateRange = 20210101:20210131;
 % dateRange = 20210201:20210228;
@@ -26,6 +26,11 @@ elseif sum(diff(dateRange)>1)==1
 else
     file = [subject '_neuro_' num2str(dateRange(1)) '---' num2str(dateRange(end)) '.mat'];
 end
+
+
+% temp
+% file = 'fetsch_badProbe_continuous.dat';
+
 
 load([folder file],'data');
 
@@ -112,21 +117,11 @@ for m = 1:length(data.filename)
     end
 
 
-
-
-    
     % simple PSTH
     makePSTH_LIP_mapping
-    
-    
-    
-    
-    
-    
-    
+        
         
 end
-
     
 
 

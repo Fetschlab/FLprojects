@@ -87,7 +87,7 @@ title('Correct')
 % PDW vs heading, error trials
 subplot(223); hold on
 for c = 1:nconds
-    errorbar(uhdg(1:3),confErr(1:3,c),confErrSE(1:3,c),'color',mcols(c,:),'linestyle','-','linew',1.5,'marker','o');
+    errorbar(uhdg,confErr(:,c),confErrSE(:,c),'color',mcols(c,:),'linestyle','-','linew',1.5,'marker','o');
 end
 xlabel(sprintf('heading angle (%s)',char(176))); 
 ylabel(yLab);
@@ -122,3 +122,19 @@ axis([xRange 0 1])
 try changeAxesFontSize(gca,12,12); tidyaxes; catch; end
 end
 title('Error')
+
+
+
+% traditional X-shape plots, one for each cond (CF 5/2024)
+fh = figure('color','white','position',[300 300 1400 400]);
+for c = 1:nconds
+    subplot(1,3,c); hold on
+    errorbar(uhdg,confCorr(:,c),confCorrSE(:,c),'color',mcols(c,:),'linestyle','-','linew',1.5,'marker','o');
+    errorbar(uhdg,confErr(:,c),confErrSE(:,c),'color',mcols(c,:),'linestyle','--','linew',1.5,'marker','o');
+    ylabel(yLab); ylim([0 1]);
+    set(gca,'xtick',uhdg);
+    try changeAxesFontSize(gca,16,16); tidyaxes; catch; end
+    box off;
+    if c==1; title('Vestibular'); elseif c==2; title('Visual'); xlabel(sprintf('heading angle (%s)',char(176))); else title('Combined'); end
+end
+

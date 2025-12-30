@@ -1,0 +1,13 @@
+
+.idea/
+*.xml
+*.pkl
+*.pyc
+*.png
+codes/build
+codes/.vscode/
+codes/pydots3DMP.egg-info/
+
+data/
+
+*.gif

@@ -4,6 +4,7 @@
 *.asv
 *.mat
 *.pyc
+*.yml
 *.pdf
 
 pyDots3DMP/.idea/
