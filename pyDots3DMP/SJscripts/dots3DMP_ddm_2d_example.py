@@ -20,7 +20,7 @@ from datetime import datetime
 
 from pybads import BADS
 
-from ddm_moi import ddm_2d
+from behavior import ddm_2d
 
 # going to use these custom functions for processing behavioral data, and plotting fit/data results
 from behavior.preprocessing import (

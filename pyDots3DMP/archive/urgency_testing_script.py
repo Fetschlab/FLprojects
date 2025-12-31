@@ -2,8 +2,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from ddm_moi.Accumulator import AccumulatorModelMOI
-from ddm_moi.ddm_2d import get_stim_urg
+from behavior.Accumulator import AccumulatorModelMOI
+from behavior.ddm_2d import get_stim_urg
 
 accum = AccumulatorModelMOI(
     tvec=np.arange(0, 2, 0.05),

@@ -7,7 +7,7 @@ import pickle
 import json
 from typing import Optional
 
-from ddm_moi import ddm_2d
+from behavior import ddm_2d
 
 from behavior.preprocessing import (
     dots3DMP_create_trial_list, dots3DMP_create_conditions,

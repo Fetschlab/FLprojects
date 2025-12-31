@@ -6,8 +6,8 @@ Created on Tue Dec  5 13:00:07 2023
 @author: stevenjerjian
 """
 
-from ddm_moi import ddm_2d
-from ddm_moi.Accumulator import AccumulatorModelMOI, log_pmap
+from behavior import ddm_2d
+from behavior.Accumulator import AccumulatorModelMOI, log_pmap
 import numpy as np
 import matplotlib.pyplot as plt
 
