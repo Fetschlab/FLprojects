@@ -156,7 +156,7 @@ class Accumulator:
         self.cdf()
         if return_pdf:
             self.pdf()
-        self.is_fitted = True
+        self._is_fitted = True
         
         return self
 

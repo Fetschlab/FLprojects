@@ -2,22 +2,19 @@
 
 import numpy as np
 import pandas as pd
-from typing import Union, Optional
+from typing import Union, Optional, Any
 
-from dataclasses import dataclass, field
-from copy import copy, deepcopy
+from collections import namedtuple
+from copy import deepcopy
 import itertools
 import logging
 import time
 
-from sklearn.base import BaseEstimator
 from scipy.signal import convolve
 from scipy.stats import norm, skewnorm
-from scipy.optimize import minimize
 from pybads import BADS
-from abc import abstractmethod
 
-from behavior.preprocessing import (
+from preprocessing import (
     dots3DMP_create_trial_list, dots3DMP_create_conditions,
     data_cleanup, format_onetargconf,
     )
@@ -41,11 +38,12 @@ from Accumulator import Accumulator
 # ISSUE - are params being set correctly on each fitting iteration - should be concatenating 
 # fit and fixed for predict function # use print print print
 
-
 # %% ----------------------------------------------------------------
 
 logger = logging.getLogger()
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
+
+OptimBounds = namedtuple('OptimBounds', ['lb', 'ub', 'plb', 'pub'])
 
 def main():
     
@@ -62,7 +60,7 @@ def main():
     accum = dots3dmpAccumulator(grid_vec=grid_vec, tvec=time_vec, **init_params, 
                                 stim_scaling=False, return_wager=False)
 
-    datafilepath = "/Users/stevenjerjian/Desktop/FetschLab/PLDAPS_data/dataStructs/lucio_20220512-20230606.csv"
+    datafilepath = "/Users/stevenjerjian/Desktop/Academia/FetschLab/PLDAPS_data/dataStructs/lucio_20220512-20230606.csv"
     data = data_cleanup(datafilepath)  # this is a hack function to quickly load and clean the data, could be improved/generalized with options
     data = format_onetargconf(data, remove_one_targ=True)
     data = data.reset_index(drop=True)
@@ -71,109 +69,79 @@ def main():
     y = data[['choice', 'PDW', 'RT']].astype({'choice': 'int', 'PDW': 'int'})
     y['RT'] += 0.3 # to reverse the downshift from motion platform latency
 
-    # accum.fit(X, y, fixed_params=['kmult', 'wager_alpha'])
+    accum.fit(X, y, fixed_params=['kmult', 'wager_alpha'])
     y_pred, y_pred_samp = accum.predict(X, y, n_samples=1, seed=1)
     # y_pred_samp['RT'] -= 0.3
 
-    print(y.head())
-    print(y_pred.head())
+    # print(y.head())
+    # print(y_pred.head())
     # print(y_pred_samp.head())
 
 # %% ----------------------------------------------------------------
     
-class AccumulatorModel2D(BaseEstimator):
+class dots3dmpAccumulator:
+    PARAM_NAMES = ('kmult', 'bound', 'non_dec_time', 'wager_thr', 'wager_alpha')
 
-    PARAM_NAMES = ('kmult', 'bound', 'non_dec_time', 'wager_thr', 'wager_alpha') # class attribute
-
-    def __init__(self, grid_vec: np.ndarray, tvec: np.ndarray, kmult: list, bound: list, non_dec_time: list, 
-                 return_wager: bool=True, wager_thr: list=[1], wager_alpha: list=[0.05], wager_axis=None):
+    def __init__(
+        self,
+        grid_vec: np.ndarray,
+        tvec: np.ndarray,
+        kmult: list = [0.3, 0.3],
+        bound: list = [1., 1., 1.],
+        non_dec_time: list = [0.3],
+        wager_thr: list = [1, 1, 1],
+        wager_alpha: list = [0],
+        return_wager: bool = True,
+        wager_axis: Optional[int] = None,
+        stim_scaling: Union[bool, tuple[np.ndarray, np.ndarray]] = True,
+        ):
+        """3DMP accumulator model with confidence/wager readout
+        :param grid_vec: vector of DV grid points
+        :param tvec: vector of time points
+        :param kmult: list of k multipliers [k_ves, k_vis]
+        :param bound: list of bounds per modality [ves, vis, comb]      
+        :param non_dec_time: list of non-decision times per modality
+        :param wager_thr: list of wager thresholds per modality
+        :param wager_alpha: list of wager alpha parameters per modality
+        :param return_wager: whether to compute wager predictions
+        :param wager_axis: axis for wager calculation (None = log odds)
+        :param stim_scaling: whether to use stimulus-driven urgency signals
+        """
         self.grid_vec = grid_vec
         self.tvec = tvec
         self.kmult = kmult
         self.bound = bound
         self.non_dec_time = non_dec_time
-        self.return_wager = return_wager
         self.wager_thr = wager_thr
         self.wager_alpha = wager_alpha
-        self.wager_axis = wager_axis # None means both axes i.e. time and evidence (log odds)
+        self.return_wager = return_wager
+        self.wager_axis = wager_axis
+        self.stim_scaling = stim_scaling
 
-        # init as empty
-        self.params_ = {}
+        # initialize internal containers used by fit/predict
+        self.init_params = {k: getattr(self, k) for k in self.PARAM_NAMES}
+        self.params_ = self.init_params.copy() # will hold all params after fitting
         self.fixed_params = {}
 
-    @abstractmethod
-    def fit(self, X, y, fixed_params=None):
-        # custom implementation
-        pass
+       
+    def fit(
+        self,
+        X: pd.DataFrame,
+        y: pd.DataFrame,
+        fixed_params: Optional[list[str]]=None,
+        # optim_bounds: Optional[Union[OptimBounds, dict]]=None,
+        ) -> 'dots3dmpAccumulator':
+        """fit model to data in X and y, with optional fixed parameters"""
         
-    def predict(self, X):
-        # custom implementation
-        pass
-
-    def simulate(self, X):
-        # custom implementation
-        pass
-    
-
-class dots3dmpAccumulator(AccumulatorModel2D):
-
-    def __init__(self, stim_scaling=False, **kwargs):
-        super().__init__(**kwargs)  # Inherit parent class parameters
-        self.stim_scaling = stim_scaling
-        self.init_params = {k: getattr(self, k) for k in self.PARAM_NAMES}
-
-    def _get_params(self, deep=True):
-        """
-        This is a workaround to make the scikit-learn get_params call actually return all parent class parameters
-        # https://stackoverflow.com/questions/51430484/how-to-subclass-a-vectorizer-in-scikit-learn-without-repeating-all-parameters-in
-        """
-        params = super().get_params(deep)
-        cp = copy(self)
-        cp.__class__ = AccumulatorModel2D
-        params.update(AccumulatorModel2D.get_params(cp, deep))
-        return params
-
-    def _set_params_dict(self, params_array: np.ndarray, end_inds) -> None:
-        """reconstruct full params dictionary from params array and fixed params dictionary"""
-
-        start_ind = 0
-        for p, param in enumerate(self.fit_param_names):
-            if p > 0:
-                start_ind = end_inds[p-1]
-            self.params_[param] = params_array[start_ind:end_inds[p]].tolist()
-        self.params_ = self.params_ | self.fixed_params
-
-        # for pn, p in self.params_.items():
-        #     print(f'{pn}:', sep='\t')
-        #     for elem in p:
-        #         print(f'{elem:.2f}', sep=',')
-
-    def _get_fit_params(self) -> list:
-        """return list of fittable parameters (from initial parameters dict)"""
-
-        if self.fixed_params:
-            self.fixed_params = {k: self.init_params[k] for k in self.fixed_params}
-            self.fit_param_names = [k for k in self.init_params.keys() if k not in self.fixed_params.keys()]
-
-        # self.fit_params = {k: self.init_params[k] for k in self.fit_param_names}
-        # return self.fit_params.values()
-
-        return [self.init_params[k] for k in self.fit_param_names]
-            
-    def fit(self, X: pd.DataFrame, y: pd.DataFrame, fixed_params=None):
-
         self.params_ = {}
         self.n_features_in_ = len(X.columns)
 
-        # pull out the fittable parameters as an array, for optimization function
-        # and store the breakdown of the params dict for reconstructing the params dictionary 
-        # inside the optimization objective function
-
-        self.fixed_params = fixed_params 
-        params_list = self._get_fit_params()
-
         self.params_ = self.init_params.copy() # if no fittable params, just return initial settings
+        params_list = self._get_fit_params(fixed_params)
+        
         if params_list:
+            # concatenate into single array for passing to optimization function
+            # but store original list lengths for reconstructing dict later
             params_array = np.array(list(itertools.chain(*params_list)))
             self.param_end_inds = list(itertools.accumulate(map(len, params_list)))
 
@@ -185,7 +153,7 @@ class dots3dmpAccumulator(AccumulatorModel2D):
             ub = params_array * 2
             plb = params_array * 0.5
             pub = params_array * 1.5
-            bads_bounds = (lb, ub, None, None)
+            bads_bounds = (lb, ub, plb, pub)
             
             bads = BADS(
                 optim_fcn_part, 
@@ -196,14 +164,14 @@ class dots3dmpAccumulator(AccumulatorModel2D):
             result = bads.optimize()
 
             # at the end, store fitted params back into dict, with fixed ones
-            self._set_params_dict(result.x, self.param_end_inds)
+            self._build_params_dict(result.x, self.param_end_inds)
 
         return self
 
     def _objective_fcn(self, params_array: np.ndarray, X: pd.DataFrame, y) -> float:
 
         # use params array and fixed params to reconstruct full params
-        self._set_params_dict(params_array, self.param_end_inds)
+        self._build_params_dict(params_array, self.param_end_inds)
 
         t0_pred = time.perf_counter()
         y_pred = self.predict(X, y)
@@ -233,9 +201,6 @@ class dots3dmpAccumulator(AccumulatorModel2D):
     def predict(self, X, y, n_samples: int=0, seed=None):
         """make a probabilistic prediction, given model params, or sample from that prediction"""
 
-        if not self.params_:
-            self.params_ = self.init_params
-            
         rng = np.random.RandomState(seed)
         
         mods = np.unique(X['modality'])
@@ -259,7 +224,6 @@ class dots3dmpAccumulator(AccumulatorModel2D):
 
             b_ves /= len(b_ves)
             b_vis /= len(b_vis)
-
         elif isinstance(self.stim_scaling, tuple):
             b_ves, b_vis = self.stim_scaling
         else:
@@ -391,7 +355,36 @@ class dots3dmpAccumulator(AccumulatorModel2D):
         if n_samples:
             return predictions, pred_sample
         return predictions
-        
+
+
+    def _build_params_dict(self, params_array: np.ndarray, end_inds) -> None:
+        """reconstruct full params dictionary from params array and fixed params dictionary"""
+
+        start_ind = 0
+        for p, param in enumerate(self.fit_param_names):
+            if p > 0:
+                start_ind = end_inds[p-1]
+            self.params_[param] = params_array[start_ind:end_inds[p]].tolist()
+        self.params_ = self.params_ | self.fixed_params
+
+        # for pn, p in self.params_.items():
+        #     print(f'{pn}:', sep='\t')
+        #     for elem in p:
+        #         print(f'{elem:.2f}', sep=',')
+
+
+    def _get_fit_params(self, fixed_params) -> list:
+        """return list of fittable parameter values (from initial parameters dict)"""
+
+        if fixed_params:
+            self.fixed_params = {k: self.init_params[k] for k in fixed_params}
+            self.fit_param_names = [k for k in self.init_params.keys() if k not in self.fixed_params.keys()]
+
+        # self.fit_params = {k: self.init_params[k] for k in self.fit_param_names}
+        # return self.fit_params.values()
+
+        return [self.init_params[k] for k in self.fit_param_names]
+
 
     def get_loss(self):
         # self.loss = -sum([self.log_lik[v]*w for v, w in zip(outputs, llh_scaling) if v in model_llh])
