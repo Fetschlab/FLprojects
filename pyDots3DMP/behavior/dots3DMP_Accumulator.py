@@ -47,8 +47,8 @@ OptimBounds = namedtuple('OptimBounds', ['lb', 'ub', 'plb', 'pub'])
 
 def main():
     
-    grid_vec = np.arange(-3, 0, 0.025)
-    time_vec = np.arange(0, 2, 0.01)
+    grid_vec = np.arange(-3, 0, 0.05)
+    time_vec = np.arange(0, 2, 0.05)
        
     init_params = {
         'kmult': [0.3, 0.3], 
