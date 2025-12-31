@@ -25,6 +25,13 @@ class Accumulator:
 
     """
 
+    # Use __slots__ to reduce per-instance memory usage and speed attribute access.
+    __slots__ = (
+        'tvec', 'grid_vec', '_bound', 'drift_rates', 'num_images', 'wager_theta',
+        '_is_fitted', 'drift_labels', 'p_corr_', 'rt_dist_', 'pdf3D_', 'up_lose_pdf_',
+        'lo_lose_pdf_', 'log_odds_'
+    )
+
     def __init__(self, tvec: np.ndarray, grid_vec: np.ndarray, 
                  drift_rates: Optional[list] = None, 
                  bound: Optional[Union[float, Sequence, np.ndarray]] = 1.0,
