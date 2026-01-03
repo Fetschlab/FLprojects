@@ -1,11 +1,12 @@
 import logging
 import numpy as np
-from scipy.stats import multivariate_normal as mvn, _mvn
+from scipy.stats import multivariate_normal as mvn#, _mvn
 
 import matplotlib.pyplot as plt
 # from matplotlib import animation
 from typing import Optional, Union, Sequence
 
+USE_MVNUN = False
 logger = logging.getLogger(__name__)
     
 class Accumulator:
@@ -409,6 +410,42 @@ def _moi_pdf(
     return pdf_result
 
 
+def _multiple_logpdfs_vec_input(xs, means, covs):
+    """multiple_logpdfs` assuming `xs` has shape (N samples, P features).
+
+    https://gregorygundersen.com/blog/2020/12/12/group-multivariate-normal-pdf/
+    
+    Thanks to the above link, this provides a much faster way of computing the pdfs across time
+    compared to calling mvn pdf at each timepoint. 
+    TODO I did some crude checks using np.allclose that it gives the same results, but a unit test would be much better...
+    """
+    # NumPy broadcasts `eigh`.
+    vals, vecs = np.linalg.eigh(covs)
+
+    # Compute the log determinants across the second axis.
+    logdets = np.sum(np.log(vals), axis=1)
+
+    # Invert the eigenvalues.
+    valsinvs = 1./vals
+
+    # Add a dimension to `valsinvs` so that NumPy broadcasts appropriately.
+    Us = vecs * np.sqrt(valsinvs)[:, None]
+    devs = xs[:, None, :] - means[None, :, :]
+
+    # Use `einsum` for matrix-vector multiplications across the first dimension.
+    devUs = np.einsum('jnk,nki->jni', devs, Us)
+
+    # Compute the Mahalanobis distance by squaring each term and summing.
+    mahas = np.sum(np.square(devUs), axis=2)
+
+    # Compute and broadcast scalar normalizers.
+    dim = xs.shape[1]
+    log2pi = np.log(2 * np.pi)
+
+    out = -0.5 * (dim * log2pi + mahas + logdets[None, :])
+    return out.T
+
+
 def _pdf_at_timestep(
     t, 
     mu: np.ndarray, 
@@ -477,7 +514,6 @@ def _moi_cdf(
     # downside is that this is a private function, so have to be more careful as it skips a lot of
     # typical checks e.g. on positive definite-ness of cov matrix. It could also change in 
     # future Scipy releases without warning...
-    use_mvnun = True
 
     # skip the first sample (t starts at 1)
     for t in range(1, len(tvec)):
@@ -490,8 +526,8 @@ def _moi_cdf(
         mu_t = mu[t, :].T * tvec[t]
 
         # define frozen mv object
-        if not use_mvnun:
-            mvn_0 = _mvn_timestep(mean=s0 + mu_t, cov=sigma * tvec[t])
+        if not USE_MVNUN:
+            mvn_0 = mvn(mean=s0 + mu_t, cov=sigma * tvec[t])
             mvn_0.maxpts = 10000*2
 
             # total density within boundaries
@@ -513,8 +549,8 @@ def _moi_cdf(
         for j in range(1, k*2):
             sj = _sj_rot(j, s0, k)
 
-            if not use_mvnun:
-                mvn_j = _mvn_timestep(mean=sj + mu_t, cov=sigma * tvec[t])
+            if not USE_MVNUN:
+                mvn_j = mvn(mean=sj + mu_t, cov=sigma * tvec[t])
                 mvn_j.maxpts = 10000*2
 
                 # total density WITHIN boundaries for jth image
@@ -553,17 +589,21 @@ def _moi_cdf(
     return p_up, rt_dist, flux1, flux2
 
 
-def _moi_dv(mu: np.ndarray, s: np.ndarray = np.array([1, 1]), num_images: int = 7) -> np.ndarray:
+def _moi_dv(
+    mu: np.ndarray,
+    s: np.ndarray = np.array([1, 1]),
+    num_images: int = 7
+    ) -> np.ndarray:
 
     sigma, k = _corr_num_images(num_images)
-
     V = np.diag(s) * sigma * np.diag(s)
-
-    dv = np.zeros_like(mu)
+    
 
     # FIXME default call to rvs may end up resulting in the same result each time because the numpy random number generator
     # has the same seed on each function call. Not sure why...
     # TODO repeated rvs calls (calling at each timepoint) ends up being quite slow, consider Cholesky alternative below
+
+    dv = np.zeros_like(mu)
     for t in range(1, mu.shape[0]):
         dv[t, :] = mvn(mu[t, :].T, cov=V).rvs()
 
@@ -574,42 +614,6 @@ def _moi_dv(mu: np.ndarray, s: np.ndarray = np.array([1, 1]), num_images: int = 
 # maybe useful for faster dv simulation (replacement for rvs calls)
 # def chol_sample(mean, cov):
 #     return mean + np.linalg.cholesky(cov) @ np.random.standard_normal(mean.size)
-
-
-def _multiple_logpdfs_vec_input(xs, means, covs):
-    """multiple_logpdfs` assuming `xs` has shape (N samples, P features).
-
-    https://gregorygundersen.com/blog/2020/12/12/group-multivariate-normal-pdf/
-    
-    Thanks to the above link, this provides a much faster way of computing the pdfs across time
-    compared to calling mvn pdf at each timepoint. 
-    TODO I did some crude checks using np.allclose that it gives the same results, but a unit test would be much better...
-    """
-    # NumPy broadcasts `eigh`.
-    vals, vecs = np.linalg.eigh(covs)
-
-    # Compute the log determinants across the second axis.
-    logdets = np.sum(np.log(vals), axis=1)
-
-    # Invert the eigenvalues.
-    valsinvs = 1./vals
-
-    # Add a dimension to `valsinvs` so that NumPy broadcasts appropriately.
-    Us = vecs * np.sqrt(valsinvs)[:, None]
-    devs = xs[:, None, :] - means[None, :, :]
-
-    # Use `einsum` for matrix-vector multiplications across the first dimension.
-    devUs = np.einsum('jnk,nki->jni', devs, Us)
-
-    # Compute the Mahalanobis distance by squaring each term and summing.
-    mahas = np.sum(np.square(devUs), axis=2)
-
-    # Compute and broadcast scalar normalizers.
-    dim = xs.shape[1]
-    log2pi = np.log(2 * np.pi)
-
-    out = -0.5 * (dim * log2pi + mahas + logdets[None, :])
-    return out.T
 
 
 def _urgency_scaling(mu: np.ndarray, tvec: np.ndarray, urg=None) -> np.ndarray:

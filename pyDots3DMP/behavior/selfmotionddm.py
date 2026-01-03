@@ -85,7 +85,7 @@ def main():
     y['RT'] += 0.3 # to reverse the downshift from motion platform latency
 
     accum.fit(X, y)
-    y_pred, y_pred_samp = accum.predict(X, y, n_samples=1, seed=1)
+    y_pred, y_pred_samp = accum.predict(X, y, n_samples=10, seed=1)
     # y_pred_samp['RT'] -= 0.3
 
     # print(y.head())
@@ -102,13 +102,13 @@ class SelfMotionDDM:
         grid_vec: np.ndarray,
         tvec: np.ndarray,
         kmult: list = [0.3, 0.3],
-        bound: list = [1., 1., 1.],
-        non_dec_time: list = [0.3],
-        wager_thr: list = [1, 1, 1],
-        wager_alpha: list = [0.05],
+        bound: list | int | float = 1.,
+        non_dec_time: list | int | float = 0.3,
+        wager_thr: list | int | float = 1.,
+        wager_alpha: list | int | float = 0.05,
         return_wager: bool = True,
         wager_axis: Optional[int] = None,
-        stim_scaling: Union[bool, tuple[np.ndarray, np.ndarray]] = True,
+        stim_scaling: bool | tuple[np.ndarray, np.ndarray] = True,
         ):
         """3DMP accumulator model with confidence/wager readout
         :param grid_vec: vector of DV grid points
@@ -202,7 +202,7 @@ class SelfMotionDDM:
         logger.info('Current params: %s', {k: [round(vv, 2) for vv in v] for k, v in self.params_.items()})
 
         t0_pred = time.perf_counter()
-        y_pred = self.predict(X, y)
+        y_pred, _ = self.predict(X, y)
         t1_pred = time.perf_counter() - t0_pred
         logger.info(f'single objective function prediction run took {t1_pred:.2f} seconds')
         
@@ -227,10 +227,20 @@ class SelfMotionDDM:
         logger.info('Total loss:\t%.2f', self.neg_llh_)
 
         return self.neg_llh_
+    
 
     def predict(self, X, y, n_samples: int=0, seed=None):
-        """make a probabilistic prediction, given model params, or sample from that prediction"""
-
+        """
+        generate model predictions for data in X
+        :param X: DataFrame with columns modality, coherence, delta, heading
+        :param y: DataFrame with columns choice, PDW, RT (for RT likelihood calculation)
+        :param n_samples: number of samples to draw for probabilistic predictions (0 = none)
+        :param seed: random seed for sampling
+        :return: 
+            predictions - DataFrame with columns choice, PDW, RT (predicted likelihoods)
+            pred_sample - DataFrame with sampled predictions (n_samples > 0 -> how many draws from binomial for choice/PDW)
+        """
+        
         rng = np.random.RandomState(seed)
         
         mods = np.unique(X['modality'])
@@ -246,6 +256,7 @@ class SelfMotionDDM:
         bound = self._handle_param_mod(self.params_['bound'], mods)  
         non_dec_time = self._handle_param_mod(self.params_['non_dec_time'], mods)  
         thetas = self._handle_param_mod(self.params_['wager_thr'], mods)  
+        alphas = self._handle_param_mod(self.params_['wager_alpha'], mods)  
 
         if not self.stim_scaling:
             kves, kvis = self._handle_kmult(self.params_['kmult'], cohs.T, k_scale=100) 
@@ -263,7 +274,7 @@ class SelfMotionDDM:
 
         predictions = pd.DataFrame(np.full((X.shape[0], 3), fill_value=np.nan), 
                                    columns=['choice', 'PDW', 'RT'])
-        pred_sample = deepcopy(predictions)
+        pred_sample = deepcopy(predictions) if n_samples else None
 
         if self.return_wager:
             logger.info('Calculating wager maps')
@@ -290,7 +301,7 @@ class SelfMotionDDM:
                 else:
                     raise NotImplementedError('alternatives to log odds not yet implemented')
 
-                wager_above_threshold = [p >= theta for p, theta in zip(self.wager_maps, thetas)]
+                wager_is_high = [p >= theta for p, theta in zip(self.wager_maps, thetas)]
 
         # now loop over coherences and deltas with one accumulator each for actual predictions
         for c, coh in enumerate(cohs):
@@ -351,15 +362,21 @@ class SelfMotionDDM:
                             pxt_lo /= total_p
 
                             p_choice_and_wager = np.array(
-                                [[np.sum(pxt_up[wager_above_threshold[m]]),     # pRight+High
-                                    np.sum(pxt_up[~wager_above_threshold[m]])],   # pRight+Low
-                                    [np.sum(pxt_lo[wager_above_threshold[m]]),     # pLeft+High
-                                    np.sum(pxt_lo[~wager_above_threshold[m]])]],  # pLeft+Low
+                                [
+                                    [
+                                        np.sum(pxt_up[wager_is_high[m]]),   # pRight+High
+                                        np.sum(pxt_up[~wager_is_high[m]])   # pRight+Low
+                                    ],   
+                                    [
+                                        np.sum(pxt_lo[wager_is_high[m]]),   # pLeft+High
+                                        np.sum(pxt_lo[~wager_is_high[m]])   # pLeft+Low
+                                    ]
+                                ]
                             )
 
                             # calculate p_wager using Bayes rule, then factor in base rate of low bets ("alpha")
                             p_choice_given_wager, p_wager = _margconds_from_intersection(p_choice_and_wager, p_choice)
-                            p_wager += np.array([-self.params_['wager_alpha'][0], self.params_['wager_alpha'][0]]) * p_wager[0]
+                            p_wager += np.array([-self.params_['wager_alpha'][m], self.params_['wager_alpha'][m]]) * p_wager[0]
                             p_wager = np.clip(p_wager, 1e-100, 1-1e-100)
 
                             # print(f'heading={hdg}, p_wager={p_wager}')
@@ -386,12 +403,12 @@ class SelfMotionDDM:
                         predictions.loc[trial_index, 'RT'] = rt_dist[dist_inds]
 
                         if n_samples:
-                            pred_sample.loc[trial_index, 'RT'] = rng.choice(self.tvec, trial_index.sum(), replace=True, p=rt_dist)
+                            pred_sample.loc[trial_index, 'RT'] = rng.choice(
+                                self.tvec, trial_index.sum(), replace=True, p=rt_dist
+                                )
         
-        if n_samples:
-            return predictions, pred_sample
-        return predictions
-
+        return predictions, pred_sample
+    
 
     def _build_params_dict(
         self,
@@ -429,9 +446,16 @@ class SelfMotionDDM:
         return [self.init_params[k] for k in self.fit_param_names]
 
 
-    def simulate(self, X):
-        # dv simulation for each trial in X, given model params
-        pass
+    def simulate(self, X, n_samples: Optional[int] = 100, seed=None):
+        """
+        simulate data from model given X
+        :param X: DataFrame with columns modality, coherence, delta, heading
+        :return: simulated DataFrame with columns choice, PDW, RT
+        """
+        _, preds = self.predict(X, None, n_samples=1)
+        
+        raise NotImplementedError('simulate method not yet implemented')
+        
     
     @staticmethod
     def _handle_kmult(kmult, cohs, k_scale=1):
