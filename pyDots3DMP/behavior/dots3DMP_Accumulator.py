@@ -15,7 +15,6 @@ from scipy.stats import norm, skewnorm
 from pybads import BADS
 
 from preprocessing import (
-    dots3DMP_create_trial_list, dots3DMP_create_conditions,
     data_cleanup, format_onetargconf,
     )
 from Accumulator import Accumulator
@@ -118,6 +117,7 @@ class SelfMotionDDM:
         self.wager_axis = wager_axis
         self.stim_scaling = stim_scaling
 
+
         # initialize internal containers used by fit/predict
         self.init_params = {k: getattr(self, k) for k in self.PARAM_NAMES}
         self.params_ = self.init_params.copy() # will hold all params after fitting
@@ -130,7 +130,7 @@ class SelfMotionDDM:
         y: pd.DataFrame,
         fixed_params: Optional[list[str]]=None,
         # optim_bounds: Optional[Union[OptimBounds, dict]]=None,
-        ) -> 'dots3dmpAccumulator':
+        ) -> 'SelfMotionDDM':
         """fit model to data in X and y, with optional fixed parameters"""
         
         self.params_ = {}
@@ -169,15 +169,18 @@ class SelfMotionDDM:
         return self
 
     def _objective_fcn(self, params_array: np.ndarray, X: pd.DataFrame, y) -> float:
-
+        """objective function for optimization - negative log likelihood of data given model params"""
+        
         # use params array and fixed params to reconstruct full params
         self._build_params_dict(params_array, self.param_end_inds)
+        logger.info('Current params: %s', {k: [round(vv, 2) for vv in v] for k, v in self.params_.items()})
 
         t0_pred = time.perf_counter()
         y_pred = self.predict(X, y)
         t1_pred = time.perf_counter() - t0_pred
-        print(f'single objective function prediction run took {t1_pred:.2f} seconds')
-
+        logger.info(f'single objective function prediction run took {t1_pred:.2f} seconds')
+        
+        # calculate log likelihoods for each output
         log_lik_choice = log_lik_bin(y['choice'].to_numpy(), y_pred['choice'].to_numpy())
         log_lik_pdw    = log_lik_bin(y['PDW'].to_numpy(), y_pred['PDW'].to_numpy())
         log_lik_rt     = log_lik_cont(y['RT'].to_numpy(), y_pred['RT'].to_numpy(), self.tvec)
@@ -190,12 +193,14 @@ class SelfMotionDDM:
 
         self.neg_llh_ = self.log_lik_['choice']
 
-        print('\n================================================================')
         logger.info('Total loss:\t%.2f', self.neg_llh_)
         logger.info('Individual log likelihoods: %s', {key: round(val, 2) for key,val in self.log_lik_.items()})
-        print('=================================================================\n')
 
         return self.neg_llh_
+
+    def _calculate_neg_llh(self) -> float:
+
+        pass
     
 
     def predict(self, X, y, n_samples: int=0, seed=None):
@@ -277,7 +282,6 @@ class SelfMotionDDM:
 
                     # set up accumulator for this condition
                     accumulator = Accumulator(grid_vec=self.grid_vec, tvec=self.tvec, bound=bound[m])
-
                     drifts, accumulator.tvec = self.calc_3dmp_drift_rates(
                         b_vals[m], k_vals[m], self.tvec[-1], hdgs, delta=delta,
                         )
@@ -391,10 +395,6 @@ class SelfMotionDDM:
         return [self.init_params[k] for k in self.fit_param_names]
 
 
-    def get_loss(self):
-        # self.loss = -sum([self.log_lik[v]*w for v, w in zip(outputs, llh_scaling) if v in model_llh])
-        pass
-
     def simulate(self, X):
         # dv simulation for each trial in X, given model params
         pass
@@ -420,6 +420,7 @@ class SelfMotionDDM:
             param *= len(mods)
         return param
 
+
     @staticmethod
     def get_stim_urgs(tvec: np.ndarray, pos=None, skew_params=None):
 
@@ -439,12 +440,17 @@ class SelfMotionDDM:
         acc /= acc.max()
         
         return acc, vel
+
         
     @staticmethod
-    def calc_3dmp_drift_rates(b_t: np.ndarray, b_k: Union[float, tuple[float, float]],
-        tmax: float, hdgs: np.ndarray, delta: Optional[float] = 0.0, 
-        #return_abs: Optional[bool] = False,
-        cue_weights: Optional[tuple[float, float]] = None) -> tuple[np.ndarray, np.ndarray]:
+    def calc_3dmp_drift_rates(
+        b_t: np.ndarray,
+        b_k: Union[float, tuple[float, float]],
+        tmax: float,
+        hdgs: np.ndarray,
+        delta: Optional[float] = 0.0, 
+        cue_weights: Optional[tuple[float, float]] = None
+        ) -> tuple[np.ndarray, np.ndarray]:
         """
         Calculate drift rates
         if cue_weights is None, optimal cue weights calculated from k's
@@ -493,7 +499,7 @@ class SelfMotionDDM:
 
 
 # %% ----------------------------------------------------------------
-## HELPER FUNCTIONS
+## GENERAL HELPR FUNCTIONS
 
 def log_lik_bin(y, y_hat):
     # return np.sum(y * np.log(y_hat) + (1 - y) * np.log(y_hat))
@@ -517,7 +523,6 @@ def _margconds_from_intersection(prob_ab, prob_a):
     prob_b = prob_a.T @ b_given_a
     prob_b[prob_b==0] = np.finfo(np.float64).tiny
     a_given_b = b_given_a * prob_a / prob_b
-
 
     # assert np.allclose(prob_b, 1.0) and np.allclose(np.sum(a_given_b, axis=0), [1.0, 1.0])
     # assert np.allclose(prob_a, 1.0) and np.allclose(prob_ab, 1.0)
