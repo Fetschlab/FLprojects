@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 from scipy.stats import multivariate_normal as mvn, _mvn
 
@@ -5,7 +6,7 @@ import matplotlib.pyplot as plt
 # from matplotlib import animation
 from typing import Optional, Union, Sequence
 
-# from codetiming import Timer
+logger = logging.getLogger(__name__)
     
 class Accumulator:
     """
@@ -32,11 +33,15 @@ class Accumulator:
         'lo_lose_pdf_', 'log_odds_'
     )
 
-    def __init__(self, tvec: np.ndarray, grid_vec: np.ndarray, 
-                 drift_rates: Optional[list] = None, 
-                 bound: Optional[Union[float, Sequence, np.ndarray]] = 1.0,
-                 num_images: Optional[int]=7,
-                 wager_theta: Optional[float]=1.0):
+    def __init__(
+        self,
+        tvec: np.ndarray,
+        grid_vec: np.ndarray, 
+        drift_rates: Optional[list] = None, 
+        bound: Optional[Union[float, Sequence, np.ndarray]] = 1.0,
+        num_images: Optional[int]=7,
+        wager_theta: Optional[float]=1.0
+        ):
         self.tvec = tvec
         self.grid_vec = grid_vec
         self.bound = bound
@@ -48,9 +53,11 @@ class Accumulator:
         if self.drift_rates:
             self.drift_labels = self.drift_rates.copy()
 
+
     @property
-    def is_fitted(self):
+    def is_fitted(self) -> bool:    
         return self._is_fitted
+
     
     @property
     def bound(self):
@@ -61,12 +68,19 @@ class Accumulator:
         self._bound = np.array(b)
         return self._bound
 
+
     @bound.setter
     def bound(self, bound):
         self._bound = bound
 
-    def apply_drifts(self, drifts, labels: Optional[list] = None, 
-                     sensitivity: float = 1.0, urgency: Optional[Union[np.ndarray,float]] = None):
+
+    def apply_drifts(
+        self,
+        drifts,
+        labels: Optional[list] = None, 
+        sensitivity: float = 1.0,
+        urgency: Optional[Union[np.ndarray,float]] = None
+        ):
         """
         Set accumulator drift rates. Optionally add label for each drift.
         This also adds a mirrored drift rate for the anti-correlated accumulator, and 
@@ -100,6 +114,7 @@ class Accumulator:
 
         self.p_corr_ = p_corr
         self.rt_dist_ = rt_dist
+
 
     def pdf(self, full_pdf=False):
 
@@ -143,19 +158,23 @@ class Accumulator:
 
         return self.up_lose_pdf_, self.lo_lose_pdf_
 
+
     def log_posterior_odds(self):
         """Return the log posterior odds given pdfs"""
         self.log_odds_ = log_odds(self.up_lose_pdf_, self.lo_lose_pdf_)
         return self.log_odds_
 
+
     @property
     def wager_map(self):
         return self.log_odds_ >= self.wager_theta
+
 
     def dv(self, drift, sigma):
         """Return accumulated DV for given drift rate and diffusion noise."""
         return _moi_dv(mu=drift*self.tvec.reshape(-1, 1),
                        s=sigma, num_images=self.num_images)
+
 
     def compute_distrs(self, return_pdf=False):
         """Calculate cdf and pdf for accumulator object. Returns self for chaining commands"""
@@ -166,6 +185,7 @@ class Accumulator:
         self._is_fitted = True
         
         return self
+
 
     def plot(self, d_ind: int = -1):
         """
@@ -246,25 +266,21 @@ class Accumulator:
 
 
 ## ----------------------------------------------------------------
-## % Private functions
+## % HELPER FUNCTIONS
 
+# NOTE:
 # Python does not have explicit private/public functions, but by convention, private functions
 # are prefaced with an underscore, meaning they are not advised to be called directly from outside
 # the module, but exist only for internal use.
 
-## ----------------------------------------------------------------
-
-# TODO make these all static methods and move them inside the class namespace?
-
-# @staticmethod
-#@np_cache_minimal
+# low-level helper functions for method of images accumulator
 def _sj_rot(j, s0, k):
     """
     Image rotation formalism.
 
     :param j: jth image
     :param s0: starting_point, length 2 array
-    :param k: 2*k-1 is the number of images
+    :param k: 2*k-1 is the number of images - k=4 for 7 images
     :return:
     """
     alpha = (k - 1)/k * np.pi
@@ -279,11 +295,12 @@ def _sj_rot(j, s0, k):
 
     return (1 / np.sin(np.pi / k)) * (s @ s0.T)
 
+
 def _weightj(j, mu, sigma, sj, s0):
     """weight of the jth image"""
     return (-1) ** j * np.exp(mu @ np.linalg.inv(sigma) @ (sj - s0).T)
 
-#@lru_cache(maxsize=32)
+
 def _corr_num_images(num_images: int) -> tuple[np.ndarray, int]:
     """returns 2-D accumulator correlation given a number of images"""
 
@@ -293,14 +310,16 @@ def _corr_num_images(num_images: int) -> tuple[np.ndarray, int]:
 
     return sigma, k
 
-# TODO this has the same input and outputs as _moi_pdf, so should be a single function with a flag
+# %% ----------------------------------------------------------------
+# CDF/PDF calculations
 def _moi_pdf_vec(
     xmesh: np.ndarray, 
     ymesh: np.ndarray, 
     tvec: np.ndarray,
     mu: np.ndarray,
     bound=np.array([1, 1]),
-    num_images: int = 7):
+    num_images: int = 7
+    ):
     
     """
     Calculate 2-D pdf according to method of images (vectorized implementation).
@@ -318,7 +337,6 @@ def _moi_pdf_vec(
 
     nx, ny = xmesh.shape
     pdf_result = np.zeros((len(tvec), nx, ny)).squeeze()
-    # pdf_result2 = np.zeros_like(pdf_result)
 
     xy_mesh = np.dstack((xmesh, ymesh))
     new_mesh = xy_mesh.reshape(-1, 2)
@@ -342,15 +360,15 @@ def _moi_pdf_vec(
         # skip the first sample (t starts at 1)
         for t in range(1, len(tvec)):
             a_j = _weightj(j, mu[t, :].T, sigma, sj, s0)
+            # pdf_result[t, ...] += a_j * mvn(mean=sj + mu[t, :], cov=sigma*tvec[t]).pdf(xy_mesh)
+            
             aj_all[t] = a_j
 
-            # pdf_result[t, ...] += a_j * mvn(mean=sj + mu[t, :], cov=sigma*tvec[t]).pdf(xy_mesh)
-
-        # use vectorized implementation!
-        # TODO unit tests with np.allclose vs scipy mvn result
+        # use vectorized implementation for speed # TODO unit tests to verify correctness
         pdf_result += (aj_all * np.exp(_multiple_logpdfs_vec_input(new_mesh, sj + mu_t, covs)))
 
     return pdf_result
+
 
 def _moi_pdf(
     xmesh: np.ndarray, 
@@ -390,6 +408,7 @@ def _moi_pdf(
 
     return pdf_result
 
+
 def _pdf_at_timestep(
     t, 
     mu: np.ndarray, 
@@ -398,7 +417,8 @@ def _pdf_at_timestep(
     k: int, 
     s0: np.ndarray
     ):
-
+    """Calculate pdf at a single timepoint."""
+    
     pdf = mvn(mean=s0 + mu*t, cov=sigma*t).pdf(xy_mesh)
 
     # j-values start at 1, go to k*2-1
@@ -408,6 +428,7 @@ def _pdf_at_timestep(
         pdf += a_j * mvn(mean=sj + mu*t, cov=sigma*t).pdf(xy_mesh)
 
     return pdf
+
 
 def _moi_cdf(
     tvec: np.ndarray, 
