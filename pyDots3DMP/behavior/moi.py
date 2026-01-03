@@ -1,21 +1,14 @@
 # -*- coding: utf-8 -*-
 """
 Low-level helper functions for 2-D self-motion DDM using method of images.
-
-
 """
 
 import numpy as np
 from scipy.stats import multivariate_normal as mvn
+from scipy.stats import norm
 
 USE_MVNUN = False
 
-# NOTE:
-# Python does not have explicit private/public functions, but by convention, private functions
-# are prefaced with an underscore, meaning they are not advised to be called directly from outside
-# the module, but exist only for internal use.
-
-# low-level helper functions for method of images accumulator
 def _sj_rot(j, s0, k):
     """
     Image rotation formalism.
@@ -145,7 +138,7 @@ def moi_pdf(
     # skip the first sample (t starts at 1)
     for t in range(1, len(tvec)):
 
-        pdf_result[t, ...] = _pdf_at_timestep(
+        pdf_result[t, ...] = pdf_at_timestep(
             tvec[t], mu[t, :], sigma, xy_mesh, k, s0)
 
     return pdf_result
@@ -207,6 +200,12 @@ def pdf_at_timestep(
 
     return pdf
 
+
+    # integrate using weights (sum over nodes)
+    integral = np.sum(w * integrand, axis=0)
+
+    # integral now approximates Phi_2(h,k; rho)
+    return integral.reshape(shape)
 
 def moi_cdf(
     tvec: np.ndarray, 
@@ -358,4 +357,10 @@ def sample_dv(
 
 # maybe useful for faster dv simulation (replacement for rvs calls)
 # def chol_sample(mean, cov):
-#     return mean + np.linalg.cholesky(cov) @ np.random.standard_normal(mean.size)
+#     return mean + np.linalg.cholesky(cov) @ np.random.standard_normal(mean.size)    res = {
+        'orig': out_orig,
+        'vec': out_vec,
+        'flux1_err': np.max(np.abs(out_orig[2] - out_vec[2])),
+        'flux2_err': np.max(np.abs(out_orig[3] - out_vec[3])),
+    }
+    return res

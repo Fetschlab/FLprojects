@@ -1,12 +1,11 @@
 import logging
-import numpy as np
-from scipy.stats import multivariate_normal as mvn#, _mvn
-
-import matplotlib.pyplot as plt
-# from matplotlib import animation
 from typing import Optional, Union, Sequence
 
-from moi import moi_cdf, moi_pdf, pdf_vec, sample_dv
+import numpy as np
+import matplotlib.pyplot as plt
+# from matplotlib import animation
+
+from moi import moi_cdf, moi_pdf, moi_pdf_vec, sample_dv
 
 logger = logging.getLogger(__name__)
     

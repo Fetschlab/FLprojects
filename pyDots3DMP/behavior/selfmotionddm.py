@@ -1,23 +1,20 @@
 # %% ----------------------------------------------------------------
 
-import numpy as np
-import pandas as pd
-from typing import Union, Optional, Any
-
 from collections import namedtuple
 from copy import deepcopy
-import itertools
 from datetime import datetime
 import logging
+import itertools
 import time
+from typing import Union, Optional, Any
 
+import numpy as np
+import pandas as pd
+from pybads import BADS
 from scipy.signal import convolve
 from scipy.stats import norm, skewnorm
-from pybads import BADS
 
-from preprocessing import (
-    data_cleanup, format_onetargconf,
-    )
+from preprocessing import data_cleanup, format_onetargconf
 from accumulator import Accumulator
 
 # TODO list
