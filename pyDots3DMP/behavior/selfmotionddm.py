@@ -7,6 +7,7 @@ from typing import Union, Optional, Any
 from collections import namedtuple
 from copy import deepcopy
 import itertools
+from datetime import datetime
 import logging
 import time
 
@@ -17,7 +18,7 @@ from pybads import BADS
 from preprocessing import (
     data_cleanup, format_onetargconf,
     )
-from Accumulator import Accumulator
+from accumulator import Accumulator
 
 # TODO list
 
@@ -39,8 +40,23 @@ from Accumulator import Accumulator
 
 # %% ----------------------------------------------------------------
 
-logger = logging.getLogger()
-logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# Create handlers
+c_handler = logging.StreamHandler()
+f_handler = logging.FileHandler(f'ddm_fitting_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
+c_handler.setLevel(logging.DEBUG) 
+f_handler.setLevel(logging.DEBUG) 
+
+# Create formatters and add them to handlers, and add handlers to logger
+c_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+f_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+c_handler.setFormatter(c_format)
+f_handler.setFormatter(f_format)
+logger.addHandler(c_handler)
+logger.addHandler(f_handler)
+
 
 OptimBounds = namedtuple('OptimBounds', ['lb', 'ub', 'plb', 'pub'])
 
@@ -54,7 +70,7 @@ def main():
         'bound': [1., 1., 1.],
         'non_dec_time': [0.3],
         'wager_thr': [1, 1, 1],
-        'wager_alpha': [0]
+        'wager_alpha': [0.05]
     }
     accum = SelfMotionDDM(grid_vec=grid_vec, tvec=time_vec, **init_params, 
                                 stim_scaling=False, return_wager=False)
@@ -68,7 +84,7 @@ def main():
     y = data[['choice', 'PDW', 'RT']].astype({'choice': 'int', 'PDW': 'int'})
     y['RT'] += 0.3 # to reverse the downshift from motion platform latency
 
-    accum.fit(X, y, fixed_params=['kmult', 'wager_alpha'])
+    accum.fit(X, y)
     y_pred, y_pred_samp = accum.predict(X, y, n_samples=1, seed=1)
     # y_pred_samp['RT'] -= 0.3
 
@@ -89,7 +105,7 @@ class SelfMotionDDM:
         bound: list = [1., 1., 1.],
         non_dec_time: list = [0.3],
         wager_thr: list = [1, 1, 1],
-        wager_alpha: list = [0],
+        wager_alpha: list = [0.05],
         return_wager: bool = True,
         wager_axis: Optional[int] = None,
         stim_scaling: Union[bool, tuple[np.ndarray, np.ndarray]] = True,
@@ -117,7 +133,6 @@ class SelfMotionDDM:
         self.wager_axis = wager_axis
         self.stim_scaling = stim_scaling
 
-
         # initialize internal containers used by fit/predict
         self.init_params = {k: getattr(self, k) for k in self.PARAM_NAMES}
         self.params_ = self.init_params.copy() # will hold all params after fitting
@@ -132,20 +147,22 @@ class SelfMotionDDM:
         # optim_bounds: Optional[Union[OptimBounds, dict]]=None,
         ) -> 'SelfMotionDDM':
         """fit model to data in X and y, with optional fixed parameters"""
+
+        logger.info('Starting model fitting')
         
-        self.params_ = {}
         self.n_features_in_ = len(X.columns)
 
-        self.params_ = self.init_params.copy() # if no fittable params, just return initial settings
+        # get list of fittable parameters, if any
+        self.params_ = self.init_params.copy() 
         params_list = self._get_fit_params(fixed_params)
-        
+
         if params_list:
             # concatenate into single array for passing to optimization function
             # but store original list lengths for reconstructing dict later
             params_array = np.array(list(itertools.chain(*params_list)))
             self.param_end_inds = list(itertools.accumulate(map(len, params_list)))
 
-            # pass fixed model_params and data as fixed inputs to objective function
+            # pass data as fixed inputs to objective function
             optim_fcn_part = lambda params: self._objective_fcn(params, X, y)
 
             # TODO allow user to specify these instead or with init params
@@ -168,11 +185,20 @@ class SelfMotionDDM:
 
         return self
 
-    def _objective_fcn(self, params_array: np.ndarray, X: pd.DataFrame, y) -> float:
-        """objective function for optimization - negative log likelihood of data given model params"""
+    def _objective_fcn(
+        self,
+        params_array: np.ndarray,
+        X: pd.DataFrame,
+        y: pd.DataFrame,
+        fixed_params: Optional[dict[str, Any]]=None,
+        ) -> float:
+        """
+        objective function for optimization - negative log likelihood of data given model params
+        return float for minimization
+        """
         
         # use params array and fixed params to reconstruct full params
-        self._build_params_dict(params_array, self.param_end_inds)
+        self._build_params_dict(params_array, self.param_end_inds, fixed_params)
         logger.info('Current params: %s', {k: [round(vv, 2) for vv in v] for k, v in self.params_.items()})
 
         t0_pred = time.perf_counter()
@@ -181,27 +207,26 @@ class SelfMotionDDM:
         logger.info(f'single objective function prediction run took {t1_pred:.2f} seconds')
         
         # calculate log likelihoods for each output
-        log_lik_choice = log_lik_bin(y['choice'].to_numpy(), y_pred['choice'].to_numpy())
-        log_lik_pdw    = log_lik_bin(y['PDW'].to_numpy(), y_pred['PDW'].to_numpy())
-        log_lik_rt     = log_lik_cont(y['RT'].to_numpy(), y_pred['RT'].to_numpy(), self.tvec)
+        log_lik_choice = log_lik_bin(y['choice'].to_numpy(), y_pred['choice'].to_numpy()) / len(y)
+        log_lik_pdw    = log_lik_bin(y['PDW'].to_numpy(), y_pred['PDW'].to_numpy()) / len(y)
+        log_lik_rt     = log_lik_cont(y['RT'].to_numpy(), y_pred['RT'].to_numpy(), self.tvec) / len(y)
 
-        self.log_lik_ = {'choice': log_lik_choice, 'pdw': log_lik_pdw, 'rt': log_lik_rt}
-        self.log_lik = {k:v/len(y) for k, v in self.log_lik_.items()}
-        
-        # self.neg_llh_ = -sum(self.log_lik_.values())
-        # self.neg_llh_ = -sum([self.log_lik[v]*w for v, w in zip(outputs, llh_scaling) if v in self.log_lik])
-
-        self.neg_llh_ = self.log_lik_['choice']
-
+        self.log_lik_ = {
+            'choice': log_lik_choice,
+            'pdw': log_lik_pdw,
+            'rt': log_lik_rt
+        }
+        if self.return_wager:
+            logger.info('Log likelihoods - choice: %.2f, PDW: %.2f, RT: %.2f', 
+                        log_lik_choice, log_lik_pdw, log_lik_rt)
+            self.neg_llh_ = -sum([log_lik_choice, log_lik_pdw, log_lik_rt])
+        else:
+            logger.info('Log likelihoods - choice: %.2f, RT: %.2f', 
+                        log_lik_choice, log_lik_rt)
+            self.neg_llh_ = -sum([log_lik_choice, log_lik_rt])
         logger.info('Total loss:\t%.2f', self.neg_llh_)
-        logger.info('Individual log likelihoods: %s', {key: round(val, 2) for key,val in self.log_lik_.items()})
 
         return self.neg_llh_
-
-    def _calculate_neg_llh(self) -> float:
-
-        pass
-    
 
     def predict(self, X, y, n_samples: int=0, seed=None):
         """make a probabilistic prediction, given model params, or sample from that prediction"""
@@ -241,7 +266,7 @@ class SelfMotionDDM:
         pred_sample = deepcopy(predictions)
 
         if self.return_wager:
-            print('Calculating wager maps')
+            logger.info('Calculating wager maps')
             self.wager_maps = []
             k_vals_fixed = [kves, np.mean(kvis), [kves, np.mean(kvis)]]
             for m, mod in enumerate(mods):
@@ -255,6 +280,7 @@ class SelfMotionDDM:
                     )
 
                 # run the method of images - diffusion to bound to extract pdfs, cdfs, and LPO
+                # positive headings only (assume symmetry around 0 for log odds mapping)
                 accumulator.apply_drifts(abs_drifts, hdgs[hdgs>=0])
                 accumulator.compute_distrs(return_pdf=True) # get the pdfs necessarily
 
@@ -285,6 +311,7 @@ class SelfMotionDDM:
                     drifts, accumulator.tvec = self.calc_3dmp_drift_rates(
                         b_vals[m], k_vals[m], self.tvec[-1], hdgs, delta=delta,
                         )
+                    # this time use signed headings
                     accumulator.apply_drifts(drifts, hdgs) 
 
                     # run the method of images - diffusion to bound to extract pdfs, cdfs, and LPO
@@ -366,15 +393,22 @@ class SelfMotionDDM:
         return predictions
 
 
-    def _build_params_dict(self, params_array: np.ndarray, end_inds) -> None:
+    def _build_params_dict(
+        self,
+        params_array: np.ndarray,
+        end_inds: list,
+        fixed_params: Optional[dict[str, Any]]=None,
+        ) -> None:
         """reconstruct full params dictionary from params array and fixed params dictionary"""
+
+        fixed_params = fixed_params if fixed_params is not None else self.fixed_params
 
         start_ind = 0
         for p, param in enumerate(self.fit_param_names):
             if p > 0:
                 start_ind = end_inds[p-1]
             self.params_[param] = params_array[start_ind:end_inds[p]].tolist()
-        self.params_ = self.params_ | self.fixed_params
+        self.params_ = self.params_ | fixed_params
 
         # for pn, p in self.params_.items():
         #     print(f'{pn}:', sep='\t')
@@ -387,10 +421,10 @@ class SelfMotionDDM:
 
         if fixed_params:
             self.fixed_params = {k: self.init_params[k] for k in fixed_params}
-            self.fit_param_names = [k for k in self.init_params.keys() if k not in self.fixed_params.keys()]
-
-        # self.fit_params = {k: self.init_params[k] for k in self.fit_param_names}
-        # return self.fit_params.values()
+            
+        self.fit_param_names = [k for k in self.init_params.keys() if k not in self.fixed_params.keys()]
+        logger.info(f'Fixed parameters: {self.fixed_params}')
+        logger.info(f'Fitting parameters: {self.fit_param_names}')
 
         return [self.init_params[k] for k in self.fit_param_names]
 
@@ -408,7 +442,7 @@ class SelfMotionDDM:
             kvis = kmult * cohs
             kves = np.mean(kvis)  # ves lies between vis cohs
         if len(kmult) == 2:
-            kvis = kmult[1] * cohs
+            kvis = kmult[1] * cohs # vis scaled by coherence
         else:
             kvis = kmult[1:]  # 3 independent kmults
         return kves, kvis
@@ -562,5 +596,4 @@ def _intersection_from_margconds(a_given_b, prob_a, prob_b):
 # %%
 
 if __name__ == '__main__':
-    # logger = logging.getLogger(__name__)
     main()
