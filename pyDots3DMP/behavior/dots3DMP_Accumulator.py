@@ -275,14 +275,19 @@ class dots3dmpAccumulator:
                     if (delta != 0 and mod < 3) or (c > 0 and mod == 1) or trial_index.sum()==0:
                         continue       
 
+                    # set up accumulator for this condition
                     accumulator = Accumulator(grid_vec=self.grid_vec, tvec=self.tvec, bound=bound[m])
 
                     drifts, accumulator.tvec = self.calc_3dmp_drift_rates(
                         b_vals[m], k_vals[m], self.tvec[-1], hdgs, delta=delta,
                         )
                     accumulator.apply_drifts(drifts, hdgs) 
+
+                    # run the method of images - diffusion to bound to extract pdfs, cdfs, and LPO
                     accumulator.compute_distrs(return_pdf=self.return_wager)
 
+                    # get predictions for all trials in this condition
+                    
                     # ====== CHOICE ======
                     p_right = np.clip(accumulator.p_corr_.T, 1e-100, 1-1e-100)
                     predictions.loc[trial_index, 'choice'] = p_right[hdg_inds[trial_index]]
