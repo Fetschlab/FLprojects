@@ -57,7 +57,7 @@ def main():
         'wager_thr': [1, 1, 1],
         'wager_alpha': [0]
     }
-    accum = dots3dmpAccumulator(grid_vec=grid_vec, tvec=time_vec, **init_params, 
+    accum = SelfMotionDDM(grid_vec=grid_vec, tvec=time_vec, **init_params, 
                                 stim_scaling=False, return_wager=False)
 
     datafilepath = "/Users/stevenjerjian/Desktop/Academia/FetschLab/PLDAPS_data/dataStructs/lucio_20220512-20230606.csv"
@@ -79,7 +79,7 @@ def main():
 
 # %% ----------------------------------------------------------------
     
-class dots3dmpAccumulator:
+class SelfMotionDDM:
     PARAM_NAMES = ('kmult', 'bound', 'non_dec_time', 'wager_thr', 'wager_alpha')
 
     def __init__(
