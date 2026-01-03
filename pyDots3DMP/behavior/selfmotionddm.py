@@ -448,11 +448,20 @@ class SelfMotionDDM:
         return kves, kvis
 
     @staticmethod
-    # for repeating param for each mod if per-mod is not specificed
     def _handle_param_mod(param, mods):
-        if len(param) == 1:
-            param *= len(mods)
-        return param
+        """broadcast param to match number of mods"""
+        n_mods = len(mods)
+        
+        if np.isscalar(param):
+            return [param] * n_mods
+
+        param_list = list(param)
+        if len(param_list) == n_mods:
+            return param_list
+        if len(param_list) == 1:
+            return param_list * n_mods
+
+        raise ValueError("Length of param list does not match number of modalities")
 
 
     @staticmethod
