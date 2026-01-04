@@ -13,6 +13,7 @@ import pandas as pd
 from pybads import BADS
 from scipy.signal import convolve
 from scipy.stats import norm, skewnorm
+from scipy.optimize import minimize
 
 from preprocessing import data_cleanup, format_onetargconf
 from accumulator import Accumulator
@@ -21,20 +22,24 @@ from accumulator import Accumulator
 # %% ----------------------------------------------------------------
 # Set up logger
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
-# Create handlers
-c_handler = logging.StreamHandler()
-f_handler = logging.FileHandler(f'ddm_fitting_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
-c_handler.setLevel(logging.DEBUG) 
-f_handler.setLevel(logging.DEBUG) 
+# for handler in logger.handlers[:]:
+#     logger.removeHandler(handler)
+#     handler.close()
 
-# Create formatters and add them to handlers, and add handlers to logger
-c_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-f_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-c_handler.setFormatter(c_format)
-f_handler.setFormatter(f_format)
-logger.addHandler(c_handler) 
+# # # Create handlers
+# c_handler = logging.StreamHandler()
+# f_handler = logging.FileHandler(f'ddm_fitting_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
+# c_handler.setLevel(logging.DEBUG) 
+# f_handler.setLevel(logging.DEBUG) 
+
+# # Create formatters and add them to handlers, and add handlers to logger
+# c_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+# f_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+# c_handler.setFormatter(c_format)
+# f_handler.setFormatter(f_format)
+# logger.addHandler(c_handler) 
 # logger.addHandler(f_handler)  # uncomment to log to file as well
 
 
@@ -43,7 +48,7 @@ OptimBounds = namedtuple('OptimBounds', ['lb', 'ub', 'plb', 'pub'])
 def main():
     
     grid_vec = np.arange(-3, 0, 0.05)
-    time_vec = np.arange(0, 2, 0.05)
+    time_vec = np.arange(0, 2, 0.01)
        
     init_params = {
         'kmult': [0.6, 0.6], 
@@ -65,15 +70,15 @@ def main():
     y = data[['choice', 'PDW', 'RT']].astype({'choice': 'int', 'PDW': 'int'})
     y['RT'] += 0.3 # to reverse the downshift from motion platform latency
 
-    X = X_all
-    # X = X_all[delta0].reset_index(drop=True)
-    # y = y[delta0].reset_index(drop=True)
-
+    # fit only delta=0 trials
+    X = X_all[delta0].reset_index(drop=True)
+    y = y[delta0].reset_index(drop=True)
     accum.fit(X, y)
-    y_pred, y_pred_samp = accum.predict(X, y=None, n_samples=1, cache_accumulators=True, seed=1)
+    
+    # y_pred, y_pred_samp = accum.predict(X, y=None, n_samples=1, cache_accumulators=True, seed=1)
 
-    print(y.head())
-    print(y_pred_samp.head())
+    # print(y.head())
+    # print(y_pred_samp.head())
 
 # %% ----------------------------------------------------------------
     
@@ -85,13 +90,13 @@ class SelfMotionDDM:
         grid_vec: np.ndarray,
         tvec: np.ndarray,
         kmult: list = [0.3, 0.3],
-        bound: list | int | float = 1.,
-        non_dec_time: list | int | float = 0.3,
-        wager_thr: list | int | float = 1.,
-        wager_alpha: list | int | float = 0.05,
+        bound: list = [1., 1., 1.],
+        non_dec_time: list = [0.3],
+        wager_thr: list = [1.],
+        wager_alpha: list = [0.05],
         return_wager: bool = True,
         wager_axis: Optional[int] = None,
-        stim_scaling: bool | tuple[np.ndarray, np.ndarray] = True,
+        stim_scaling: Union[tuple[np.ndarray, np.ndarray], bool] = True,
         ):
         """3DMP accumulator model with confidence/wager readout
         :param grid_vec: vector of DV grid points
@@ -202,8 +207,11 @@ class SelfMotionDDM:
         objective function for optimization - negative log likelihood of data given model params
         return float for minimization
         """
-        
-        # use params array and fixed params to reconstruct full params
+
+        params_array = np.asarray(params_array)
+            
+        # combine params array passed to objective function with fixed params
+        # to reconstruct full params dict expected by custom predict method
         self._build_params_dict(params_array, self.param_end_inds, fixed_params)
         logger.info('Current params: %s', {k: [round(vv, 2) for vv in v] for k, v in self.params_.items()})
 
@@ -215,8 +223,8 @@ class SelfMotionDDM:
         # calculate log likelihoods for each output
         log_lik_choice = log_lik_bin(y['choice'].to_numpy(), y_pred['choice'].to_numpy()) / len(y)
         log_lik_pdw    = log_lik_bin(y['PDW'].to_numpy(), y_pred['PDW'].to_numpy()) / len(y)
-        log_lik_rt     = log_lik_cont(y['RT'].to_numpy(), y_pred['RT'].to_numpy(), self.tvec) / len(y)
-
+        log_lik_rt     = log_lik_cont(y_pred['RT'].to_numpy()) / len(y)
+        
         self.log_lik_ = {
             'choice': log_lik_choice,
             'pdw': log_lik_pdw,
@@ -233,7 +241,7 @@ class SelfMotionDDM:
         logger.info('Total loss:\t%.2f', self.neg_llh_)
 
         return self.neg_llh_
-    
+
 
     def predict(
         self,
@@ -283,14 +291,17 @@ class SelfMotionDDM:
 
         b_vals = [b_ves, b_vis, np.vstack((b_ves, b_vis)).T]
 
-        predictions = pd.DataFrame(np.full((X.shape[0], 3), fill_value=np.nan), 
-                                   columns=['choice', 'PDW', 'RT'])
+        # initialize predictions dataframes
+        predictions = pd.DataFrame(
+            np.full((X.shape[0], 3), fill_value=np.nan), columns=['choice', 'PDW', 'RT']
+            )
         pred_sample = deepcopy(predictions) if n_samples else None
 
+        self.wager_maps = []
         if self.return_wager:
-            logger.info('Calculating wager maps')
-            self.wager_maps = []
+            
             k_vals_fixed = [kves, np.mean(kvis), [kves, np.mean(kvis)]]
+            
             for m, mod in enumerate(mods):
 
                 # set accumulators with absolute drifts, for log odds mappings
@@ -345,7 +356,7 @@ class SelfMotionDDM:
                     # get predictions for all trials in this condition
                     
                     # ====== CHOICE ======
-                    p_right = np.clip(accumulator.p_corr_.T, 1e-100, 1-1e-100)
+                    p_right = np.clip(accumulator.p_corr_.T, 1e-10, 1-1e-10)
                     predictions.loc[trial_index, 'choice'] = p_right[hdg_inds[trial_index]]
 
                     # ====== WAGER ======
@@ -388,10 +399,9 @@ class SelfMotionDDM:
 
                             # calculate p_wager using Bayes rule, then factor in base rate of low bets ("alpha")
                             p_choice_given_wager, p_wager = _margconds_from_intersection(p_choice_and_wager, p_choice)
-                            p_wager += np.array([-self.params_['wager_alpha'][m], self.params_['wager_alpha'][m]]) * p_wager[0]
+                            p_wager += np.array([-alphas[m], alphas[m]]) * p_wager[0]
                             p_wager = np.clip(p_wager, 1e-100, 1-1e-100)
 
-                            # print(f'heading={hdg}, p_wager={p_wager}')
                             predictions.loc[trial_index, 'PDW'] = p_wager[0]
 
                             if n_samples:
