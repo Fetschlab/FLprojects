@@ -377,28 +377,35 @@ def _bvn_cdf(h, k, rho, n=64):
 def sample_dv(
     mu: np.ndarray,
     s: np.ndarray = np.array([1, 1]),
-    num_images: int = 7
+    num_images: int = 7,
+    seed: Optional[int] = None
     ) -> np.ndarray:
 
     sigma, k = _corr_num_images(num_images)
     V = np.diag(s) * sigma * np.diag(s)
     
-
-    # FIXME default call to rvs may end up resulting in the same result each time because the numpy random number generator
-    # has the same seed on each function call. Not sure why...
-    # TODO repeated rvs calls (calling at each timepoint) ends up being quite slow, consider Cholesky alternative below
-
     dv = np.zeros_like(mu)
-    for t in range(1, mu.shape[0]):
-        dv[t, :] = mvn(mu[t, :].T, cov=V).rvs()
+    T = mu.shape[0]
 
-    dv = dv.cumsum(axis=0)
+    # Vectorized sampling: draw all increments at once using a standard normal
+    # and transform with Cholesky decomposition of V. Cheap trick to simulate 
+    # diffusion according to covariance matrix V, without repeated calls to
+    # scipy.stats.multivariate_normal.rvs
+    
+    if T > 1:
+
+        # for t in range(1, T):
+        #     dv[t, :] = mvn(mu[t, :].T, cov=V).rvs()
+        # dv = dv.cumsum(axis=0)
+        
+        rng = np.random.default_rng(seed)
+        L = np.linalg.cholesky(V)
+        Z = rng.standard_normal(size=(T - 1, mu.shape[1]))
+        
+        increments = mu[1:] + (Z @ L.T)
+        dv[1:] = np.cumsum(increments, axis=0)
 
     return dv
-
-# maybe useful for faster dv simulation (replacement for rvs calls)
-# def chol_sample(mean, cov):
-#     return mean + np.linalg.cholesky(cov) @ np.random.standard_normal(mean.size)
 
 
 # --- Fully vectorized t x j implementation --------------------------------
