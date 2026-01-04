@@ -17,26 +17,9 @@ from scipy.stats import norm, skewnorm
 from preprocessing import data_cleanup, format_onetargconf
 from accumulator import Accumulator
 
-# TODO list
-
-# - get optimization running
-# - get visualizations of model predictions
-# - implement simulate method
-# - abstract common parts of predict and simulate methods together
-# - if no wager, drop wager params and handle
-# - cleanup RT part
-# - add logging 
-
-
-# low-level to do 
-# handle fixed params/params when calling predict before any fitting?
-# maybe the way is to call fit with all fixed params...
-
-# ISSUE - are params being set correctly on each fitting iteration - should be concatenating 
-# fit and fixed for predict function # use print print print
 
 # %% ----------------------------------------------------------------
-
+# Set up logger
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -51,8 +34,8 @@ c_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 f_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 c_handler.setFormatter(c_format)
 f_handler.setFormatter(f_format)
-logger.addHandler(c_handler)
-logger.addHandler(f_handler)
+logger.addHandler(c_handler) 
+# logger.addHandler(f_handler)  # uncomment to log to file as well
 
 
 OptimBounds = namedtuple('OptimBounds', ['lb', 'ub', 'plb', 'pub'])
@@ -63,8 +46,8 @@ def main():
     time_vec = np.arange(0, 2, 0.05)
        
     init_params = {
-        'kmult': [0.3, 0.3], 
-        'bound': [1., 1., 1.],
+        'kmult': [0.3, 0.5], 
+        'bound': [0.6, 0.6, 0.6],
         'non_dec_time': [0.3],
         'wager_thr': [1, 1, 1],
         'wager_alpha': [0.05]
@@ -77,17 +60,19 @@ def main():
     data = format_onetargconf(data, remove_one_targ=True)
     data = data.reset_index(drop=True)
 
-    X = data[['modality', 'coherence', 'delta', 'heading']]
+    X_all = data[['modality', 'coherence', 'delta', 'heading']]
+    delta0 = X_all['delta'] == 0
     y = data[['choice', 'PDW', 'RT']].astype({'choice': 'int', 'PDW': 'int'})
     y['RT'] += 0.3 # to reverse the downshift from motion platform latency
 
-    accum.fit(X, y)
-    y_pred, y_pred_samp = accum.predict(X, y, n_samples=10, seed=1)
-    # y_pred_samp['RT'] -= 0.3
+    X = X_all[delta0].reset_index(drop=True)
+    y = y[delta0].reset_index(drop=True)
 
-    # print(y.head())
-    # print(y_pred.head())
-    # print(y_pred_samp.head())
+    # accum.fit(X, y)
+    y_pred, y_pred_samp = accum.predict(X, y=None, n_samples=1, cache_accumulators=True, seed=1)
+
+    print(y.head())
+    print(y_pred_samp.head())
 
 # %% ----------------------------------------------------------------
     
@@ -134,6 +119,8 @@ class SelfMotionDDM:
         self.init_params = {k: getattr(self, k) for k in self.PARAM_NAMES}
         self.params_ = self.init_params.copy() # will hold all params after fitting
         self.fixed_params = {}
+
+        self.accumulators_ = {}  # cache of accumulators per condition if desired
 
        
     def fit(
@@ -226,7 +213,14 @@ class SelfMotionDDM:
         return self.neg_llh_
     
 
-    def predict(self, X, y, n_samples: int=0, seed=None):
+    def predict(
+        self,
+        X,
+        y=None,
+        n_samples: int=1,
+        cache_accumulators=False,
+        seed=None
+        ):
         """
         generate model predictions for data in X
         :param X: DataFrame with columns modality, coherence, delta, heading
@@ -245,16 +239,14 @@ class SelfMotionDDM:
         deltas = np.unique(X['delta'])
         hdgs, hdg_inds = np.unique(X['heading'], return_inverse=True)
 
-        cond_groups = X[['modality','coherence','delta']].drop_duplicates(
-            ).sort_values(by=['modality','coherence','delta'])
-
-        # TODO clean these up better
+        # handle parameters per modality
         kves, kvis = self._handle_kmult(self.params_['kmult'], cohs.T, k_scale=1) 
         bound = self._handle_param_mod(self.params_['bound'], mods)  
         non_dec_time = self._handle_param_mod(self.params_['non_dec_time'], mods)  
         thetas = self._handle_param_mod(self.params_['wager_thr'], mods)  
         alphas = self._handle_param_mod(self.params_['wager_alpha'], mods)  
 
+        # get stimulus-driven urgency signals if specified, for scaling drifts
         if not self.stim_scaling:
             kves, kvis = self._handle_kmult(self.params_['kmult'], cohs.T, k_scale=100) 
 
@@ -280,7 +272,6 @@ class SelfMotionDDM:
             for m, mod in enumerate(mods):
 
                 # set accumulators with absolute drifts, for log odds mappings
-                
                 accumulator = Accumulator(grid_vec=self.grid_vec, tvec=self.tvec, bound=bound[m])
 
                 abs_drifts, accumulator.tvec = self.calc_3dmp_drift_rates(
@@ -288,9 +279,11 @@ class SelfMotionDDM:
                     )
 
                 # run the method of images - diffusion to bound to extract pdfs, cdfs, and LPO
-                # positive headings only (assume symmetry around 0 for log odds mapping)
                 accumulator.apply_drifts(abs_drifts, hdgs[hdgs>=0])
-                accumulator.compute_distrs(return_pdf=True) # get the pdfs necessarily
+                accumulator.compute_distrs(return_pdf=True) # get the pdfs for wager calculation
+
+                if cache_accumulators:
+                    self.accumulators_[('wager', mod)] = accumulator
 
                 if self.wager_axis is None:
                     log_odds_map = accumulator.log_posterior_odds()
@@ -325,6 +318,8 @@ class SelfMotionDDM:
                     # run the method of images - diffusion to bound to extract pdfs, cdfs, and LPO
                     accumulator.compute_distrs(return_pdf=self.return_wager)
 
+                    if cache_accumulators:
+                        self.accumulators_[(mod, coh, delta)] = accumulator
                     # get predictions for all trials in this condition
                     
                     # ====== CHOICE ======
@@ -332,8 +327,6 @@ class SelfMotionDDM:
                     predictions.loc[trial_index, 'choice'] = p_right[hdg_inds[trial_index]]
 
                     # ====== WAGER ======
-
-                    # TODO figure out how to vectorize over heading for PDW and RT
                 
                     for h, hdg in enumerate(hdgs):
                         
@@ -395,9 +388,11 @@ class SelfMotionDDM:
                         rt_dist /= rt_dist.sum()  # renormalize to get posterior
 
                         # need original data here for RT to get the likelihood in the predictions
-                        actual_rts = y.loc[trial_index, 'RT'].values
-                        dist_inds = [np.argmin(np.abs(self.tvec - rt)) for rt in actual_rts]
-                        predictions.loc[trial_index, 'RT'] = rt_dist[dist_inds]
+
+                        if y is not None:
+                            actual_rts = y.loc[trial_index, 'RT'].values
+                            dist_inds = [np.argmin(np.abs(self.tvec - rt)) for rt in actual_rts]
+                            predictions.loc[trial_index, 'RT'] = rt_dist[dist_inds]
 
                         if n_samples:
                             pred_sample.loc[trial_index, 'RT'] = rng.choice(
@@ -443,13 +438,13 @@ class SelfMotionDDM:
         return [self.init_params[k] for k in self.fit_param_names]
 
 
-    def simulate(self, X, n_samples: Optional[int] = 100, seed=None):
+    def simulate(self, X, n_samples: int = 100, seed=None):
         """
         simulate data from model given X
         :param X: DataFrame with columns modality, coherence, delta, heading
         :return: simulated DataFrame with columns choice, PDW, RT
         """
-        _, preds = self.predict(X, None, n_samples=1)
+        _, preds = self.predict(X, None, n_samples=n_samples)
         
         raise NotImplementedError('simulate method not yet implemented')
         
