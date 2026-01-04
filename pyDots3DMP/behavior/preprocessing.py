@@ -2,17 +2,18 @@
 import numpy as np
 import pandas as pd
 from pathlib import Path, PurePath
+from typing import Literal, Optional, Union
 
 from itertools import product
 
-
-# %% helper functions
-
+# %% basic stats functions
 def prop_se(x):
+    """standard error of proportion"""
     return np.sqrt((np.mean(x)*(1-np.mean(x))) / len(x))
 
 
 def cont_se(x):
+    """standard error of continuous variable"""
     return np.std(x) / np.sqrt(len(x))
 
 
@@ -24,12 +25,29 @@ def prop_se_minmax(x):
     se = prop_se(x)
     return (np.mean(x)-se, np.mean(x)+se)
 
+# %% dataframe cleaning functions
 
-def drop_brfix(df, columns="choice") -> pd.DataFrame:
+def drop_breakfix(df, columns: Union[list, str]="choice") -> pd.DataFrame:
+    """drop trials with breakfixes"""
     return df.dropna(subset=columns, axis=0)
 
-def drop_one_targs(df, columns=["oneTargChoice"]) -> pd.DataFrame:
+
+def drop_one_target_wager(df, columns: Union[list, str]="oneTargChoice") -> pd.DataFrame:
+    """drop one-target wager trials"""
     return df.loc[(df[columns] == 0).all(axis=1), :]
+
+
+def drop_columns(df, columns) -> pd.DataFrame:
+    """drop specified columns from dataframe"""
+    df = df.loc[:, ~df.columns.str.startswith('Unnamed')] # drop any unnamed columns first
+    return df.drop(columns, axis=1)
+
+
+def zero_one_choice(df) -> pd.DataFrame:
+    """recode choice column to be 0 and 1 instead of 1 and 2"""
+    if np.max(df['choice']) == 2:
+        df['choice'] -= 1
+    return df
 
 
 def drop_outlierRTs_bygroup(func):
@@ -39,9 +57,26 @@ def drop_outlierRTs_bygroup(func):
 
 
 #@drop_outlierRTs_bygroup
-def drop_outlierRTs(df, rt_range, metric: str = "precomputed") -> pd.DataFrame:
+def drop_outlierRTs(
+    df,
+    rt_range: Union[float, tuple] = (0, np.inf),
+    metric: Literal["precomputed", "stdev", "percentile"] = "precomputed"
+    ) -> pd.DataFrame:
+    """drop trials with outlier RTs, based on specified metric
 
-    min_rt, max_rt = 0, np.inf
+    Args:
+        df (pd.DataFrame): behavioral data
+        rt_range (tuple, optional): range of RTs to keep. Defaults to (0, np.inf).
+        metric: str, optional): method to determine RT range. Options are:
+            "precomputed": use rt_range as is (min, max)
+            "stdev": use mean +/- rt_range * std
+            "percentile": use rt_range as percentiles (min, max)
+    """
+
+    if metric == "stdev":
+        assert isinstance(rt_range, (int, float)), "rt_range must be a single float for 'stdev' metric"
+    else:
+        assert isinstance(rt_range, tuple) and len(rt_range) == 2, "rt_range must be a tuple (min, max)"
 
     if metric == "precomputed":
         min_rt, max_rt = rt_range
@@ -53,33 +88,70 @@ def drop_outlierRTs(df, rt_range, metric: str = "precomputed") -> pd.DataFrame:
         max_rt = rt_mu + rt_range*rt_std
 
     elif metric == "percentile":
+        assert 0 <= rt_range[0] < rt_range[1] <= 100, "percentile range must be between 0 and 100"
         prc_rt = np.percentile(df['RT'], rt_range)
         min_rt, max_rt = prc_rt[0], prc_rt[1]
 
     return df.loc[(df['RT'] > min_rt) & (df['RT'] <= max_rt), :]
 
 
-def bin_conditions(df, bin_ranges, bin_labels) -> pd.DataFrame:
+def bin_conditions(
+    df,
+    bin_ranges,
+    bin_labels: Optional[dict] = None
+    ) -> pd.DataFrame:
+    """
+    group multiple condition values into bins
+
+    this is useful for consolidating the number of unique stimulus conditions 
+    e.g. 
+
+    bins = {
+        'coherence': [0, 0.5, 1],
+        'heading': [-14, -8, -4, -2, -1, 1, 2, 4, 8, 14],
+        'delta': [-5, -2, 2, 5],
+    }
+    labels = {
+        'coherence': [0.2, 0.7],
+        'heading': [-12, -6, -3, -1.5, 0, 1.5, 3, 6, 12],
+        'delta': [-3, 0, 3],
+    }
+
+    will group coherence values into low (0.2) and high (0.7), heading values into 9 bins,
+    and delta values into 3 bins.
+    Any coherence between 0 and 0.5 will be labeled as 0.2, and between 0.5 and 1 as 0.7, etc.
+    Similarly any heading between -14 and -8 will be labeled as -12, etc.
+    
+    Args:
+        df (pd.DataFrame): behavioral data
+        bin_ranges (dict): dictionary specifying bin edges for each condition
+        bin_labels (dict): dictionary specifying labels for each bin
+
+    if bin_labels is None, the midpoint of each bin will be used as the label.
+    Returns:
+        pd.DataFrame: dataframe with binned condition columns
+    """
+    
+    if bin_labels is None:
+        bin_labels = {}
+        for col, bins in bin_ranges.items():
+            labels = []
+            for i in range(len(bins)-1):
+                labels.append((bins[i] + bins[i+1]) / 2)
+            bin_labels[col] = labels
+            
     for col, bins in bin_ranges.items():
         df[col] = pd.cut(df[col], bins=bins, labels=bin_labels[col])
         df[col] = df[col].astype('float')
+        
     return df
 
 
-def drop_columns(df, columns) -> pd.DataFrame:
-    df = df.loc[:, ~df.columns.str.startswith('Unnamed')]
-    return df.drop(columns, axis=1)
-
-
-def zero_one_choice(df) -> pd.DataFrame:
-    # to make 0..1, like PDW - more convenient for pRight calculations
-    # but should type as category for other things!
-    if np.max(df['choice']) == 2:
-        df['choice'] -= 1
-    return df
-
-
-def data_cleanup(filename: str, drop_cols=None, save_file: bool = False) -> pd.DataFrame:
+def data_cleanup(
+    filepath: Union[Path, str],
+    drop_cols=None,
+    save_file: bool = False
+    ) -> pd.DataFrame:
 
     # TODO add kwargs for drop and binning parameters below, currently hardcoded...
     # TODO add print statements to explain, allow user-inputs to specify what functions to use?
@@ -106,8 +178,8 @@ def data_cleanup(filename: str, drop_cols=None, save_file: bool = False) -> pd.D
                         "amountRewardLowConfOffered", "amountRewardHighConfOffered", "reward"]
 
     bhv_df_clean = (bhv_df
-                    .pipe(drop_brfix, columns=['choice', 'PDW'])
-                    .pipe(drop_one_targs)
+                    .pipe(drop_breakfix, columns=['choice', 'PDW'])
+                    .pipe(drop_one_target_wager)
                     .pipe(zero_one_choice)
                     .pipe(drop_columns, columns=drop_cols)
                     .pipe(drop_outlierRTs, rt_range=(0.25, 2))
@@ -126,7 +198,11 @@ def data_cleanup(filename: str, drop_cols=None, save_file: bool = False) -> pd.D
     return bhv_df_clean
 
 
-def format_onetargconf(df: pd.DataFrame, remove_one_targ: bool = True) -> pd.DataFrame:
+def recode_onetarget_wagers(
+    df: pd.DataFrame,
+    remove_one_targ: bool = True
+    ) -> pd.DataFrame:
+    """Recode or remove one-target wager trials"""
 
     if remove_one_targ:
         # create new df with one-target PDW trials removed
@@ -141,11 +217,18 @@ def format_onetargconf(df: pd.DataFrame, remove_one_targ: bool = True) -> pd.Dat
     return df
 
 
-def dots3DMP_create_trial_list(hdgs: list, mods: list, cohs: list, deltas: list,
-                               nreps: int = 1, shuff: bool = True) -> pd.DataFrame:
+def dots3DMP_create_trial_list(
+    hdgs: list,
+    mods: list,
+    cohs: list,
+    deltas: list,
+    nreps: int = 1,
+    shuff: bool = True
+    ) -> pd.DataFrame:
+    """Create a trial list of stimulus conditions for dots3DMP task"""
 
     if isinstance(shuff, int):
-        np.random.seed(shuff)  # for reproducibility
+        np.random.seed(shuff) 
 
     num_hdg_groups = any([1 in mods]) + any([2 in mods]) * len(cohs) + \
         any([3 in mods]) * len(cohs) * len(deltas)
@@ -198,10 +281,18 @@ def dots3DMP_create_trial_list(hdgs: list, mods: list, cohs: list, deltas: list,
     return trial_table
 
 
-def add_trial_outcomes(trial_table: pd.DataFrame, outcomes: dict = None) -> pd.DataFrame:
-
-    """Replicate a trial table of stimulus conditions N times to include possible trial outcomes
+def add_trial_outcomes(
+    trial_table: pd.DataFrame,
+    outcomes: Optional[dict] = None
+    ) -> pd.DataFrame:
+    """
+    Replicate a trial table of stimulus conditions N times to include possible trial outcomes
     e.g. choice and wager
+
+    Args:
+        trial_table (pd.DataFrame): initial trial conditions list
+        outcomes (dict, optional): dictionary specifying possible outcomes for each outcome type.
+            Defaults to {'choice': [0, 1], 'PDW': [0, 1], 'oneTargConf': [0]}.
 
     Returns:
         pd.DataFrame: final trial conditions list, with additional columns for trial outcomes
@@ -219,7 +310,13 @@ def add_trial_outcomes(trial_table: pd.DataFrame, outcomes: dict = None) -> pd.D
     return new_trial_table
 
 
-def dots3DMP_create_conditions(conds_dict: dict[str, list], cond_labels=None) -> pd.DataFrame:
+def dots3DMP_create_conditions(
+    conds_dict: dict[str, list],
+    cond_labels: Optional[list[str]] = None
+    ) -> pd.DataFrame:
+    """
+    Create a trial list of stimulus and response conditions for dots3DMP task
+    """
     
     # TODO allow user to set stim and res_keys
     stim_keys = ['mods', 'cohs', 'deltas', 'hdgs']    
@@ -231,8 +328,9 @@ def dots3DMP_create_conditions(conds_dict: dict[str, list], cond_labels=None) ->
     rr_dict = {key: conds_dict.get(key, [0]) for key in res_keys}
     conds = conds.pipe(add_trial_outcomes, rr_dict)
     
-    indices = [idx for idx, el in enumerate(stim_keys+res_keys)
-               if el in conds_dict]
+    indices = [
+        idx for idx, el in enumerate(stim_keys+res_keys) if el in conds_dict
+               ]
     
     conds = conds[conds.columns[indices]]
     

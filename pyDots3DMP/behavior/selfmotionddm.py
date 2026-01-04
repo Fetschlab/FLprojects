@@ -62,8 +62,8 @@ def main():
 
     datafilepath = "/Users/stevenjerjian/Desktop/Academia/FetschLab/PLDAPS_data/dataStructs/lucio_20220512-20230606.csv"
     data = data_cleanup(datafilepath)  # this is a hack function to quickly load and clean the data, could be improved/generalized with options
-    data = format_onetargconf(data, remove_one_targ=True)
-    data = data.reset_index(drop=True)
+
+    data = data.loc[data['oneTargConf'] == 0, :]  # remove one-target wager trials
 
     X_all = data[['modality', 'coherence', 'delta', 'heading']]
     delta0 = X_all['delta'] == 0
