@@ -150,16 +150,42 @@ class SelfMotionDDM:
             # pass data as fixed inputs to objective function
             optim_fcn_part = lambda params: self._objective_fcn(params, X, y)
 
-            bads_bounds = (lb, ub, plb, pub)
+            min_method = 'bads'
+            # min_method = 'Nelder-Mead'
             
-            bads = BADS(
-                optim_fcn_part, 
-                params_array, 
-                *bads_bounds, 
-                options = {'random_seed': 1234}
-                )
-            result = bads.optimize()
+            if min_method == 'bads':
 
+                lb = params_array * 0.25
+                ub = params_array * 3.0
+                plb = params_array * 0.5
+                pub = params_array * 2.0
+                bads_bounds = (lb, ub, plb, pub)
+
+                options = {
+                        "random_seed": 42,
+                        # "uncertainty_handling": True,
+                        "max_fun_evals": 300,
+                        # "noise_final_samples": 100,
+                        "display": "full"
+                    }
+                
+                bads = BADS(
+                    optim_fcn_part, 
+                    params_array, 
+                    *bads_bounds, 
+                    options=options
+                    )
+                result = bads.optimize()
+
+            else:
+                result = minimize(
+                    self._objective_fcn,
+                    params_array,
+                    args=(X, y),
+                    method=min_method,
+                    options={'maxiter': 5000, 'disp': True}
+                    )
+                
             # at the end, store fitted params back into dict, with fixed ones
             self._build_params_dict(result.x, self.param_end_inds)
 
