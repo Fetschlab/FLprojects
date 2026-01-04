@@ -158,9 +158,9 @@ def data_cleanup(
 
     folder = "/Users/stevenjerjian/Desktop/FetschLab/PLDAPS_data/dataStructs/"
    
-    clean_filename = Path(filename).stem + "_clean.csv"
+    clean_filename = Path(filepath).stem + "_clean.csv"
 
-    bhv_df = pd.read_csv(PurePath(folder, filename))
+    bhv_df = pd.read_csv(filepath)
 
     bins = {
         'coherence': [0, 0.5, 1],
