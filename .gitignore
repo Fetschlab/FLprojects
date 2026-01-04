@@ -1,10 +1,18 @@
+
+# MacOS system files
 *.DS_Store
-*.m~
 *.icloud
+
+# MATLAB temporary or data files
+*.m~
 *.asv
 *.mat
-*.pyc
-*.yml
-*.pdf
 
-pyDots3DMP/.idea/
+# Python cache files
+*.pyc
+__pycache__/
+
+# output files
+*.log
+*.json
+*.pdf
