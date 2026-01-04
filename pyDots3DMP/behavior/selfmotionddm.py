@@ -46,11 +46,11 @@ def main():
     time_vec = np.arange(0, 2, 0.05)
        
     init_params = {
-        'kmult': [0.3, 0.5], 
-        'bound': [0.6, 0.6, 0.6],
+        'kmult': [0.6, 0.6], 
+        'bound': [1.0, 1.0, 1.0],
         'non_dec_time': [0.3],
         'wager_thr': [1, 1, 1],
-        'wager_alpha': [0.05]
+        'wager_alpha': [0.05],
     }
     accum = SelfMotionDDM(grid_vec=grid_vec, tvec=time_vec, **init_params, 
                                 stim_scaling=False, return_wager=False)
@@ -65,10 +65,11 @@ def main():
     y = data[['choice', 'PDW', 'RT']].astype({'choice': 'int', 'PDW': 'int'})
     y['RT'] += 0.3 # to reverse the downshift from motion platform latency
 
-    X = X_all[delta0].reset_index(drop=True)
-    y = y[delta0].reset_index(drop=True)
+    X = X_all
+    # X = X_all[delta0].reset_index(drop=True)
+    # y = y[delta0].reset_index(drop=True)
 
-    # accum.fit(X, y)
+    accum.fit(X, y)
     y_pred, y_pred_samp = accum.predict(X, y=None, n_samples=1, cache_accumulators=True, seed=1)
 
     print(y.head())
@@ -149,11 +150,6 @@ class SelfMotionDDM:
             # pass data as fixed inputs to objective function
             optim_fcn_part = lambda params: self._objective_fcn(params, X, y)
 
-            # TODO allow user to specify these instead or with init params
-            lb = params_array * 0.3
-            ub = params_array * 2
-            plb = params_array * 0.5
-            pub = params_array * 1.5
             bads_bounds = (lb, ub, plb, pub)
             
             bads = BADS(
@@ -379,19 +375,21 @@ class SelfMotionDDM:
                         # ====== RT ======
 
                         # first convolve model RT distribution with non-decision time
-                        ndt_dist = norm.pdf(self.tvec, loc=non_dec_time[m], scale=0.001) #scale=self.params_['sigma_ndt'])
+                        ndt_dist = norm.pdf(self.tvec, loc=non_dec_time[m], scale=0.05) #scale=self.params_['sigma_ndt'])
                         rt_dist = np.squeeze(accumulator.rt_dist_[h, :])
-
-                        rt_dist = np.clip(rt_dist, np.finfo(np.float64).eps, a_max=None)
                         rt_dist = convolve(rt_dist, ndt_dist / ndt_dist.sum())
-                        rt_dist = rt_dist[:len(accumulator.tvec)]
-                        rt_dist /= rt_dist.sum()  # renormalize to get posterior
+                        rt_dist = np.clip(rt_dist, 1e-10, a_max=None)
 
-                        # need original data here for RT to get the likelihood in the predictions
+                        # trim to original length of tvec and renormalize to get posterior
+                        rt_dist = rt_dist[:len(accumulator.tvec)]
+                        rt_dist /= rt_dist.sum()
 
                         if y is not None:
+                            # need original data here to get RT likelihoods
                             actual_rts = y.loc[trial_index, 'RT'].values
-                            dist_inds = [np.argmin(np.abs(self.tvec - rt)) for rt in actual_rts]
+                            # dist_inds = [np.argmin(np.abs(self.tvec - rt)) for rt in actual_rts]
+                            dist_inds = np.searchsorted(self.tvec, actual_rts)
+                            dist_inds[dist_inds >= len(self.tvec)] = len(self.tvec) - 1  # cap at max index
                             predictions.loc[trial_index, 'RT'] = rt_dist[dist_inds]
 
                         if n_samples:
@@ -564,9 +562,8 @@ def log_lik_bin(y, y_hat):
     # return np.sum(y * np.log(y_hat) + (1 - y) * np.log(y_hat))
     return np.sum(np.log(y_hat[y==1])) + np.sum(np.log(1 - y_hat[y==0]))
 
-def log_lik_cont(y, y_hat, t):
-    y_inds = np.searchsorted(t, y)
-    return np.sum(np.log(y_hat[y_inds]))
+def log_lik_cont(y_hat):
+    return np.sum(np.log(y_hat))
 
 def _margconds_from_intersection(prob_ab, prob_a):
     """
