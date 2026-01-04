@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 # from matplotlib import animation
 
-from moi import moi_cdf, moi_pdf, moi_pdf_vec, sample_dv
+from moi import moi_cdf, moi_cdf_vec, moi_pdf, moi_pdf_vec, sample_dv
 
 logger = logging.getLogger(__name__)
     
@@ -105,19 +105,23 @@ class Accumulator:
 
     def cdf(self):
         """calculate cdf at boundaries, and corresponding choices and times"""
-        # faster to preallocate array rather than appending to list
+    def cdf(self, use_vectorized: bool = True):
+        """calculate cdf at boundaries for each drift rate, returns
+        probability of correct choice and RT distribution (no NDT)"""
         p_corr = np.zeros(len(self.drift_rates))
         rt_dist = np.zeros((len(self.drift_rates), len(self.tvec)))
+
+        cdf_fcn = moi_cdf_vec if use_vectorized else moi_cdf
         
         for d, drift in enumerate(self.drift_rates):
-            p_corr[d], rt_dist[d, :], flux1, flux2 = moi_cdf(
+            p_corr[d], rt_dist[d, :], flux1, flux2 = cdf_fcn(
                 self.tvec, drift, self.bound, 0.025, self.num_images)
-
+            
         self.p_corr_ = p_corr
         self.rt_dist_ = rt_dist
 
 
-    def pdf(self, full_pdf=False):
+    def pdf(self, use_vectorized=True, full_pdf=False):
 
         # TODO allow flexible specification of grid_vec, to use mgrid
         if full_pdf:
@@ -139,12 +143,12 @@ class Accumulator:
                 pdf_lo = pdf_3d[:, -1, :]  # top bound
 
             else:
-                # only need to calculate pdf at the boundaries!
-
-                # vectorized implementation is about 10x faster!
-                pdf_lo = moi_pdf_vec(xmesh1, ymesh1, self.tvec, drift,
+                # sufficient to calculate pdf just at the boundaries, not the full third quadrant
+                # and use vectorized version for speed
+                pdf_fcn = moi_pdf_vec if use_vectorized else moi_pdf
+                pdf_lo = pdf_fcn(xmesh1, ymesh1, self.tvec, drift,
                                       self.bound, self.num_images)
-                pdf_up = moi_pdf_vec(xmesh2, ymesh2, self.tvec, drift,
+                pdf_up = pdf_fcn(xmesh2, ymesh2, self.tvec, drift,
                                       self.bound, self.num_images)
 
             # distribution of losing accumulator, GIVEN winner has hit bound
