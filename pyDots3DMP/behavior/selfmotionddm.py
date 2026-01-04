@@ -429,10 +429,11 @@ class SelfMotionDDM:
                             predictions.loc[trial_index, 'RT'] = rt_dist[dist_inds]
 
                         if n_samples:
-                            pred_sample.loc[trial_index, 'RT'] = rng.choice(
-                                self.tvec, trial_index.sum(), replace=True, p=rt_dist
+                            sampled_RTs = np.random.choice(
+                                self.tvec, (trial_index.sum(), n_samples), replace=True, p=rt_dist
                                 )
-        
+                            pred_sample.loc[trial_index, 'RT'] = sampled_RTs.mean(axis=1)
+
         return predictions, pred_sample
     
 
