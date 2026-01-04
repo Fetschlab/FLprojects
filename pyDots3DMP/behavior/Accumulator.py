@@ -103,11 +103,10 @@ class Accumulator:
             self.drift_rates.append(drifts_posneg)
             
 
-    def cdf(self):
-        """calculate cdf at boundaries, and corresponding choices and times"""
     def cdf(self, use_vectorized: bool = True):
         """calculate cdf at boundaries for each drift rate, returns
         probability of correct choice and RT distribution (no NDT)"""
+        
         p_corr = np.zeros(len(self.drift_rates))
         rt_dist = np.zeros((len(self.drift_rates), len(self.tvec)))
 

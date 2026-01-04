@@ -47,6 +47,45 @@ def _corr_num_images(num_images: int) -> tuple[np.ndarray, int]:
 
 # %% ----------------------------------------------------------------
 # CDF/PDF calculations
+
+def moi_pdf(
+    xmesh: np.ndarray, 
+    ymesh: np.ndarray,
+    tvec: np.ndarray,
+    mu: np.ndarray,
+    bound=np.array([1, 1]), 
+    num_images: int = 7
+    ) -> np.ndarray:
+    """
+    Calculate pdf according to method of images. Older implementation,
+    this is not vectorized over time so runs slower.
+
+    :param xmesh: x-values for pdf computation
+    :param ymesh: y-valuues, should match shape of xmesh
+    :param tvec: 1-D array containing times to evaluate pdf
+    :param mu: drift rate 2xlen(tvec) array (to incorporate any urgency signal)
+    :param bound: bound, length 2 array
+    :param num_images: number of images for MOI, default is 7
+    :return: pdf at each timepoint (t, x, y)-shape array
+    """
+    
+    sigma, k = _corr_num_images(num_images)
+
+    nx, ny = xmesh.shape
+    pdf_result = np.zeros((len(tvec), nx, ny)).squeeze()
+
+    xy_mesh = np.dstack((xmesh, ymesh))
+
+    s0 = -bound
+    # skip the first sample (t starts at 1)
+    for t in range(1, len(tvec)):
+
+        pdf_result[t, ...] = pdf_at_timestep(
+            tvec[t], mu[t, :], sigma, xy_mesh, k, s0)
+
+    return pdf_result
+
+
 def moi_pdf_vec(
     xmesh: np.ndarray, 
     ymesh: np.ndarray, 
@@ -101,45 +140,6 @@ def moi_pdf_vec(
 
         # use vectorized implementation for speed # TODO unit tests to verify correctness
         pdf_result += (aj_all * np.exp(_multiple_logpdfs_vec_input(new_mesh, sj + mu_t, covs)))
-
-    return pdf_result
-
-
-def moi_pdf(
-    xmesh: np.ndarray, 
-    ymesh: np.ndarray,
-    tvec: np.ndarray,
-    mu: np.ndarray,
-    bound=np.array([1, 1]), 
-    num_images: int = 7
-    ) -> np.ndarray:
-    """
-    Calculate pdf according to method of images. Older implementation,
-    this is not vectorized over time so runs slower.
-
-    :param xmesh: x-values for pdf computation
-    :param ymesh: y-valuues, should match shape of xmesh
-    :param tvec: 1-D array containing times to evaluate pdf
-    :param mu: drift rate 2xlen(tvec) array (to incorporate any urgency signal)
-    :param bound: bound, length 2 array
-    :param num_images: number of images for MOI, default is 7
-    :return: pdf at each timepoint (t, x, y)-shape array
-    """
-    
-    sigma, k = _corr_num_images(num_images)
-
-    nx, ny = xmesh.shape
-    pdf_result = np.zeros((len(tvec), nx, ny)).squeeze()
-
-    xy_mesh = np.dstack((xmesh, ymesh))
-
-    s0 = -bound
-
-    # skip the first sample (t starts at 1)
-    for t in range(1, len(tvec)):
-
-        pdf_result[t, ...] = pdf_at_timestep(
-            tvec[t], mu[t, :], sigma, xy_mesh, k, s0)
 
     return pdf_result
 
@@ -200,12 +200,6 @@ def pdf_at_timestep(
 
     return pdf
 
-
-    # integrate using weights (sum over nodes)
-    integral = np.sum(w * integrand, axis=0)
-
-    # integral now approximates Phi_2(h,k; rho)
-    return integral.reshape(shape)
 
 def moi_cdf(
     tvec: np.ndarray, 
@@ -333,6 +327,53 @@ def moi_cdf(
     return p_up, rt_dist, flux1, flux2
 
 
+# --- Vectorized bivariate normal CDF (no private SciPy calls) ---
+def _bvn_cdf(h, k, rho, n=64):
+    """Vectorized bivariate normal CDF Phi_2(h,k; rho).
+
+    Uses a transformation to map the integral from (-inf, h) to (-1,1) and
+    applies Gauss-Legendre quadrature. Accepts scalars or 1-D arrays for h,k,rho
+    and returns an array of the same shape.
+    """
+    from numpy.polynomial.legendre import leggauss
+    h = np.asarray(h)
+    k = np.asarray(k)
+    rho = np.asarray(rho)
+
+    # broadcast to common shape
+    h, k, rho = np.broadcast_arrays(h, k, rho)
+
+    # get nodes and weights on [-1,1]
+    u, w = leggauss(n)
+    # reshape weights for broadcasting over the mesh (nodes, *h.shape)
+    w = w[:, None, None]
+
+    # transform nodes to x in (-inf, h) via x = h - (1+u)/(1-u)
+    # dx/du = -2/(1-u)^2, take absolute value for jacobian
+    denom = (1 - u)
+    # expand node-dependent terms to shape (n,1,1) so they broadcast correctly over h's shape
+    x = h[None, ...] - ((1.0 + u) / denom)[:, None, None]
+    jac = (2.0 / (denom ** 2))[:, None, None]
+
+    # compute phi(x) and inner normal CDF Phi((k - rho*x)/sqrt(1-rho^2))
+    # phi(x) = exp(-x^2/2)/sqrt(2*pi)
+    phi_x = np.exp(-0.5 * x**2) / np.sqrt(2.0 * np.pi)
+
+    denom_r = np.sqrt(1.0 - rho**2)
+    inner = (k[None, ...] - rho[None, ...] * x) / denom_r[None, ...]
+
+    # use scipy's univariate normal CDF (vectorized)
+    phi_inner = norm.cdf(inner)
+
+    integrand = phi_x * phi_inner * jac
+
+    # integrate using weights (sum over nodes)
+    integral = np.sum(w * integrand, axis=0)
+
+    # integral now approximates Phi_2(h,k; rho)
+    return integral.reshape(h.shape)
+
+
 def sample_dv(
     mu: np.ndarray,
     s: np.ndarray = np.array([1, 1]),
@@ -357,7 +398,95 @@ def sample_dv(
 
 # maybe useful for faster dv simulation (replacement for rvs calls)
 # def chol_sample(mean, cov):
-#     return mean + np.linalg.cholesky(cov) @ np.random.standard_normal(mean.size)    res = {
+#     return mean + np.linalg.cholesky(cov) @ np.random.standard_normal(mean.size)
+
+
+# --- Fully vectorized t x j implementation --------------------------------
+
+def moi_cdf_vec(
+    tvec: np.ndarray,
+    mu: np.ndarray,
+    bound=np.array([1, 1]),
+    margin_width: float = 0.025,
+    num_images: int = 7,
+    bvn_n: int = 64,
+):
+    """
+    Vectorized moi CDF over times (T) and images (J).
+    Uses vectorized bivariate normal CDF implementation
+    
+    Returns same outputs as `moi_cdf`: p_up, rt_dist, flux1, flux2
+    """
+    sigma, k = _corr_num_images(num_images)
+    s0 = -bound
+    b0, bm = -margin_width, 0
+    bound0 = np.array([b0, b0])
+    bound1 = np.array([b0, bm])
+    bound2 = np.array([bm, b0])
+
+    # safe copy so we don't mutate input
+    tvec_safe = np.array(tvec, dtype=float, copy=True)
+    tvec_safe[tvec_safe == 0] = np.min(tvec_safe[tvec_safe > 0])
+
+    T = len(tvec_safe)
+    # build all image starting positions (J,2)
+    sj_list = [s0] + [_sj_rot(j, s0, k) for j in range(1, k*2)]
+    sj_all = np.vstack(sj_list)             # (J,2)
+    J = sj_all.shape[0]
+
+    # means: (T, J, 2)
+    mu_t = mu * tvec_safe[:, None]         # (T,2)
+    means = mu_t[:, None, :] + sj_all[None, :, :]  # (T,J,2)
+
+    # weights: (T, J)
+    inv_sigma = np.linalg.inv(sigma)
+    delta = (sj_all - s0)                   # (J,2)
+    exponent = (mu @ inv_sigma) @ delta.T   # (T,J)
+    signs = np.array([1] + [(-1)**j for j in range(1, k*2)])
+    weights = signs[None, :] * np.exp(exponent)
+
+    sd = np.sqrt(tvec_safe)[:, None]        # (T,1)
+    rho_param = sigma[0, 1]
+
+    # standardized limits shape (T,J)
+    h0 = (bound0[0] - means[..., 0]) / sd
+    k0 = (bound0[1] - means[..., 1]) / sd
+    h1 = (bound1[0] - means[..., 0]) / sd
+    k1 = (bound1[1] - means[..., 1]) / sd
+    h2 = (bound2[0] - means[..., 0]) / sd
+    k2 = (bound2[1] - means[..., 1]) / sd
+
+    # compute cdfs
+    cdf0 = _bvn_cdf(h0, k0, rho_param, n=bvn_n)
+    cdf1_arr = _bvn_cdf(h1, k1, rho_param, n=bvn_n) - cdf0
+    cdf2_arr = _bvn_cdf(h2, k2, rho_param, n=bvn_n) - cdf0
+    
+    # reduce over images
+    cdf_rest = np.sum(weights * cdf0, axis=1)
+    cdf1 = np.sum(weights * cdf1_arr, axis=1)
+    cdf2 = np.sum(weights * cdf2_arr, axis=1)
+
+    survival_prob = np.ones_like(tvec_safe)
+    survival_prob[1:] = cdf_rest[1:]
+    flux1 = np.zeros_like(tvec_safe); flux2 = np.zeros_like(tvec_safe)
+    flux1[1:] = cdf1[1:]; flux2[1:] = cdf2[1:]
+
+    p_up = np.sum(flux2) / np.sum(flux1 + flux2)
+    rt_dist = np.diff(np.insert(1 - survival_prob, 0, 0))
+
+    return p_up, rt_dist, flux1, flux2
+
+
+# --- Small helper for quick comparisons ------------------------------------
+
+def compare_moi_cdfs(tvec, mu, **kwargs):
+    """
+    Quick comparison helper between original `moi_cdf` and `moi_cdf_vec`.
+    Returns dict with results and absolute differences for flux arrays.
+    """
+    out_orig = moi_cdf(tvec.copy(), mu.copy(), **kwargs)
+    out_vec = moi_cdf_vec(tvec.copy(), mu.copy(), **kwargs)
+    res = {
         'orig': out_orig,
         'vec': out_vec,
         'flux1_err': np.max(np.abs(out_orig[2] - out_vec[2])),
