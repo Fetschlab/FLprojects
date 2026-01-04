@@ -12,7 +12,7 @@ from scipy.optimize import curve_fit
 
 from functools import wraps
 from typing import Optional
-from .preprocessing import prop_se, cont_se, gaus
+from .utils import prop_se, cont_se, gaus
 
 
 # TODO functions list

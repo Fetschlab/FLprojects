@@ -6,7 +6,7 @@ import pandas as pd
 import pickle
 from pathlib import PurePath
 
-from behavior.preprocessing import dots3DMP_create_trial_list, add_trial_outcomes
+from behavior.utils import dots3DMP_create_trial_list, add_trial_outcomes
 from neural.rate_utils import build_pseudopop, concat_aligned_rates
 from neural.tuning_utils import *
 

@@ -4,7 +4,7 @@
 import numpy as np
 import pandas as pd
 
-from behavior.preprocessing import dots3DMP_create_trial_list, add_trial_outcomes
+from behavior.utils import dots3DMP_create_trial_list, add_trial_outcomes
 from neural.dots3DMP_build_dataset import build_rate_population
 from neural.rate_utils import roc_outcome, pref_hdg_dir
 from neural.tuning_utils import tuning_across, tuning_within

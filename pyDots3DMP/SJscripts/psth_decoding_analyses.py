@@ -17,7 +17,7 @@
 
 import numpy as np
 
-from behavior.preprocessing import dots3DMP_create_conditions
+from behavior.utils import dots3DMP_create_conditions
 from neural.dots3DMP_build_dataset import build_rate_population
 from neural.load_utils import quick_load
 from neural.rate_utils import pref_hdg_dir, demean_conditions, condition_averages

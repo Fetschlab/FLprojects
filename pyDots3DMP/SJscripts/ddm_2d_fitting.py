@@ -9,7 +9,7 @@ from typing import Optional
 
 from behavior import ddm_2d
 
-from behavior.preprocessing import (
+from behavior.utils import (
     dots3DMP_create_trial_list, dots3DMP_create_conditions,
     data_cleanup, format_onetargconf,
     )

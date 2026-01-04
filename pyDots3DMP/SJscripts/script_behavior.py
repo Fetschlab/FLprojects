@@ -7,7 +7,7 @@ import seaborn as sns
 
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
-from behavior.preprocessing import data_cleanup, format_onetargconf
+from behavior.utils import data_cleanup, format_onetargconf
 from behavior.descriptive import *
 
 

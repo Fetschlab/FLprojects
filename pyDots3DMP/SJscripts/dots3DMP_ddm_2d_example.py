@@ -23,7 +23,7 @@ from pybads import BADS
 from behavior import ddm_2d
 
 # going to use these custom functions for processing behavioral data, and plotting fit/data results
-from behavior.preprocessing import (
+from behavior.utils import (
     dots3DMP_create_trial_list, dots3DMP_create_conditions,
     data_cleanup, format_onetargconf,
     )

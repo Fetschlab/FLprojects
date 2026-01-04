@@ -15,7 +15,7 @@ from scipy.signal import convolve
 from scipy.stats import norm, skewnorm
 from scipy.optimize import minimize
 
-from preprocessing import data_cleanup, format_onetargconf
+from behavior.utils import data_cleanup
 from accumulator import Accumulator
 
 
