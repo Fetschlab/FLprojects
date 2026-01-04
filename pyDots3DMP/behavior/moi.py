@@ -3,6 +3,8 @@
 Low-level helper functions for 2-D self-motion DDM using method of images.
 """
 
+from typing import Optional
+
 import numpy as np
 from scipy.stats import multivariate_normal as mvn
 from scipy.stats import norm
@@ -47,6 +49,8 @@ def _corr_num_images(num_images: int) -> tuple[np.ndarray, int]:
 
 # %% ----------------------------------------------------------------
 # CDF/PDF calculations
+
+# 
 
 def moi_pdf(
     xmesh: np.ndarray, 
@@ -327,89 +331,6 @@ def moi_cdf(
     return p_up, rt_dist, flux1, flux2
 
 
-# --- Vectorized bivariate normal CDF (no private SciPy calls) ---
-def _bvn_cdf(h, k, rho, n=64):
-    """Vectorized bivariate normal CDF Phi_2(h,k; rho).
-
-    Uses a transformation to map the integral from (-inf, h) to (-1,1) and
-    applies Gauss-Legendre quadrature. Accepts scalars or 1-D arrays for h,k,rho
-    and returns an array of the same shape.
-    """
-    from numpy.polynomial.legendre import leggauss
-    h = np.asarray(h)
-    k = np.asarray(k)
-    rho = np.asarray(rho)
-
-    # broadcast to common shape
-    h, k, rho = np.broadcast_arrays(h, k, rho)
-
-    # get nodes and weights on [-1,1]
-    u, w = leggauss(n)
-    # reshape weights for broadcasting over the mesh (nodes, *h.shape)
-    w = w[:, None, None]
-
-    # transform nodes to x in (-inf, h) via x = h - (1+u)/(1-u)
-    # dx/du = -2/(1-u)^2, take absolute value for jacobian
-    denom = (1 - u)
-    # expand node-dependent terms to shape (n,1,1) so they broadcast correctly over h's shape
-    x = h[None, ...] - ((1.0 + u) / denom)[:, None, None]
-    jac = (2.0 / (denom ** 2))[:, None, None]
-
-    # compute phi(x) and inner normal CDF Phi((k - rho*x)/sqrt(1-rho^2))
-    # phi(x) = exp(-x^2/2)/sqrt(2*pi)
-    phi_x = np.exp(-0.5 * x**2) / np.sqrt(2.0 * np.pi)
-
-    denom_r = np.sqrt(1.0 - rho**2)
-    inner = (k[None, ...] - rho[None, ...] * x) / denom_r[None, ...]
-
-    # use scipy's univariate normal CDF (vectorized)
-    phi_inner = norm.cdf(inner)
-
-    integrand = phi_x * phi_inner * jac
-
-    # integrate using weights (sum over nodes)
-    integral = np.sum(w * integrand, axis=0)
-
-    # integral now approximates Phi_2(h,k; rho)
-    return integral.reshape(h.shape)
-
-
-def sample_dv(
-    mu: np.ndarray,
-    s: np.ndarray = np.array([1, 1]),
-    num_images: int = 7,
-    seed: Optional[int] = None
-    ) -> np.ndarray:
-
-    sigma, k = _corr_num_images(num_images)
-    V = np.diag(s) * sigma * np.diag(s)
-    
-    dv = np.zeros_like(mu)
-    T = mu.shape[0]
-
-    # Vectorized sampling: draw all increments at once using a standard normal
-    # and transform with Cholesky decomposition of V. Cheap trick to simulate 
-    # diffusion according to covariance matrix V, without repeated calls to
-    # scipy.stats.multivariate_normal.rvs
-    
-    if T > 1:
-
-        # for t in range(1, T):
-        #     dv[t, :] = mvn(mu[t, :].T, cov=V).rvs()
-        # dv = dv.cumsum(axis=0)
-        
-        rng = np.random.default_rng(seed)
-        L = np.linalg.cholesky(V)
-        Z = rng.standard_normal(size=(T - 1, mu.shape[1]))
-        
-        increments = mu[1:] + (Z @ L.T)
-        dv[1:] = np.cumsum(increments, axis=0)
-
-    return dv
-
-
-# --- Fully vectorized t x j implementation --------------------------------
-
 def moi_cdf_vec(
     tvec: np.ndarray,
     mu: np.ndarray,
@@ -482,6 +403,93 @@ def moi_cdf_vec(
     rt_dist = np.diff(np.insert(1 - survival_prob, 0, 0))
 
     return p_up, rt_dist, flux1, flux2
+
+
+def _bvn_cdf(h, k, rho, n=64):
+    """Vectorized bivariate normal CDF Phi_2(h,k; rho).
+
+    The naive implementation of the bivariate normal CDF in SciPy
+    (scipy.stats.multivariate_normal.cdf) is quite slow because it requires
+    a loop over each timepoint and image, to account for the changing mean and covariance
+    at each timepoint. This function provides a vectorized alternative using
+    Gauss-Legendre quadrature
+
+    Uses a transformation to map the integral from (-inf, h) to (-1,1) and
+    applies Gauss-Legendre quadrature. Accepts scalars or 1-D arrays for h,k,rho
+    and returns an array of the same shape.
+    """
+    from numpy.polynomial.legendre import leggauss
+    h = np.asarray(h)
+    k = np.asarray(k)
+    rho = np.asarray(rho)
+
+    # broadcast to common shape
+    h, k, rho = np.broadcast_arrays(h, k, rho)
+
+    # get nodes and weights on [-1,1]
+    u, w = leggauss(n)
+    # reshape weights for broadcasting over the mesh (nodes, *h.shape)
+    w = w[:, None, None]
+
+    # transform nodes to x in (-inf, h) via x = h - (1+u)/(1-u)
+    # dx/du = -2/(1-u)^2, take absolute value for jacobian (this allows for integration by substitution)
+    denom = (1 - u)
+    # expand node-dependent terms to shape (n,1,1) so they broadcast correctly over h's shape
+    x = h[None, ...] - ((1.0 + u) / denom)[:, None, None]
+    jac = (2.0 / (denom ** 2))[:, None, None]
+
+    # compute phi(x) and inner normal CDF Phi((k - rho*x)/sqrt(1-rho^2))
+    # phi(x) = exp(-x^2/2)/sqrt(2*pi)
+    phi_x = np.exp(-0.5 * x**2) / np.sqrt(2.0 * np.pi)
+
+    denom_r = np.sqrt(1.0 - rho**2)
+    inner = (k[None, ...] - rho[None, ...] * x) / denom_r[None, ...]
+
+    # use scipy's univariate normal CDF (vectorized)
+    phi_inner = norm.cdf(inner)
+
+    integrand = phi_x * phi_inner * jac
+
+    # integrate using weights (sum over nodes)
+    integral = np.sum(w * integrand, axis=0)
+
+    return integral.reshape(h.shape)
+
+
+def sample_dv(
+    mu: np.ndarray,
+    s: np.ndarray = np.array([1, 1]),
+    num_images: int = 7,
+    seed: Optional[int] = None
+    ) -> np.ndarray:
+
+    sigma, k = _corr_num_images(num_images)
+    V = np.diag(s) * sigma * np.diag(s)
+    
+    dv = np.zeros_like(mu)
+    T = mu.shape[0]
+
+    # Vectorized sampling: draw all increments at once using a standard normal
+    # and transform with Cholesky decomposition of V. Cheap trick to simulate 
+    # diffusion according to covariance matrix V, without repeated calls to
+    # scipy.stats.multivariate_normal.rvs
+    
+    if T > 1:
+
+        # for t in range(1, T):
+        #     dv[t, :] = mvn(mu[t, :].T, cov=V).rvs()
+        # dv = dv.cumsum(axis=0)
+        
+        rng = np.random.default_rng(seed)
+        L = np.linalg.cholesky(V)
+        Z = rng.standard_normal(size=(T - 1, mu.shape[1]))
+        
+        increments = mu[1:] + (Z @ L.T)
+        dv[1:] = np.cumsum(increments, axis=0)
+
+    return dv
+
+
 
 
 # --- Small helper for quick comparisons ------------------------------------
