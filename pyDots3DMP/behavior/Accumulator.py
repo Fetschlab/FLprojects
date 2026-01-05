@@ -1,13 +1,9 @@
-
-
-
-
 import logging
 from typing import Optional, Union, Sequence
 
 import numpy as np
 import matplotlib.pyplot as plt
-# from matplotlib import animation
+from matplotlib import animation
 
 from moi import moi_cdf, moi_cdf_vec, moi_pdf, moi_pdf_vec, sample_dv
 
@@ -28,7 +24,6 @@ class Accumulator:
         if full_pdf is True, it will return a single 3-D array of the square grid, with a 2-D pdf for each timepoint
     - dist runs the cdf method, and optionally the pdf method too (if return_pdf is true), with full_pdf set to False
     - log_posterior_odds uses the losing accumulator pdfs given correct and errors to calculate log odds of correct choice
-
     """
 
     # Use __slots__ to reduce per-instance memory usage and speed attribute access.
@@ -140,7 +135,7 @@ class Accumulator:
         for drift in self.drift_rates:
 
             if full_pdf:
-                # return the full pdf in 
+                # return the full pdf in "3D" (x-y space, over time)
                 pdf_3d = moi_pdf(xmesh, ymesh, self.tvec, drift, self.bound, self.num_images)
                 pdfs.append(pdf_3d)
 
@@ -191,7 +186,7 @@ class Accumulator:
 
         self.cdf()
         if return_pdf:
-            self.pdf()
+            self.pdf(full_pdf=True)
         self._is_fitted = True
         
         return self
@@ -210,7 +205,7 @@ class Accumulator:
         -------
         fig_cdf & fig_pdf: figure handles
         """
-        if not self.is_fitted:
+        if not hasattr(self, 'p_corr_'):
             raise ValueError('Accumulator distributions have not yet been calculated')
 
         fig_cdf, axc = plt.subplots(2, 1, figsize=(4, 5))
@@ -255,25 +250,51 @@ class Accumulator:
         return fig_cdf, fig_pdf
 
 
-    def plot_3d(self, d_ind=-1):
-        raise NotImplementedError("3D plot is extremely slow or getting stuck somehow, need to improve")
+    def plot_3d(
+        self,
+        drift_ind=-1,
+        save_path: str = 'pdf_animation',
+        filetype: str = '.mp4'
+        ):
+        """Create and save animation of the full PDF over time.
 
-        def animate_wrap(i):
-            z = log_pmap(self.pdf3D[d_ind, i, :, :])
-            cont = plt.contourf(self.grid_vec, self.grid_vec, z, levels=100)
-            plt.title(f"Frame: {i + 1} - {self.tvec[i]:.2f}")
-            return cont
+        Notes
+        -----
+        - This uses `imshow` and blitting to update frames efficiently.
+        - Requires `pdf3D_` to be computed with `full_pdf=True` (shape: [n_drifts, n_time, nx, ny]).
+        """
+        if not hasattr(self, 'pdf3D_'):
+            raise ValueError('Full PDF not available: compute pdf(full_pdf=True) first')
 
-        # def init():
-        #     cont = plt.contourf(self.grid_vec, self.grid_vec, log_pmap(self.pdf3D[d_ind, 0, :, :]),
-        #                         levels=100)
-        #     return cont
+        # Precompute log-scaled frames once (shape: n_time, nx, ny)
+        frames = log_pmap(self.pdf3D_[drift_ind])
+        n_frames = frames.shape[0]
 
-        fig = plt.figure()
+        # determine display range once for consistent color mapping
+        vmin, vmax = float(frames.min()), float(frames.max())
 
-        anim = animation.FuncAnimation(fig, animate_wrap, frames=len(self.tvec))
-        writervideo = animation.PillowWriter(fps=10)
-        anim.save(f'pdf_animation_{self.drift_labels[d_ind]}.gif', writer=writervideo)
+        fig, ax = plt.subplots()
+        extent = [self.grid_vec[0], self.grid_vec[-1], self.grid_vec[0], self.grid_vec[-1]]
+
+        # draw first frame with imshow (much faster than contourf)
+        im = ax.imshow(frames[0].T, origin='lower', extent=extent,
+                       aspect='auto', vmin=vmin, vmax=vmax, cmap='viridis', interpolation='nearest')
+        drift_str = np.array2string(self.drift_rates[drift_ind][0], formatter={'float_kind': '{:.3e}'.format})
+        title = ax.set_title(f"Frame 1 - {self.tvec[0]:.2f}s, drift = {drift_str}")
+        fig.colorbar(im, ax=ax)
+
+        def animate(i):
+            im.set_data(frames[i].T)
+            drift_str = np.array2string(self.drift_rates[drift_ind][i], formatter={'float_kind': '{:.3e}'.format})
+            title.set_text(f"Frame {i + 1} - {self.tvec[i]:.2f}, drift = {drift_str}")
+            return im, title
+
+        anim = animation.FuncAnimation(fig, animate, frames=n_frames, blit=True)
+        writer = animation.PillowWriter(fps=10)
+        anim.save(f'{save_path}_{self.drift_labels[drift_ind]}.gif', writer=writer)
+        plt.close(fig)
+        
+        return anim
 
 
 def _urgency_scaling(mu: np.ndarray, tvec: np.ndarray, urg=None) -> np.ndarray:
