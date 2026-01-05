@@ -25,6 +25,64 @@ def prop_se_minmax(x):
     se = prop_se(x)
     return (np.mean(x)-se, np.mean(x)+se)
 
+
+def log_lik_bin(y, y_hat):
+    # return np.sum(y * np.log(y_hat) + (1 - y) * np.log(y_hat))
+    return np.sum(np.log(y_hat[y==1])) + np.sum(np.log(1 - y_hat[y==0]))
+
+def log_lik_cont(y_hat):
+    return np.sum(np.log(y_hat))
+
+def margconds_from_intersection(prob_ab, prob_a):
+    """
+    :param prob_ab: joint probability of A and B
+    :param prob_a: marginal probability of A
+    :return: 
+        a_given_b: conditional probability of A given B
+        prob_b: marginal probability of B
+    """
+
+    prob_a = prob_a.reshape(-1, 1)  # make it 2-D, for element-wise and matrix mults below
+    b_given_a = (prob_ab / np.sum(prob_ab)) / prob_a
+    prob_b = prob_a.T @ b_given_a
+    prob_b[prob_b==0] = np.finfo(np.float64).tiny
+    a_given_b = b_given_a * prob_a / prob_b
+
+    # assert np.allclose(prob_b, 1.0) and np.allclose(np.sum(a_given_b, axis=0), [1.0, 1.0])
+    # assert np.allclose(prob_a, 1.0) and np.allclose(prob_ab, 1.0)
+    
+    return a_given_b, prob_b.flatten()
+    
+    # TODO attempt to do for multiple headings at once...work in progress
+    # proba_full = np.expand_dims(prob_a, axis=1)
+    # b_given_a = (prob_ab / np.sum(prob_ab, axis=(0, 1))) / proba_full
+    # prob_b = np.zeros_like(prob_a)
+    # for d in range(prob_b.shape[1]):
+    #     prob_b[:, d] = prob_a[:, d].T @ b_given_a[:, :, d]
+    
+    # a_given_b = b_given_a * proba_full / np.expand_dims(prob_b, axis=0)
+    # return a_given_b, prob_b
+
+
+def intersection_from_margconds(a_given_b, prob_a, prob_b):
+    """
+    Recover intersection of a and b using conditionals and marginals, according to Bayes theorem
+    Essentially the inverse of margconds_from_intersection, and the two can be used together e.g.
+    to update the intersections after adding a base_rate to prob_b
+
+    :param a_given_b:
+    :param prob_a:
+    :param prob_b:
+    :return:
+        prob_ab: joint probability of A and B
+        b_given_a
+    """
+
+    prob_ab = a_given_b * prob_b
+    b_given_a = prob_ab / prob_a
+
+    return prob_ab, b_given_a
+
 # %% dataframe cleaning functions
 
 def drop_breakfix(df, columns: Union[list, str]="choice") -> pd.DataFrame:
