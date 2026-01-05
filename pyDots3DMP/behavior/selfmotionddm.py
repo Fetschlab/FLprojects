@@ -15,7 +15,7 @@ from scipy.signal import convolve
 from scipy.stats import norm, skewnorm
 from scipy.optimize import minimize
 
-from behavior.utils import data_cleanup
+from utils import data_cleanup
 from accumulator import Accumulator
 
 
@@ -278,12 +278,12 @@ class SelfMotionDDM:
 
         # get stimulus-driven urgency signals if specified, for scaling drifts
         if not self.stim_scaling:
-            kves, kvis = self._handle_kmult(self.params_['kmult'], cohs.T, k_scale=100) 
-
+            # uniform scaling
+            # kves, kvis = self._handle_kmult(self.params_['kmult'], cohs.T, k_scale=100) 
             b_ves, b_vis = np.ones_like(self.tvec), np.ones_like(self.tvec)
-
             b_ves /= len(b_ves)
             b_vis /= len(b_vis)
+            
         elif isinstance(self.stim_scaling, tuple):
             b_ves, b_vis = self.stim_scaling
         else:

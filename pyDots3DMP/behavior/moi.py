@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Low-level helper functions for 2-D self-motion DDM using method of images.
 """
@@ -14,10 +13,12 @@ USE_MVNUN = False
 def _sj_rot(j, s0, k):
     """
     Image rotation formalism.
+    compute jth rotated image's source position
+    express rotations across lines as angular rotations
 
     :param j: jth image
     :param s0: starting_point, length 2 array
-    :param k: 2*k-1 is the number of images - k=4 for 7 images
+    :param k: number of reflections. 2*k-1 is the number of images - k=4 for 7 images
     :return:
     """
     alpha = (k - 1)/k * np.pi

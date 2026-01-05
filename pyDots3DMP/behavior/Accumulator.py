@@ -1,3 +1,7 @@
+
+
+
+
 import logging
 from typing import Optional, Union, Sequence
 
@@ -85,7 +89,8 @@ class Accumulator:
         """
         Set accumulator drift rates. Optionally add label for each drift.
         This also adds a mirrored drift rate for the anti-correlated accumulator, and 
-        updates drift rates based on sensitivity and urgency parameters."""
+        updates drift rates based on sensitivity and urgency parameters.
+        """
 
         if isinstance(drifts, np.ndarray):
             drifts = np.split(drifts, drifts.shape[1], axis=1)
@@ -114,7 +119,8 @@ class Accumulator:
         
         for d, drift in enumerate(self.drift_rates):
             p_corr[d], rt_dist[d, :], flux1, flux2 = cdf_fcn(
-                self.tvec, drift, self.bound, 0.025, self.num_images)
+                self.tvec, drift, self.bound, 0.025, self.num_images
+                )
             
         self.p_corr_ = p_corr
         self.rt_dist_ = rt_dist
@@ -134,8 +140,8 @@ class Accumulator:
         for drift in self.drift_rates:
 
             if full_pdf:
-                pdf_3d = moi_pdf(xmesh, ymesh, self.tvec, drift,
-                                  self.bound, self.num_images)
+                # return the full pdf in 
+                pdf_3d = moi_pdf(xmesh, ymesh, self.tvec, drift, self.bound, self.num_images)
                 pdfs.append(pdf_3d)
 
                 pdf_up = pdf_3d[:, :, -1]  # right bound
@@ -145,10 +151,8 @@ class Accumulator:
                 # sufficient to calculate pdf just at the boundaries, not the full third quadrant
                 # and use vectorized version for speed
                 pdf_fcn = moi_pdf_vec if use_vectorized else moi_pdf
-                pdf_lo = pdf_fcn(xmesh1, ymesh1, self.tvec, drift,
-                                      self.bound, self.num_images)
-                pdf_up = pdf_fcn(xmesh2, ymesh2, self.tvec, drift,
-                                      self.bound, self.num_images)
+                pdf_lo = pdf_fcn(xmesh1, ymesh1, self.tvec, drift, self.bound, self.num_images)
+                pdf_up = pdf_fcn(xmesh2, ymesh2, self.tvec, drift, self.bound, self.num_images)
 
             # distribution of losing accumulator, GIVEN winner has hit bound
             marg_up.append(pdf_up)  # right bound
@@ -156,7 +160,6 @@ class Accumulator:
 
         if full_pdf:
             self.pdf3D_ = np.stack(pdfs, axis=0)
-
         self.up_lose_pdf_ = np.stack(marg_up, axis=0)
         self.lo_lose_pdf_ = np.stack(marg_lo, axis=0)
 
@@ -176,8 +179,11 @@ class Accumulator:
 
     def dv(self, drift, sigma):
         """Return accumulated DV for given drift rate and diffusion noise."""
-        return sample_dv(mu=drift*self.tvec.reshape(-1, 1),
-                       s=sigma, num_images=self.num_images)
+        return sample_dv(
+            mu=drift*self.tvec.reshape(-1, 1),
+            s=sigma,
+            num_images=self.num_images
+            )
 
 
     def compute_distrs(self, return_pdf=False):
@@ -205,14 +211,15 @@ class Accumulator:
         fig_cdf & fig_pdf: figure handles
         """
         if not self.is_fitted:
-            print('Accumulator distributions have not yet been calculated...')
-            return None
+            raise ValueError('Accumulator distributions have not yet been calculated')
 
         fig_cdf, axc = plt.subplots(2, 1, figsize=(4, 5))
-        axc[0].plot(self.drift_labels, self.p_corr_)
+        axc[0].plot(self.drift_labels, self.p_corr_, marker='o')
+        axc[0].set_ylim([0, 1])
         axc[0].set_xlabel('drift')
         axc[0].set_xticks(self.drift_labels)
         axc[0].set_ylabel('prob. correct choice')
+        axc[1].set_title('Accumulator CDF/PDF Results')
 
         axc[1].plot(self.tvec, self.rt_dist_.T)
         # axc[1].legend(self.drift_labels, frameon=False)
@@ -267,9 +274,6 @@ class Accumulator:
         anim = animation.FuncAnimation(fig, animate_wrap, frames=len(self.tvec))
         writervideo = animation.PillowWriter(fps=10)
         anim.save(f'pdf_animation_{self.drift_labels[d_ind]}.gif', writer=writervideo)
-
-
-
 
 
 def _urgency_scaling(mu: np.ndarray, tvec: np.ndarray, urg=None) -> np.ndarray:

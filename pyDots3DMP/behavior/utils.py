@@ -34,6 +34,8 @@ def drop_breakfix(df, columns: Union[list, str]="choice") -> pd.DataFrame:
 
 def drop_one_target_wager(df, columns: Union[list, str]="oneTargChoice") -> pd.DataFrame:
     """drop one-target wager trials"""
+    if isinstance(columns, str):
+        columns = [columns]
     return df.loc[(df[columns] == 0).all(axis=1), :]
 
 
