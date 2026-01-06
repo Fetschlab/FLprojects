@@ -14,8 +14,8 @@ dependencies = [
     "ipykernel>=6.31.0",
     "matplotlib>=3.6.2",
     "numpy>=1.23.5",
-    "pandas>=1.5.2",
-    "pybads>=1.0.2",
+    "pandas>=2.3.3",
+    "pybads>=1.0.6",
     "scikit-learn>=1.2.1",
     "scipy>=1.9.3",
 ]
