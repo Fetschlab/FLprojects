@@ -102,9 +102,10 @@ def moi_pdf_vec(
     
     """
     Calculate 2-D pdf according to method of images (vectorized implementation).
+    NOTE: this has not been tested for the `full_pdf` version of moi_pdf
 
     :param xmesh: x-values for pdf computation
-    :param ymesh: y-valuues, should match shape of xmesh
+    :param ymesh: y-values, should match shape of xmesh
     :param tvec: 1-D array containing times to evaluate pdf
     :param mu: drift rate 2xlen(tvec) array (to incorporate any urgency signal)
     :param bound: bound, length 2 array
@@ -117,19 +118,15 @@ def moi_pdf_vec(
     nx, ny = xmesh.shape
     pdf_result = np.zeros((len(tvec), nx, ny)).squeeze()
 
-    xy_mesh = np.dstack((xmesh, ymesh))
-    new_mesh = xy_mesh.reshape(-1, 2)
-
-    # xy_mesh is going to be an X*Y*2 mesh.
-    # for vectorized pdf calculation, reshape it to N*2
-    # TODO this might require more testing for the full_pdf
+    xy_mesh = np.dstack((xmesh, ymesh))  # shape (X, Y, 2)
+    xy_mesh = xy_mesh.reshape(-1, 2)     # shape (X*Y, 2)
 
     s0 = -bound
 
     covs = tvec[:, None, None] * sigma
     mu_t = tvec[:, None] * mu
 
-    pdf_result += np.exp(_multiple_logpdfs_vec_input(new_mesh, s0 + mu_t, covs))
+    pdf_result += np.exp(_multiple_logpdfs_vec_input(xy_mesh, s0 + mu_t, covs))
 
     for j in range(1, k*2):
         sj = _sj_rot(j, s0, k)
@@ -144,7 +141,7 @@ def moi_pdf_vec(
             aj_all[t] = a_j
 
         # use vectorized implementation for speed # TODO unit tests to verify correctness
-        pdf_result += (aj_all * np.exp(_multiple_logpdfs_vec_input(new_mesh, sj + mu_t, covs)))
+        pdf_result += (aj_all * np.exp(_multiple_logpdfs_vec_input(xy_mesh, sj + mu_t, covs)))
 
     return pdf_result
 
