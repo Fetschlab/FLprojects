@@ -2,8 +2,10 @@ import logging
 from typing import Optional, Union, Sequence
 
 import numpy as np
+
+# always import from base matplotlib first to avoid backend issues
+import matplotlib as mpl
 import matplotlib.pyplot as plt
-from matplotlib import animation
 
 from .moi import moi_cdf, moi_cdf_vec, moi_pdf, moi_pdf_vec, sample_dv
 
@@ -192,7 +194,11 @@ class Accumulator:
         return self
 
 
-    def plot(self, d_ind: int = -1):
+    def plot(
+        self,
+        d_ind: int = -1,
+        save_path: Optional[str] = None,
+        ):
         """
         Plot summary of accumulator results.
 
@@ -237,15 +243,20 @@ class Accumulator:
             axp[1].set_title(f"Losing accumulator | Error, drift rate {self.drift_labels[d_ind]}")
             cbar = fig_cdf.colorbar(contour, ax=axp[0])
             cbar = fig_cdf.colorbar(contour, ax=axp[1])
+            fig_pdf.tight_layout()
 
-        if has_log_odds:
-            vmin, vmax = 0, 3
-            contour = axp[2].contourf(self.tvec, self.grid_vec,
-                                        self.log_odds_.T, vmin=vmin, vmax=vmax,
-                                        levels=100)
-            axp[2].set_title("Log Odds of Correct Choice given Losing Accumulator")
-            cbar = fig_pdf.colorbar(contour, ax=axp[2])
-        fig_pdf.tight_layout()
+            if has_log_odds:
+                vmin, vmax = 0, 3
+                contour = axp[2].contourf(self.tvec, self.grid_vec,
+                                            self.log_odds_.T, vmin=vmin, vmax=vmax,
+                                            levels=100)
+                axp[2].set_title("Log Odds of Correct Choice given Losing Accumulator")
+                cbar = fig_pdf.colorbar(contour, ax=axp[2])
+
+        if save_path:
+            fig_cdf.savefig(f"{save_path}/cdf.png")
+            if fig_pdf is not None:
+                fig_pdf.savefig(f"{save_path}/pdf.png")
 
         return fig_cdf, fig_pdf
 
@@ -289,8 +300,8 @@ class Accumulator:
             title.set_text(f"Frame {i + 1} - {self.tvec[i]:.2f}, drift = {drift_str}")
             return im, title
 
-        anim = animation.FuncAnimation(fig, animate, frames=n_frames, blit=True)
-        writer = animation.PillowWriter(fps=10)
+        anim = mpl.animation.FuncAnimation(fig, animate, frames=n_frames, blit=True)
+        writer = mpl.animation.PillowWriter(fps=10)
         anim.save(f'{save_path}_{self.drift_labels[drift_ind]}.gif', writer=writer)
         plt.close(fig)
         
