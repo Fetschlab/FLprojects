@@ -19,73 +19,6 @@ from .utils import data_cleanup, log_lik_bin, log_lik_cont, margconds_from_inter
 from .Accumulator import Accumulator
 
 logger = logging.getLogger(__name__)
-# %% ----------------------------------------------------------------
-# Set up logger
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-
-for handler in logger.handlers[:]:
-    logger.removeHandler(handler)
-    handler.close()
-
-# # Create handlers
-c_handler = logging.StreamHandler()
-f_handler = logging.FileHandler(f'ddm_fitting_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
-c_handler.setLevel(logging.DEBUG) 
-f_handler.setLevel(logging.DEBUG) 
-
-# Create formatters and add them to handlers, and add handlers to logger
-c_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-f_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-c_handler.setFormatter(c_format)
-f_handler.setFormatter(f_format)
-logger.addHandler(c_handler) 
-# logger.addHandler(f_handler)  # uncomment to log to file as well
-
-OptimBounds = namedtuple('OptimBounds', ['lb', 'ub', 'plb', 'pub'])
-
-def main():
-    
-    grid_vec = np.arange(-3, 0, 0.01)
-    time_vec = np.arange(0, 2, 0.05)
-       
-    init_params = {
-        'kmult': [1, 1], 
-        'bound': [1, 1, 1],
-        'non_dec_time': [0.3],
-        'wager_thr': [1, 1, 1],
-        'wager_alpha': [0.05],
-    }
-    ddm = SelfMotionDDM(
-        grid_vec=grid_vec,
-        tvec=time_vec,
-        **init_params, 
-        stim_scaling=True,
-        return_wager=True
-        )
-
-    datafilepath = "/Users/stevenjerjian/Desktop/Academia/FetschLab/PLDAPS_data/dataStructs/lucio_20220512-20230606.csv"
-    data = data_cleanup(datafilepath)  # this is a hack function to quickly load and clean the data, could be improved/generalized with options
-
-    data = data.loc[data['oneTargConf'] == 0, :]  # remove one-target wager trials
-
-    X_all = data[['modality', 'coherence', 'delta', 'heading']]
-    delta0 = X_all['delta'] == 0
-    y = data[['choice', 'PDW', 'RT']].astype({'choice': 'int', 'PDW': 'int'})
-    y['RT'] += 0.3 # to reverse the downshift from motion platform latency
-
-    # fit only delta=0 trials
-    X = X_all[delta0].reset_index(drop=True)
-    y = y[delta0].reset_index(drop=True)
-    
-    # ddm.fit(X, y)
-
-    # ddm.simulate(X, n_samples=10, sample_dvs=True, seed=1)
-    
-    y_pred, y_pred_samp = ddm.predict(X, y=None, n_samples=1, cache_accumulators=True, seed=1)
-
-    # print(y.head())
-    # print(y_pred_samp.head())
 
 # %% ----------------------------------------------------------------
     
@@ -220,7 +153,8 @@ class SelfMotionDDM:
         # combine params array passed to objective function with fixed params
         # to reconstruct full params dict expected by custom predict method
         self._build_params_dict(params_array, self.param_end_inds, fixed_params)
-        logger.info('Current params: %s', {k: [round(vv, 2) for vv in v] for k, v in self.params_.items()})
+        logger.info(params_array)
+        # logger.info('Current params: %s', {k: [round(vv, 2) for vv in v] for k, v in self.params_.items()})
 
         t0_pred = time.perf_counter()
         y_pred, _ = self.predict(X, y)
@@ -482,15 +416,99 @@ class SelfMotionDDM:
         return [self.init_params[k] for k in self.fit_param_names]
 
 
-    def simulate(self, X, n_samples: int = 100, seed=None):
+    def simulate(
+        self,
+        X,
+        n_samples: int = 1,
+        sample_dvs: bool = False,
+        seed=None):
         """
         simulate data from model given X
         :param X: DataFrame with columns modality, coherence, delta, heading
+        :param n_samples: number of samples to draw per trial (default 1)
+        :param return_dvs: whether to sample DV trajectories
+        :param seed: random seed for sampling
         :return: simulated DataFrame with columns choice, PDW, RT
-        """
-        _, preds = self.predict(X, None, n_samples=n_samples)
+
         
-        raise NotImplementedError('simulate method not yet implemented')
+        """
+        
+        _, preds = self.predict(
+            X,
+            y=None,
+            n_samples=n_samples, 
+            cache_accumulators=sample_dvs, 
+            seed=seed
+            )
+
+        if sample_dvs:
+            # build n_samples DV trajectories for unique conditions (from cached accumulator objects)
+
+            # NOTE: IMCOMPLETE
+            
+            Xu = X.drop_duplicates().values
+            preds = pd.DataFrame(np.repeat(Xu, n_samples, axis=0), columns=X.columns)
+            
+            for i, row in X.iterrows():
+                mod = row['modality']
+                coh = row['coherence']
+                delta = row['delta']
+
+                accum = self.accumulators_[(mod, coh, delta)]
+
+                for hdg, drift in enumerate(zip(accum.drift_labels, accum.drift_rates)):
+
+                    trial_inds = preds.index[
+                        (preds["modality"]==mod) & (preds["coherence"]==coh) & \
+                            (preds["delta"]==delta) & (preds["heading"]==hdg)
+                    ]
+
+                    for itr in range(n_samples):
+                        dv = accum.dv(drift, sigma=np.array([1., 1.]))
+
+                        is_hit_bnd = (dv >= accum.bound).any(axis=0)
+                        t_bnd_cross = np.argmax((dv >= accum.bound) == 1, axis=0)
+
+                        if is_hit_bnd.all():
+                            # both accumulators hit the bound - choice and RT determined by whichever hit first
+                            choice = np.argmin(t_bnd_cross)
+                            rt_ind = t_bnd_cross[choice]
+                            final_v = dv[rt_ind, choice ^ 1]  # losing accumulator at RT
+
+                        elif ~is_hit_bnd.any():
+                            # neither accumulator hits the bound
+                            rt_ind = -1
+                            choice = np.argmax(np.argmax(dv, axis=0))  # winner is whoever has max dv value
+                            final_v = accum.bound[choice] - (dv[rt_ind, choice] - dv[rt_ind, choice ^ 1])
+                            # wager odds map accounts for the distance between winner and loser, so this shifts up both accumulators
+                            # as if the 'winner' did hit the bound, so we can do a consistent look-up on the wager odds map
+
+                        else:
+                            # only one hits the bound
+                            choice = np.argmax(is_hit_bnd)
+                            rt_ind = t_bnd_cross[choice]
+                            final_v = dv[rt_ind, choice ^ 1]
+
+                        if self.return_wager:
+
+                            # look-up log odds threshold
+                            grid_ind = np.argmin(np.abs(accum.grid_vec - final_v))
+
+                            wager_accum = self.accumulators_[('wager', mod)]
+                            
+                            # log_odds = wager_odds_maps[m][rt_ind, grid_ind]
+                            wager = int(wager_odds_above_threshold[m][rt_ind, grid_ind])
+                            wager *= (np.random.random() > params['alpha'])  # incorporate base-rate of low bets
+                            preds.loc[trial_inds[itr], 'PDW'] = wager
+
+                        # flip choice result so that left choices = 0, right choices = 1 in the output
+                        preds.loc[these_trials[tr], 'choice'] = choice ^ 1
+
+                        # RT = decision time + non-decision time - motion onset latency
+                        preds.loc[these_trials[tr], 'RT'] = \
+                            orig_tvec[rt_ind] + non_dec_time[tr] - 0.3
+
+        return preds
         
     
     @staticmethod
@@ -598,9 +616,3 @@ class SelfMotionDDM:
         drifts /= tvec[:, None]
 
         return drifts, tvec
-
-
-# %%
-
-if __name__ == '__main__':
-    main()
