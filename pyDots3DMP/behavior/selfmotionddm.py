@@ -15,7 +15,7 @@ from scipy.signal import convolve
 from scipy.stats import norm, skewnorm
 from scipy.optimize import minimize
 
-from .utils import data_cleanup, log_lik_bin, log_lik_cont, margconds_from_intersection
+from .utils import log_lik_bin, log_lik_cont, margconds_from_intersection
 from .Accumulator import Accumulator
 
 logger = logging.getLogger(__name__)
@@ -60,6 +60,7 @@ class SelfMotionDDM:
         self.return_wager = return_wager
         self.wager_axis = wager_axis
         self.stim_scaling = stim_scaling
+        # TODO add init option to set whether to use vectorized accumulator cdf/pdf calculations
 
         # initialize internal containers used by fit/predict
         self.init_params = {k: getattr(self, k) for k in self.PARAM_NAMES}

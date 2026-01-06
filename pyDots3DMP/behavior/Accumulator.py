@@ -183,12 +183,12 @@ class Accumulator:
             )
 
 
-    def compute_distrs(self, return_pdf=False):
+    def compute_distrs(self, use_vectorized=True, return_pdf=False):
         """Calculate cdf and pdf for accumulator object. Returns self for chaining commands"""
 
-        self.cdf()
+        self.cdf(use_vectorized=use_vectorized)
         if return_pdf:
-            self.pdf()
+            self.pdf(use_vectorized=use_vectorized)
         self._is_fitted = True
         
         return self
