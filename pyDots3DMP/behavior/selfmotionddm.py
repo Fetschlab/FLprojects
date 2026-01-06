@@ -15,50 +15,54 @@ from scipy.signal import convolve
 from scipy.stats import norm, skewnorm
 from scipy.optimize import minimize
 
-from utils import data_cleanup, log_lik_bin, log_lik_cont, margconds_from_intersection
-from Accumulator import Accumulator
+from .utils import data_cleanup, log_lik_bin, log_lik_cont, margconds_from_intersection
+from .Accumulator import Accumulator
 
-
+logger = logging.getLogger(__name__)
 # %% ----------------------------------------------------------------
 # Set up logger
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-# for handler in logger.handlers[:]:
-#     logger.removeHandler(handler)
-#     handler.close()
+for handler in logger.handlers[:]:
+    logger.removeHandler(handler)
+    handler.close()
 
-# # # Create handlers
-# c_handler = logging.StreamHandler()
-# f_handler = logging.FileHandler(f'ddm_fitting_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
-# c_handler.setLevel(logging.DEBUG) 
-# f_handler.setLevel(logging.DEBUG) 
+# # Create handlers
+c_handler = logging.StreamHandler()
+f_handler = logging.FileHandler(f'ddm_fitting_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
+c_handler.setLevel(logging.DEBUG) 
+f_handler.setLevel(logging.DEBUG) 
 
-# # Create formatters and add them to handlers, and add handlers to logger
-# c_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-# f_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-# c_handler.setFormatter(c_format)
-# f_handler.setFormatter(f_format)
-# logger.addHandler(c_handler) 
+# Create formatters and add them to handlers, and add handlers to logger
+c_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+f_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+c_handler.setFormatter(c_format)
+f_handler.setFormatter(f_format)
+logger.addHandler(c_handler) 
 # logger.addHandler(f_handler)  # uncomment to log to file as well
-
 
 OptimBounds = namedtuple('OptimBounds', ['lb', 'ub', 'plb', 'pub'])
 
 def main():
     
-    grid_vec = np.arange(-3, 0, 0.05)
-    time_vec = np.arange(0, 2, 0.01)
+    grid_vec = np.arange(-3, 0, 0.01)
+    time_vec = np.arange(0, 2, 0.05)
        
     init_params = {
-        'kmult': [0.6, 0.6], 
-        'bound': [1.0, 1.0, 1.0],
+        'kmult': [1, 1], 
+        'bound': [1, 1, 1],
         'non_dec_time': [0.3],
         'wager_thr': [1, 1, 1],
         'wager_alpha': [0.05],
     }
-    accum = SelfMotionDDM(grid_vec=grid_vec, tvec=time_vec, **init_params, 
-                                stim_scaling=False, return_wager=False)
+    ddm = SelfMotionDDM(
+        grid_vec=grid_vec,
+        tvec=time_vec,
+        **init_params, 
+        stim_scaling=True,
+        return_wager=True
+        )
 
     datafilepath = "/Users/stevenjerjian/Desktop/Academia/FetschLab/PLDAPS_data/dataStructs/lucio_20220512-20230606.csv"
     data = data_cleanup(datafilepath)  # this is a hack function to quickly load and clean the data, could be improved/generalized with options
@@ -73,9 +77,12 @@ def main():
     # fit only delta=0 trials
     X = X_all[delta0].reset_index(drop=True)
     y = y[delta0].reset_index(drop=True)
-    accum.fit(X, y)
     
-    # y_pred, y_pred_samp = accum.predict(X, y=None, n_samples=1, cache_accumulators=True, seed=1)
+    # ddm.fit(X, y)
+
+    # ddm.simulate(X, n_samples=10, sample_dvs=True, seed=1)
+    
+    y_pred, y_pred_samp = ddm.predict(X, y=None, n_samples=1, cache_accumulators=True, seed=1)
 
     # print(y.head())
     # print(y_pred_samp.head())

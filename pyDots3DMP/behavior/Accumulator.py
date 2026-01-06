@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import animation
 
-from moi import moi_cdf, moi_cdf_vec, moi_pdf, moi_pdf_vec, sample_dv
+from .moi import moi_cdf, moi_cdf_vec, moi_pdf, moi_pdf_vec, sample_dv
 
 logger = logging.getLogger(__name__)
     
