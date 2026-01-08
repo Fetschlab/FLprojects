@@ -294,9 +294,9 @@ def dots3DMP_create_trial_list(
         any([3 in mods]) * len(cohs) * len(deltas)
     hdg = np.tile(hdgs, num_hdg_groups)
 
-    coh = np.empty_like(hdg)
-    modality = np.empty_like(hdg)
-    delta = np.empty_like(hdg)
+    coh = np.empty_like(hdg, dtype=float)
+    modality = np.empty_like(hdg, dtype=float)
+    delta = np.empty_like(hdg, dtype=float)
 
     if 1 in mods:
         coh[:len(hdgs)] = cohs[0]

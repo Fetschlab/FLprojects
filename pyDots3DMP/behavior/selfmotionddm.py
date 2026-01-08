@@ -206,32 +206,33 @@ class SelfMotionDDM:
         
         rng = np.random.RandomState(seed)
         
-        mods = np.unique(X['modality'])
-        cohs = np.unique(X['coherence'])
-        deltas = np.unique(X['delta'])
+        mods = np.unique(X['modality']).astype(float)
+        cohs = np.unique(X['coherence']).astype(float)
+        deltas = np.unique(X['delta']).astype(float)
         hdgs, hdg_inds = np.unique(X['heading'], return_inverse=True)
+        hdgs = hdgs.astype(float)
+
+        k_scale = 1e3
+        # get stimulus-driven urgency signals if specified, for scaling drifts
+        if not self.stim_scaling:
+            b_ves, b_vis = np.ones_like(self.tvec), np.ones_like(self.tvec)
+            b_ves /= len(b_ves)
+            b_vis /= len(b_vis)
+        elif isinstance(self.stim_scaling, tuple):
+            b_ves, b_vis = self.stim_scaling
+        else:
+            b_ves, b_vis = self.get_stim_urgs(self.tvec)
+            k_scale = 10
+
+        b_vals = [b_ves, b_vis, np.vstack((b_ves, b_vis)).T]
 
         # handle parameters per modality
-        kves, kvis = self._handle_kmult(self.params_['kmult'], cohs.T, k_scale=1) 
+        kves, kvis = self._handle_kmult(self.params_['kmult'], cohs.T, k_scale=k_scale) 
         bound = self._handle_param_mod(self.params_['bound'], mods)  
         non_dec_time = self._handle_param_mod(self.params_['non_dec_time'], mods)  
         thetas = self._handle_param_mod(self.params_['wager_thr'], mods)  
         alphas = self._handle_param_mod(self.params_['wager_alpha'], mods)  
 
-        # get stimulus-driven urgency signals if specified, for scaling drifts
-        if not self.stim_scaling:
-            # uniform scaling
-            # kves, kvis = self._handle_kmult(self.params_['kmult'], cohs.T, k_scale=100) 
-            b_ves, b_vis = np.ones_like(self.tvec), np.ones_like(self.tvec)
-            b_ves /= len(b_ves)
-            b_vis /= len(b_vis)
-            
-        elif isinstance(self.stim_scaling, tuple):
-            b_ves, b_vis = self.stim_scaling
-        else:
-            b_ves, b_vis = self.get_stim_urgs(self.tvec)
-
-        b_vals = [b_ves, b_vis, np.vstack((b_ves, b_vis)).T]
 
         # initialize predictions dataframes
         predictions = pd.DataFrame(
@@ -241,8 +242,9 @@ class SelfMotionDDM:
 
         self.wager_maps = []
         if self.return_wager:
-            
-            k_vals_fixed = [kves, np.mean(kvis), [kves, np.mean(kvis)]]
+
+            # ves, vis, comb overall sensitivities
+            k_vals_fixed = [kves, kvis.mean().item(), [kves, kvis.mean().item()]]
             
             for m, mod in enumerate(mods):
 
@@ -355,7 +357,7 @@ class SelfMotionDDM:
                         # ====== RT ======
 
                         # first convolve model RT distribution with non-decision time
-                        ndt_dist = norm.pdf(self.tvec, loc=non_dec_time[m], scale=0.05) #scale=self.params_['sigma_ndt'])
+                        ndt_dist = norm.pdf(self.tvec, loc=non_dec_time[m], scale=0.2) #scale=self.params_['sigma_ndt'])
                         rt_dist = np.squeeze(accumulator.rt_dist_[h, :])
                         rt_dist = convolve(rt_dist, ndt_dist / ndt_dist.sum())
                         rt_dist = np.clip(rt_dist, 1e-10, a_max=None)
