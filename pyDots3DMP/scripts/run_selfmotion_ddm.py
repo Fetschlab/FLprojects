@@ -15,7 +15,7 @@ from behavior.utils import data_cleanup
 # %% ----------------------------------------------------------------
 # Set up loggers
 
-def setup_logger(): 
+def setup_logger(log_file_path=None): 
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.DEBUG)
 
@@ -25,17 +25,17 @@ def setup_logger():
 
     # # Create handlers
     c_handler = logging.StreamHandler()
-    f_handler = logging.FileHandler(f'SelfMotionDDM_fit_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
     c_handler.setLevel(logging.INFO) 
-    f_handler.setLevel(logging.INFO) 
-
-    # Create formatters and add them to handlers, and add handlers to logger
     c_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    f_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     c_handler.setFormatter(c_format)
-    f_handler.setFormatter(f_format)
     logger.addHandler(c_handler) 
-    # logger.addHandler(f_handler)  # uncomment to log to file as well
+
+    if log_file_path:
+        f_handler = logging.FileHandler(log_file_path)
+        f_handler.setLevel(logging.INFO) 
+        f_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        f_handler.setFormatter(f_format)
+        logger.addHandler(f_handler)
 
     return logger
 
