@@ -218,7 +218,8 @@ class Accumulator:
         axc[0].plot(self.drift_labels, self.p_corr_, marker='o')
         axc[0].set_ylim([0, 1])
         axc[0].set_xlabel('drift')
-        axc[0].set_xticks(self.drift_labels)
+        if self.drift_labels:
+            axc[0].set_xticks(self.drift_labels)
         axc[0].set_ylabel('prob. correct choice')
         axc[1].set_title('Accumulator CDF/PDF Results')
 
