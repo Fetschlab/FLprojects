@@ -1,0 +1,23 @@
+[project]
+name = "pydots3dmp"
+version = "0.1.0"
+description = "A Python package for analysis and modelling of 3D dots Motion Platform task"
+authors = [
+    {name = "Steven Jerjian", email = "steven.jerjian@gmail.com"},
+]
+maintainers = [
+    {name = "Steven Jerjian", email = "steven.jerjian@gmail.com"},
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "ipykernel>=7.1.0",
+    "matplotlib>=3.10.8",
+    "numpy>=2.4.0",
+    "pandas>=2.3.3",
+    "pybads>=1.0.6",
+    "scikit-learn>=1.8.0",
+    "scipy>=1.16.3",
+    "seaborn>=0.13.2",
+    "statsmodels>=0.14.6",
+]
